@@ -4,8 +4,8 @@
 # submitfiles
 # finalize
 
-vault=/var/backup/vault
-meta=/var/backup/meta
+vault=/var/backups/vault
+meta=/var/backups/meta
 
 command="$1"
 shift
