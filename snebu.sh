@@ -72,12 +72,20 @@ newbackup()
     { split($11, timestamp, ".") }
     {
 	printf("%s\t%.4d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5, $6, $7, $8, filesize, $10, timestamp[1], filename, $13)
-    }' >${meta}/${bkname}.input
+    }' >${meta}/tmp/${bkname}.input
 
 
     # Create list of required files; un-escape special characters in files and convert to null terminated
-join -t$'\t' -j1 1 -j2 1 -v2 -o 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 2.10 2.11 2.12 2.13 2.14 \
-    <(  cat ${meta}/${svrname}_*_*.backupset |\
+    join -t$'\t' -j1 1 -j2 1 -v2 -o 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 2.10 2.11 2.12 2.13 2.14 \
+    <(
+	join -t$'\t' -j1 10 -j2 1 -o 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 1.10 1.11 1.12 1.13 <(
+	    cat ${meta}/${svrname}_*_*.backupset |sort -t$'\t' +9 -10
+	) <(
+	    find $vault -name "*.lzo" -type f -print |\
+	    awk '
+	    BEGIN { FS = "/"; printf("0\n") }
+	    { printf("%s%s\n", $(NF - 1), substr($NF, 1, length($NF) - 4)) }' |sort
+	) |\
         awk 'BEGIN { FS = "\t" }
         {
             ft = $1
@@ -96,7 +104,7 @@ join -t$'\t' -j1 1 -j2 1 -v2 -o 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 2.10 2.11 2.12 2
 	}' |\
         sort +0 -1 -u 
     ) \
-    <(  cat ${meta}/${bkname}.input |\
+    <(  cat ${meta}/tmp/${bkname}.input |\
         awk 'BEGIN { FS = "\t" }
         {
             if ($1 == "f")
@@ -111,7 +119,7 @@ join -t$'\t' -j1 1 -j2 1 -v2 -o 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 2.10 2.11 2.12 2
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)}' |\
         sort +0 -1 -u 
     ) |
-    tee ${meta}/${bkname}.needed |\
+    tee ${meta}/tmp/${bkname}.needed |\
     awk '
     BEGIN { FS = "\t" }
     { printf("%s\n", $12)}' |bklist_decode
@@ -120,7 +128,7 @@ join -t$'\t' -j1 1 -j2 1 -v2 -o 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 2.10 2.11 2.12 2
 submitfiles()
 {
     # Extract files from input tar stream into MD5 file names, and separate meta data manifest list
-    lzop -d |tarburst -d $vault -m $meta/${bkname}.received.in
+    lzop -d |tarburst -d $vault -m $meta/tmp/${bkname}.received.in
 
     # Process (dereference) hard links in manifest
 
@@ -133,25 +141,25 @@ submitfiles()
         joinparams='2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 1.10'
       fi
       join  -t$'\t' -j1 11 -j2 10 -o $joinparams <(
-	cat ${meta}/${bkname}.received.in |\
+	cat ${meta}/tmp/${bkname}.received.in |\
 	grep '^1'$'\t' |\
 	sort -t$'\t' +10 -11
       ) <(
-	cat ${meta}/${bkname}.received.in |\
+	cat ${meta}/tmp/${bkname}.received.in |\
 	grep '^'$i$'\t' |\
 	sort -t$'\t' +9 -10 
       )
-    done >${meta}/${bkname}.received
+    done >${meta}/tmp/${bkname}.received
 
-    egrep -v '^1'$'\t' <${meta}/${bkname}.received.in >>${meta}/${bkname}.received
+    egrep -v '^1'$'\t' <${meta}/tmp/${bkname}.received.in >>${meta}/tmp/${bkname}.received
     finalize
 
 }
 finalize()
 {
 join -t$'\t' -j1 10 -j2 12 -o 1.1 1.2 2.3 2.4 1.3 1.4 1.5 1.6 1.7 1.8 1.9 1.10 1.11 \
-    <( cat ${meta}/${bkname}.received |sort +9 -10 -u) \
-    <( cat ${meta}/${bkname}.input |sort +11 -12 -u) >${meta}/${bkname}.backupset.1
+    <( cat ${meta}/tmp/${bkname}.received |sort +9 -10 -u) \
+    <( cat ${meta}/tmp/${bkname}.input |sort +11 -12 -u) >${meta}/tmp/${bkname}.backupset.1
 
 
 # Input files that are invault
@@ -172,7 +180,7 @@ join -t$'\t' -j1 1 -j2 1 -o 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 1.10 1.11 1.12 1.13 
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)}' |\
         sort +0 -1 -u
     ) \
-    <(  cat ${meta}/${bkname}.input |\
+    <(  cat ${meta}/tmp/${bkname}.input |\
         awk 'BEGIN { FS = "\t" }
         {
             if ($1 == "f")
@@ -185,15 +193,15 @@ join -t$'\t' -j1 1 -j2 1 -o 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 1.10 1.11 1.12 1.13 
         { printf("%s-%s-%s-%s-%s-%s-%s-%s-%s-%s-%s-%s\\%s\n",
         ft, $2, $3, $4, $5, $6, $7, $8, $9, "0", $11, $12, $13)}' |\
         sort +0 -1 -u
-    ) >${meta}/${bkname}.backupset.2
+    ) >${meta}/tmp/${bkname}.backupset.2
 
 
 # Join two backupsets
 (
-    cat ${meta}/${bkname}.backupset.1
+    cat ${meta}/tmp/${bkname}.backupset.1
     join -t$'\t' -j1 12 -j2 12 -v2 -o 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 2.10 2.11 2.12 2.13 \
-        <(  cat ${meta}/${bkname}.backupset.1 |sort +11 -12 -u ) \
-        <(  cat ${meta}/${bkname}.backupset.2 |sort +11 -12 -u )
+        <(  cat ${meta}/tmp/${bkname}.backupset.1 |sort +11 -12 -u ) \
+        <(  cat ${meta}/tmp/${bkname}.backupset.2 |sort +11 -12 -u )
 ) |sort +11 -12 >${meta}/${bkname}.backupset
 
 }
