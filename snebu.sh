@@ -12,10 +12,11 @@ shift
 
 export LANG=C
 case "$command" in 
-    newbackup|submitfiles|finalize|listbackups|restore)
+    newbackup|submitfiles|finalize|listbackups|restore|expire)
 	case "$command" in
 	    newbackup|submitfiles|finalize|listbackups) loptstring="name:,datestamp:,retention:,pattern:"; soptstring="n:d:r:p:";;
 	    restore) loptstring="name:,datestamp:,retention:,pattern:"; soptstring="n:d:r:p:";;
+	    expire) loptstring="name:,retention:,age:"; soptstring="n:r:a:";;
 	esac
 	if ! args=$(getopt -l "$loptstring" -o "$soptstring" -- "$@")
 	then
@@ -27,6 +28,7 @@ case "$command" in
 	    case "$1" in
 		-n|--name) svrname=$2; shift; shift;;
 		-d|--datestamp) datestamp=$2; shift; shift;;
+		-a|--age) age=$2; shift; shift;;
 		-r|--retention) schedule=$2; shift; shift;;
 		-p|--pattern) pattern=$2; shift; shift;;
 		--) shift; break;;
@@ -45,10 +47,14 @@ case "$command" in
 
 	    restore -n backupname -d datestamp [ -p regex_search_pattern ]
 
+	    expire -n backupname -r retention_schedule -a age (in days)
+
 	EOT
 	exit 1;;
 esac
 bkname="${svrname}_${schedule}_${datestamp}"
+curdatestamp=$(date +%s)
+
 newbackup()
 {
     # Convert null terminated lines in input to newline, and escape special characters in file name
@@ -273,4 +279,42 @@ dorestore()
     fi
 }
 [ "${command}" = "restore" ] && command="dorestore"
+
+expire()
+{
+    if [ -z "${svrname}" ]
+    then
+	echo "Requires server name"
+	exit
+    fi
+    if [ -z "${schedule}" ]
+    then
+	echo "Requires retention schedule"
+	exit
+    fi
+    if [ -z "${age}" ]
+    then
+	echo "Requires age"
+	exit
+    fi
+    [ ! -d "${meta}/attic" ] && mkdir "${meta}/attic"
+    purgelist=( $(
+    ls ${meta}/${svrname}_${schedule}_*.backupset |\
+    awk '
+    BEGIN {
+	cutoff="'"$curdatestamp"'" - ("'"$age"'" * 60 * 60 * 24)
+    }
+    {
+	split($0, p1, ".")
+	split(p1[1], p2, "_")
+	if (p2[3] < cutoff)
+	    print $0
+    }'
+    ) )
+    if [ "${#purgelist[@]}" -gt 0 ]
+    then
+	echo mv ${purgelist[@]} ${meta}/attic
+    fi
+}
+
 ${command}
