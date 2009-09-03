@@ -12,7 +12,7 @@ shift
 
 export LANG=C
 case "$command" in 
-    newbackup|submitfiles|finalize|listbackups|restore|expire)
+    newbackup|submitfiles|finalize|listbackups|restore|expire|purge)
 	case "$command" in
 	    newbackup|submitfiles|finalize|listbackups) loptstring="name:,datestamp:,retention:,pattern:"; soptstring="n:d:r:p:";;
 	    restore) loptstring="name:,datestamp:,retention:,pattern:"; soptstring="n:d:r:p:";;
@@ -48,6 +48,8 @@ case "$command" in
 	    restore -n backupname -d datestamp [ -p regex_search_pattern ]
 
 	    expire -n backupname -r retention_schedule -a age (in days)
+
+	    purge
 
 	EOT
 	exit 1;;
@@ -315,6 +317,20 @@ expire()
     then
 	echo mv ${purgelist[@]} ${meta}/attic
     fi
+}
+
+purge()
+{
+    [ ! -d "${vault}/attic" ] && mkdir "${vault}/attic"
+    join -t$'\t' -j1 1 -j2 1 -v2 -o 2.2 2.1 <(
+    	cat ${meta}/*_*_*.backupset |\
+	cut -d$'\t' -f10 |sort -t$'\t' +0 -1
+    ) <(
+    	find $vault -name "*.lzo" -type f -print |\
+    	awk '
+    	BEGIN { FS = "/" }
+    	{ printf("%s%s %s/%s\n", $(NF - 1), substr($NF, 1, length($NF) - 4), $(NF - 1), $NF) }' |sort
+    ) >/tmp/snebu_files_to_purge
 }
 
 ${command}

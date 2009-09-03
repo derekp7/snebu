@@ -7,9 +7,9 @@ bklist_encode: bklist_encode.c
 bklist_decode: bklist_decode.c
 	$(CC) -o $@ $<
 tarburst: tarburst.c
-	$(CC) -o $@ -l ssl -D_FILE_OFFSET_BITS=64 $<
+	$(CC) -o $@ -l ssl -l crypto -D_FILE_OFFSET_BITS=64 $<
 gentar: gentar.c
-	$(CC) -o $@ -l ssl -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE $<
+	$(CC) -o $@ -l ssl -l crypto -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE $<
 install: $(PROGS)
 	cp -p $(PROGS) $(SCRIPTS) /usr/local/bin/
 clean:
