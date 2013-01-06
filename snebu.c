@@ -138,8 +138,40 @@ newbackup(int argc, char **argv)
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
 
+    sqlite3_exec(bkcatalog, " \
+	create temporary table if not exists inbound_file_entities ( \
+       	    backup_id     integer, \
+       	    ftype         char, \
+	    permission    char, \
+    	    device_id     char, \
+       	    inode         integer, \
+	    user_name     char, \
+	    user_id       integer, \
+	    group_name    char, \
+	    group_id      integer, \
+	    size          integer, \
+	    md5           char, \
+	    datestamp     integer, \
+	    filename      char, \
+	    extdata       char default '', \
+	constraint file_entitiesc1 unique ( \
+	    backup_id, \
+	    ftype, \
+	    permission, \
+	    device_id, \
+	    inode, \
+	    user_name, \
+	    user_id, \
+	    group_name, \
+	    group_id, \
+	    size, \
+	    md5, \
+	    datestamp, \
+	    filename, \
+	    extdata ))", 0, 0, &sqlerr);
 
-    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+
+//    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     while (getdelim(&filespecs, &filespeclen, 0, stdin) > 0) {
         flen1 = 0;
 	x = sscanf(filespecs, "%c\t%o\t%32s\t%d\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d.%*d\t%n",
@@ -154,6 +186,26 @@ newbackup(int argc, char **argv)
 		&fs.ngid, &fs.filesize, fs.md5,
 		&fs.modtime, &flen1);
 	fs.filename = filespecs + flen1;
+	if (fs.ftype == 'l')
+	    if (getdelim(&linkspecs, &linkspeclen, 0, stdin) > 0)
+		fs.linktarget = linkspecs;
+
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "insert or ignore into inbound_file_entities \
+	    (backup_id, ftype, permission, device_id, inode, user_name, user_id, group_name, \
+	    group_id, size, md5, datestamp, filename, extdata) \
+	    values ('%d', '%c', '%4.4o', '%s', '%d', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%q')",
+	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
+	    fs.filesize, "0", fs.modtime, fs.filename, fs.linktarget)), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+
+	    sqlite3_free(sqlerr);
+	}
+//	else
+//	    fprintf(stderr, "%s\n", fs.filename);
+	sqlite3_free(sqlstmt);
+#ifdef notdef
 
 	if (fs.ftype == 'f') {
 	    sqlite3_prepare_v2(bkcatalog,
@@ -199,13 +251,7 @@ newbackup(int argc, char **argv)
 		group_id, size, md5, datestamp, filename) \
 		values ('%c', '%4.4o', '%s', '%d', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q')",
 		'5', fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
-		fs.filesize, "0", fs.modtime, fs.filename)), 0, 0, &sqlerr);
-    if (sqlerr != 0) {
-	fprintf(stderr, "%s\n", sqlerr);
-	sqlite3_free(sqlerr);
-    }
-    else
-        fprintf(stderr, "Debug d: success\n");
+		fs.filesize, "0", fs.modtime, fs.filename)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
 	    sqlite3_prepare_v2(bkcatalog,
 		(sqlstmt = sqlite3_mprintf("select file_id from file_entities \
@@ -265,8 +311,9 @@ newbackup(int argc, char **argv)
 //	free(filespecs);
 //	filespecs = 0;
 //	filespeclen = 0;
+#endif
     }
-    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+//    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 	
     sqlite3_close(bkcatalog);
     return(0);
