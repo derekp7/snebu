@@ -1377,167 +1377,164 @@ int restore(int argc, char **argv)
 	    }
 	}
 
-	{
-	    strncpy(tarhead.filename, filename, 100);
-	    if (linktarget != 0)
-		strncpy(tarhead.linktarget, linktarget, 100);
+	strncpy(tarhead.filename, filename, 100);
+	if (linktarget != 0)
+	    strncpy(tarhead.linktarget, linktarget, 100);
 
-	    sprintf(tarhead.ustar, "ustar  ");
-	    *(tarhead.ftype) = t.ftype;
-	    sprintf(tarhead.mode, "%7.7o", t.mode);
-	    strncpy(tarhead.auid, t.auid, 32);
-	    sprintf(tarhead.nuid, "%7.7o", t.nuid);
-	    strncpy(tarhead.agid, t.agid, 32);
-	    sprintf(tarhead.ngid, "%7.7o", t.ngid);
-	    sprintf(tarhead.modtime, "%11.11o", t.modtime);
+	sprintf(tarhead.ustar, "ustar  ");
+	*(tarhead.ftype) = t.ftype;
+	sprintf(tarhead.mode, "%7.7o", t.mode);
+	strncpy(tarhead.auid, t.auid, 32);
+	sprintf(tarhead.nuid, "%7.7o", t.nuid);
+	strncpy(tarhead.agid, t.agid, 32);
+	sprintf(tarhead.ngid, "%7.7o", t.ngid);
+	sprintf(tarhead.modtime, "%11.11o", t.modtime);
 
 
-	    if (t.ftype == 'S') {
-		nsi = 0;
-		p = ssparseinfo;
-		for (nsi = 0, p = ssparseinfo, i = 0; ssparseinfo[i] != '\0'; i++) {
-		    if (ssparseinfo[i] == ':') {
-			ssparseinfo[i] = '\0';
-			if (nsi >= msi - 1) {
-			    msi += 64;
-			    sparseinfo = realloc(sparseinfo, msi * sizeof(*sparseinfo));
-			}
-			sparseinfo[nsi++] = atoll(p);
-			p = ssparseinfo + i + 1;
+	if (t.ftype == 'S') {
+	    nsi = 0;
+	    p = ssparseinfo;
+	    for (nsi = 0, p = ssparseinfo, i = 0; ssparseinfo[i] != '\0'; i++) {
+		if (ssparseinfo[i] == ':') {
+		    ssparseinfo[i] = '\0';
+		    if (nsi >= msi - 1) {
+			msi += 64;
+			sparseinfo = realloc(sparseinfo, msi * sizeof(*sparseinfo));
 		    }
-		}
-		if (i > 0) {
 		    sparseinfo[nsi++] = atoll(p);
-		}
-
-		sparseinfo[0] ^= t.filesize;
-		t.filesize ^= sparseinfo[0];
-		sparseinfo[0] ^= t.filesize;
-
-		if (sparseinfo[0] <= 99999999999LL)
-		    sprintf(tarhead.u.sph.realsize, "%11.11o", sparseinfo[0]);
-		else {
-		    tarhead.u.sph.realsize[0] = 0x80;
-		    for (i = 0; i < sizeof(sparseinfo[0]); i++)
-			if (lendian)
-			    tarhead.u.sph.realsize[11 - i] = ((char *) (&(sparseinfo[0])))[i];
-			else
-			    tarhead.u.sph.realsize[11 - sizeof(sparseinfo[0]) + i] = ((char *) (&(sparseinfo[0])))[i];
-		}
-		for (i = 1; i < nsi && i < 9; i++) {
-		    if (sparseinfo[i] <= 99999999999LL) {
-		       	sprintf(tarhead.u.sph.item[i - 1], "%11.11o", sparseinfo[i]);
-		    }
-		    else {
-			tarhead.u.sph.item[i][0] = 0x80;
-			for (j = 0; j < sizeof(sparseinfo[i]); j++)
-			    if (lendian)
-				tarhead.u.sph.item[i - 1][11 - j] = ((char *) (&(sparseinfo[i])))[j];
-			    else
-				tarhead.u.sph.item[i - 1][11 - sizeof(sparseinfo[i]) + j] = ((char *) (&(sparseinfo[0])))[j];
-		    }
-		}
-		if (nsi > 9) {
-		    tarhead.u.sph.isextended = 1;
-		}
-		else {
-		    tarhead.u.sph.isextended = 0;
+		    p = ssparseinfo + i + 1;
 		}
 	    }
+	    if (i > 0) {
+		sparseinfo[nsi++] = atoll(p);
+	    }
 
-	    if (t.filesize <= 99999999999LL)
-		sprintf(tarhead.size, "%11.11llo", t.filesize);
+	    sparseinfo[0] ^= t.filesize;
+	    t.filesize ^= sparseinfo[0];
+	    sparseinfo[0] ^= t.filesize;
+
+	    if (sparseinfo[0] <= 99999999999LL)
+		sprintf(tarhead.u.sph.realsize, "%11.11o", sparseinfo[0]);
 	    else {
-		tarhead.size[0] = 0x80;
-		for (i = 0; i < sizeof(t.filesize); i++)
+		tarhead.u.sph.realsize[0] = 0x80;
+		for (i = 0; i < sizeof(sparseinfo[0]); i++)
 		    if (lendian)
-			tarhead.size[11 - i] = ((char *) (&t.filesize))[i];
+			tarhead.u.sph.realsize[11 - i] = ((char *) (&(sparseinfo[0])))[i];
 		    else
-			tarhead.size[11 - sizeof(t.filesize)+ i] = ((char *) (&t.filesize))[i];
+			tarhead.u.sph.realsize[11 - sizeof(sparseinfo[0]) + i] = ((char *) (&(sparseinfo[0])))[i];
 	    }
-
-	    memcpy(tarhead.chksum, "        ", 8);
-	    for (tmpchksum = 0, p = (unsigned char *) (&tarhead), i = 512;
-		i != 0; --i, ++p)
-		tmpchksum += 0xFF & *p;
-	    sprintf(tarhead.chksum, "%6.6o", tmpchksum);
-	    sprintf(md5filepath, "%s/%c%c/%s.lzo", srcdir, md5[0], md5[1], md5 + 2);
-	    fwrite(&tarhead, 1, 512, stdout);
-	    tblocks++;
-	    if (tarhead.u.sph.isextended == 1) {
-		for (i = 0; i < sizeof(speh); i++)
-		    ((unsigned char *) &speh)[i] = 0;
-		for (i = 9; i < nsi; i++) {
-		    if (sparseinfo[i] <= 99999999999LL)
-		       	sprintf(speh.item[(i - 9) % 42], "%11.11o", sparseinfo[i]);
-		    else {
-			speh.item[(i - 9) % 42][0] = 0x80;
-			for (j = 0; i < sizeof(sparseinfo[i]); j++)
-			    if (lendian)
-				speh.item[(i - 9) % 42][11 - j] = ((char *) (&(sparseinfo[i])))[j];
-			    else
-				speh.item[(i - 9) % 42][11 - sizeof(sparseinfo[i]) + j] = ((char *) (&(sparseinfo[0])))[j];
-		    }
-		    if ((i - 9) % 42 == 41) {
-/*			if (i >= nsi - 2 && nsi > i + 1) { */
-			if (i < nsi - 1) {
-			    speh.isextended = 1;
-			}
-			else {
-			    speh.isextended = 0;
-			}
-			fwrite(&speh, 1, 512, stdout);
-			tblocks++;
-			for (j = 0; j < sizeof(speh); j++)
-			    ((unsigned char *) &speh)[j] = 0;
-		    }
+	    for (i = 1; i < nsi && i < 9; i++) {
+		if (sparseinfo[i] <= 99999999999LL) {
+		    sprintf(tarhead.u.sph.item[i - 1], "%11.11o", sparseinfo[i]);
 		}
-		if ((i - 9) % 42 != 0) {
+		else {
+		    tarhead.u.sph.item[i][0] = 0x80;
+		    for (j = 0; j < sizeof(sparseinfo[i]); j++)
+			if (lendian)
+			    tarhead.u.sph.item[i - 1][11 - j] = ((char *) (&(sparseinfo[i])))[j];
+			else
+			    tarhead.u.sph.item[i - 1][11 - sizeof(sparseinfo[i]) + j] = ((char *) (&(sparseinfo[0])))[j];
+		}
+	    }
+	    if (nsi > 9) {
+		tarhead.u.sph.isextended = 1;
+	    }
+	    else {
+		tarhead.u.sph.isextended = 0;
+	    }
+	}
+
+	if (t.filesize <= 99999999999LL)
+	    sprintf(tarhead.size, "%11.11llo", t.filesize);
+	else {
+	    tarhead.size[0] = 0x80;
+	    for (i = 0; i < sizeof(t.filesize); i++)
+		if (lendian)
+		    tarhead.size[11 - i] = ((char *) (&t.filesize))[i];
+		else
+		    tarhead.size[11 - sizeof(t.filesize)+ i] = ((char *) (&t.filesize))[i];
+	}
+
+	memcpy(tarhead.chksum, "        ", 8);
+	for (tmpchksum = 0, p = (unsigned char *) (&tarhead), i = 512;
+	    i != 0; --i, ++p)
+	    tmpchksum += 0xFF & *p;
+	sprintf(tarhead.chksum, "%6.6o", tmpchksum);
+	sprintf(md5filepath, "%s/%c%c/%s.lzo", srcdir, md5[0], md5[1], md5 + 2);
+	fwrite(&tarhead, 1, 512, stdout);
+	tblocks++;
+	if (tarhead.u.sph.isextended == 1) {
+	    for (i = 0; i < sizeof(speh); i++)
+		((unsigned char *) &speh)[i] = 0;
+	    for (i = 9; i < nsi; i++) {
+		if (sparseinfo[i] <= 99999999999LL)
+		    sprintf(speh.item[(i - 9) % 42], "%11.11o", sparseinfo[i]);
+		else {
+		    speh.item[(i - 9) % 42][0] = 0x80;
+		    for (j = 0; i < sizeof(sparseinfo[i]); j++)
+			if (lendian)
+			    speh.item[(i - 9) % 42][11 - j] = ((char *) (&(sparseinfo[i])))[j];
+			else
+			    speh.item[(i - 9) % 42][11 - sizeof(sparseinfo[i]) + j] = ((char *) (&(sparseinfo[0])))[j];
+		}
+		if ((i - 9) % 42 == 41) {
+		    if (i < nsi - 1) {
+			speh.isextended = 1;
+		    }
+		    else {
+			speh.isextended = 0;
+		    }
 		    fwrite(&speh, 1, 512, stdout);
 		    tblocks++;
+		    for (j = 0; j < sizeof(speh); j++)
+			((unsigned char *) &speh)[j] = 0;
 		}
 	    }
-	    if (t.ftype == '0' || t.ftype == 'S') {
-		pipe(zin);
-		if ((cprocess = fork()) == 0) {
-		    close(zin[0]);
-		    md5file = open(md5filepath, O_RDONLY);
-		    if (md5file == -1) {
-			fprintf(stderr, "Can not open %s\n", md5filepath);
-			exit(1);
-		    }
-		    dup2(zin[1], 1);
-		    dup2(md5file, 0);
-		    execlp("lzop", "lzop", "-d", (char *) NULL);
-		    fprintf(stderr, "Error\n");
+	    if ((i - 9) % 42 != 0) {
+		fwrite(&speh, 1, 512, stdout);
+		tblocks++;
+	    }
+	}
+	if (t.ftype == '0' || t.ftype == 'S') {
+	    pipe(zin);
+	    if ((cprocess = fork()) == 0) {
+		close(zin[0]);
+		md5file = open(md5filepath, O_RDONLY);
+		if (md5file == -1) {
+		    fprintf(stderr, "Can not open %s\n", md5filepath);
 		    exit(1);
 		}
-		close(zin[1]);
-		curfile = fdopen(zin[0], "r");
-		bytestoread = t.filesize;
-		while (bytestoread > 512ull) {
-		    count = fread(curblock, 1, 512, curfile);
-		    if (count < 512) {
-			fprintf(stderr, "file short read\n");
-			exit(1);
-		    }
-		    fwrite(curblock, 1, 512, stdout);
-		    tblocks++;
-		    bytestoread -= 512;
-		}
-		if (bytestoread > 0) {
-		    for (i = 0; i < 512; i++)
-			curblock[i] = 0;
-		    count = fread(curblock, 1, 512, curfile);
-		    fwrite(curblock, 1, 512, stdout);
-		    tblocks++;
-		}
-		kill(cprocess, 9);
-		waitpid(cprocess, NULL, 0);
-		fclose(curfile);
-		for (i = 0; i < sizeof(tarhead); i++)
-		    ((unsigned char *) &tarhead)[i] = 0;
+		dup2(zin[1], 1);
+		dup2(md5file, 0);
+		execlp("lzop", "lzop", "-d", (char *) NULL);
+		fprintf(stderr, "Error\n");
+		exit(1);
 	    }
+	    close(zin[1]);
+	    curfile = fdopen(zin[0], "r");
+	    bytestoread = t.filesize;
+	    while (bytestoread > 512ull) {
+		count = fread(curblock, 1, 512, curfile);
+		if (count < 512) {
+		    fprintf(stderr, "file short read\n");
+		    exit(1);
+		}
+		fwrite(curblock, 1, 512, stdout);
+		tblocks++;
+		bytestoread -= 512;
+	    }
+	    if (bytestoread > 0) {
+		for (i = 0; i < 512; i++)
+		    curblock[i] = 0;
+		count = fread(curblock, 1, 512, curfile);
+		fwrite(curblock, 1, 512, stdout);
+		tblocks++;
+	    }
+	    kill(cprocess, 9);
+	    waitpid(cprocess, NULL, 0);
+	    fclose(curfile);
+	    for (i = 0; i < sizeof(tarhead); i++)
+		((unsigned char *) &tarhead)[i] = 0;
 	}
 	filename = 0;
 	linktarget = 0;
@@ -1579,22 +1576,6 @@ int getconfig()
     if (config.meta == 0)
 	config.meta= "/var/backup/meta";
 }
-
-/*
-insert or ignore into file_entities (ftype, permission, device_id, inode, user_name, user_id, group_name, group_id, size, md5, datestamp, filename)
-select ftype, permission, device_id, inode, user_name, user_id, group_name, group_id, size, md5, datestamp, filename from received_file_entities_ldi where backupset_id = 1;
-
-insert or ignore into backupset_detail (backupset_id, file_id) select 1, f.file_id from file_entities f join received_file_entities_ldi r on f.ftype = r.ftype and f.permission = r.permission and f.device_id = r.device_id and f.inode = r.inode and f.user_name = r.user_name and f.user_id = r.user_id and f.group_name = r.group_name and f.group_id = r.group_id and f.size = r.size and f.md5 = r.md5 and f.datestamp = r.datestamp and f.filename = r.filename where backupset_id = 1;
-
-
-// restore
-// 1) select into temp table restore_file_entities
-create temporary view hardlink_file_entities as select min(file_id) as file_id, ftype, permission, device_id, inode, user_name, user_id, group_name, group_id, size, md5, datestamp, filename from file_entities where ftype = 0 group by ftype, permission, device_id, inode, user_name, user_id, group_name, group_id, size, md5, datestamp having count(*) > 1;
-
-select a.file_id, case when b.file_id not null and a.file_id != b.file_id then 1 else a.ftype end, a.permission, a.device_id, a.inode, a.user_name, a.user_id, a.group_name, a.group_id, a.size, case when b.file_id not null and a.file_id != b.file_id then b.filename else a.md5 end, a.datestamp, a.filename from file_entities a left join hardlink_file_entities b on a.ftype = b.ftype and a.permission = b.permission and a.device_id = b.device_id and a.inode = b.inode and a.user_name = b.user_name and a.user_id = b.user_id and a.group_name = b.group_name and a.group_id = b.group_id and a.size = b.size and a.md5 = b.md5 and a.datestamp = b.datestamp;
-
-
- */
 
 int sqlbusy(void *x, int y)
 {
