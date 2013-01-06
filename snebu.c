@@ -227,7 +227,6 @@ newbackup(int argc, char **argv)
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
-    fprintf(stderr, "%s\n", sqlstmt);
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into needed_file_entities \
@@ -281,6 +280,18 @@ int initdb(sqlite3 *bkcatalog)
     char *sqlerr;
 
     err = sqlite3_exec(bkcatalog, " \
+	    create table if not exists storagefiles ( \
+	    md5           char, \
+	    volume        char, \
+	    segment       char, \
+	    location      char, \
+	constraint storagefilesc1 unique ( \
+	    md5, \
+	    volume, \
+	    segment, \
+	    location ))", 0, 0, 0);
+
+    err = sqlite3_exec(bkcatalog, " \
 	create table if not exists file_entities ( \
     	    file_id       integer primary key autoincrement, \
        	    ftype         char, \
@@ -296,7 +307,7 @@ int initdb(sqlite3 *bkcatalog)
 	    datestamp     integer, \
 	    filename      char, \
 	    extdata       char default '', \
-	constraint file_entitiesc1 unique ( \
+	constraint file_entities_c1 unique ( \
 	    ftype, \
 	    permission, \
 	    device_id, \
@@ -311,7 +322,7 @@ int initdb(sqlite3 *bkcatalog)
 	    filename, \
 	    extdata ))", 0, 0, &sqlerr);
     if (sqlerr != 0) {
-	fprintf(stderr, sqlerr);
+	fprintf(stderr, "Create table file_entities: %s\n", sqlerr);
 	sqlite3_free(sqlerr);
     }
     if (err != 0)
@@ -372,6 +383,7 @@ int initdb(sqlite3 *bkcatalog)
 	    serial ))", 0, 0, 0);
     if (err != 0)
 	return(err);
+
     err = sqlite3_exec(bkcatalog, " \
 	    create table if not exists backupset_detail ( \
 	    backupset_id  integer, \
@@ -471,6 +483,9 @@ int initdb(sqlite3 *bkcatalog)
     err = sqlite3_exec(bkcatalog, " \
 	    create index received_file_entitiesi1 on received_file_entities ( \
 	    filename, file_id)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog, " \
+	    create index storagefilesi1 on storagefiles ( \
+	    md5)", 0, 0, 0);
     return(0);
 }
 
@@ -575,6 +590,7 @@ int submitfiles(int argc, char **argv)
     sqlite3_stmt *sqlres;
     struct stat tmpfstat;
     sqlite3 *bkcatalog;
+    char *sqlerr;
     char *bkcatalogp;
     fd_set input_s;
     struct {
@@ -672,7 +688,7 @@ int submitfiles(int argc, char **argv)
 		and f.filename = r.filename and f.extdata = r.extdata \
 		where backupset_id = '%d'", bkid)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
-	    
+
 	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
             sqlite3_close(bkcatalog);
             return(0);
@@ -832,7 +848,6 @@ int submitfiles(int argc, char **argv)
             curfile = fdopen(zin[1], "w");
 
             blockstoread = fullblocks + (partialblock > 0 ? 1 : 0);
-//      fprintf(stderr, "File contains %d 512-byte blocks and a final %d block\n", blockstoread, partialblock);
             MD5_Init(&cfmd5ctl);
             for (i = 1; i <= blockstoread; i++) {
                 count = fread(curblock, 1, 512, stdin);
@@ -843,14 +858,11 @@ int submitfiles(int argc, char **argv)
 
                 if (i == blockstoread) {
                     if (partialblock > 0) {
-    //              printf("Writing out partial block %d\n", partialblock);
                         fwrite(curblock, 1, partialblock, curfile);
                         MD5_Update(&cfmd5ctl, curblock, partialblock);
                         break;
                     }
                 }
-//	  if (i % 10000 == 0)
-//	    fprintf(stderr, "Writing out block number %d of %d to %d\n", i, blockstoread, curfile);
                 fwrite(curblock, 512, 1, curfile);
                 MD5_Update(&cfmd5ctl, curblock, 512);
             }
@@ -873,6 +885,15 @@ int submitfiles(int argc, char **argv)
 
             sprintf((destfilepath = malloc(strlen(destdir) + strlen(cfmd5a) + 7)), "%s/%s/%s.lzo", destdir, cfmd5d, cfmd5f);
             sprintf((destfilepathm = malloc(strlen(destdir) + 4)), "%s/%s", destdir, cfmd5d);
+
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(" \
+		insert or ignore into storagefiles (md5, volume, segment, location) \
+		values ('%s', 0, 0, '%q/%q.lzo')", cfmd5a, cfmd5d, cfmd5f)), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n", sqlerr);
+		sqlite3_free(sqlerr);
+	    }
+
             if (stat(destfilepath, &tmpfstat) == 0) {
                 remove(tmpfilepath);
 	    }
