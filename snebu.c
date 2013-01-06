@@ -140,7 +140,7 @@ newbackup(int argc, char **argv)
 
     sqlite3_exec(bkcatalog, " \
 	create temporary table if not exists inbound_file_entities ( \
-       	    backup_id     integer, \
+       	    backupset_id     integer, \
        	    ftype         char, \
 	    permission    char, \
     	    device_id     char, \
@@ -155,7 +155,7 @@ newbackup(int argc, char **argv)
 	    filename      char, \
 	    extdata       char default '', \
 	constraint file_entitiesc1 unique ( \
-	    backup_id, \
+	    backupset_id, \
 	    ftype, \
 	    permission, \
 	    device_id, \
@@ -186,25 +186,29 @@ newbackup(int argc, char **argv)
 		&fs.ngid, &fs.filesize, fs.md5,
 		&fs.modtime, &flen1);
 	fs.filename = filespecs + flen1;
-	if (fs.ftype == 'l')
+	if (fs.ftype == 'l') {
 	    if (getdelim(&linkspecs, &linkspeclen, 0, stdin) > 0)
 		fs.linktarget = linkspecs;
+	}
+	else
+	    fs.linktarget = "";
 
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into inbound_file_entities \
-	    (backup_id, ftype, permission, device_id, inode, user_name, user_id, group_name, \
+	    (backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name, \
 	    group_id, size, md5, datestamp, filename, extdata) \
 	    values ('%d', '%c', '%4.4o', '%s', '%d', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%q')",
 	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
-	    fs.filesize, "0", fs.modtime, fs.filename, fs.linktarget)), 0, 0, &sqlerr);
+	    fs.filesize, fs.md5, fs.modtime, fs.filename, fs.linktarget)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
-
 	    sqlite3_free(sqlerr);
 	}
 //	else
 //	    fprintf(stderr, "%s\n", fs.filename);
 	sqlite3_free(sqlstmt);
+
+	
 #ifdef notdef
 
 	if (fs.ftype == 'f') {
@@ -313,6 +317,45 @@ newbackup(int argc, char **argv)
 //	filespeclen = 0;
 #endif
     }
+    fprintf(stderr, "Done with stage 1\n");
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"insert or ignore into file_entities \
+	(ftype, permission, device_id, inode, user_name, user_id, group_name, \
+	group_id, size, md5, datestamp, filename, extdata) \
+	select ftype, permission, device_id, inode, user_name, user_id, group_name, \
+	group_id, size, md5, datestamp, filename, extdata from inbound_file_entities i \
+	where backupset_id = '%d' and (i.ftype = 'd' or i.ftype = 'l')", bkid)), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    fprintf(stderr, "Done with stage 2\n");
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"insert or ignore into needed_file_entities \
+	(backupset_id, device_id, inode, filename) \
+	select backupset_id, i.device_id, i.inode, i.filename from inbound_file_entities i \
+	left join file_entities f \
+	on i.ftype = f.ftype and i.permission = f.permission \
+	and i.device_id = f.device_id and i.inode = f.inode \
+	and i.user_name = f.user_name and i.user_id = f.user_id \
+	and i.group_name = f.group_name and i.group_id = f.group_id \
+	and i.size = f.size and i.md5 = f.md5 and i.datestamp = f.datestamp \
+	and i.filename = f.filename and i.extdata = f.extdata \
+	where i.backupset_id = '%d' and f.file_id is null", bkid)), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    fprintf(stderr, "Done with stage 3\n");
+    sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf( "\
+	select filename from needed_file_entities \
+	where backupset_id = '%d'", bkid)), 1000, &sqlres, 0);
+    while (sqlite3_step(sqlres) == SQLITE_ROW)
+	printf("%s\n", sqlite3_column_text(sqlres, 0));
+    sqlite3_finalize(sqlres);
+    sqlite3_free(sqlstmt);
+
 //    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 	
     sqlite3_close(bkcatalog);
