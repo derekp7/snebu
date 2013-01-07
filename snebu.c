@@ -1623,6 +1623,9 @@ int listbackups(int argc, char **argv)
     time_t bktime;
     char *bktimes;
     int rowcount;
+    char *dbbkname;
+    char oldbkname[128];
+    time_t oldbktime;
 
     while ((optc = getopt(argc, argv, "n:d:")) >= 0) {
 	switch (optc) {
@@ -1654,7 +1657,7 @@ int listbackups(int argc, char **argv)
 	filespec[0] = 0;
 	for (i = optind; i < argc; i++) {
 	    if (i == optind)
-		strcat(filespec, " and (filename glob ");
+		strcat(filespec, " (filename glob ");
 	    else
 		strcat(filespec, " or filename glob ");
 	    strcat(filespec, sqlite3_mprintf("'%q'", argv[i]));
@@ -1667,17 +1670,50 @@ int listbackups(int argc, char **argv)
 
     if (foundopts == 0) {
 
-	sqlite3_prepare_v2(bkcatalog,
-    	    (sqlstmt = sqlite3_mprintf(" \
-    	    select distinct name from backupsets")), 1000, &sqlres, 0);
-	rowcount = 0;
-	while (sqlite3_step(sqlres) == SQLITE_ROW) {
-	    rowcount++;
-	    printf("%s\n", sqlite3_column_text(sqlres, 0));
+	if (filespec == 0) {
+	    sqlite3_prepare_v2(bkcatalog,
+		(sqlstmt = sqlite3_mprintf(" \
+		select distinct name from backupsets")), 1000, &sqlres, 0);
+	    rowcount = 0;
+	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
+		rowcount++;
+		printf("%s\n", sqlite3_column_text(sqlres, 0));
+	    }
+	    rowcount == 0 && printf("No backups found\n");
+	    sqlite3_finalize(sqlres);
+	    sqlite3_free(sqlstmt);
 	}
-	rowcount == 0 && printf("No backups found\n");
-	sqlite3_finalize(sqlres);
-	sqlite3_free(sqlstmt);
+	else {
+
+	    sqlite3_prepare_v2(bkcatalog,
+		(sqlstmt = sqlite3_mprintf(" \
+		select distinct b.name, b.serial, f.filename from backupsets b \
+		join backupset_detail d on b.backupset_id = d.backupset_id \
+		join file_entities f on d.file_id = f.file_id where \
+		%s", filespec )), 1000, &sqlres, 0);
+	    rowcount = 0;
+	    oldbkname[0] = 0;
+	    oldbktime = 0;
+	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
+		rowcount++;
+		dbbkname = (char *) sqlite3_column_text(sqlres, 0);
+		bktime = sqlite3_column_int(sqlres, 1);
+		bktimes = ctime(&bktime);
+		bktimes[strlen(bktimes) - 1] = 0;
+		if (strcmp(dbbkname, oldbkname) != 0)
+		    printf("%s:\n", dbbkname);
+		if (bktime != oldbktime)
+		    printf("    %-10d %s:\n", bktime, bktimes);
+		printf("        %s\n", sqlite3_column_text(sqlres, 2));
+		strncpy(oldbkname, dbbkname, 127);
+		oldbkname[127] = 0;
+		oldbktime = bktime;
+	    }
+	    rowcount == 0 && printf("No backups found for %s\n", sqlstmt);
+	    sqlite3_finalize(sqlres);
+	    sqlite3_free(sqlstmt);
+	}
+
     }
     else if (foundopts == 1 || foundopts == 3) {
 
@@ -1708,8 +1744,8 @@ int listbackups(int argc, char **argv)
 	    bktime = sqlite3_column_int(sqlres, 1),
 	    bktimes = ctime(&bktime);
 	    bktimes[strlen(bktimes) - 1] = 0;
-	    printf("    %-20s %10d %s\n",
-		sqlite3_column_text(sqlres, 0),bktime, bktimes);
+	    printf("    %d / %s / %s\n",
+		bktime, sqlite3_column_text(sqlres, 0), bktimes);
 
 	}
 	rowcount == 0 && printf("No backups found\n");
