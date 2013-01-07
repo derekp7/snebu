@@ -1313,7 +1313,7 @@ int restore(int argc, char **argv)
 	a.permission, a.device_id, a.inode, a.user_name, a.user_id, \
 	a.group_name, a.group_id, a.size, a.md5, a.datestamp, a.filename, \
 	case when b.file_id not null and a.file_id != b.file_id \
-	then b.extdata else a.extdata end, a.extdata \
+	then b.filename else a.extdata end \
 	from restore_file_entities a left join hardlink_file_entities b \
 	on a.ftype = b.ftype and a.permission = b.permission \
 	and a.device_id = b.device_id and a.inode = b.inode \
