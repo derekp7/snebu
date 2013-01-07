@@ -259,9 +259,9 @@ newbackup(int argc, char **argv)
 	and i.device_id = f.device_id and i.inode = f.inode \
 	and i.user_name = f.user_name and i.user_id = f.user_id \
 	and i.group_name = f.group_name and i.group_id = f.group_id \
-	and i.size = f.size and i.md5 = f.md5 and i.datestamp = f.datestamp \
+	and i.size = f.size and i.datestamp = f.datestamp \
 	and i.filename = f.filename and i.extdata = f.extdata \
-	where i.backupset_id = '%d' and (i.ftype = '2' or i.ftype = '5')", bkid)), 0, 0, &sqlerr);
+	where i.backupset_id = '%d'", bkid)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
