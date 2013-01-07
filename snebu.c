@@ -233,12 +233,13 @@ newbackup(int argc, char **argv)
 	(backupset_id, device_id, inode, filename) \
 	select backupset_id, i.device_id, i.inode, i.filename from inbound_file_entities i \
 	left join file_entities f on \
-	i.ftype = f.ftype and i.permission = f.permission \
+	(i.ftype = f.ftype or (i.ftype = '0' and f.ftype = 'S')) and i.permission = f.permission \
 	and i.device_id = f.device_id and i.inode = f.inode \
 	and i.user_name = f.user_name and i.user_id = f.user_id \
 	and i.group_name = f.group_name and i.group_id = f.group_id \
-	and i.size = f.size and i.md5 = f.md5 and i.datestamp = f.datestamp \
-	and i.filename = f.filename and i.extdata = f.extdata \
+	and i.size = f.size and i.datestamp = f.datestamp \
+	and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S') \
+        or i.extdata = f.extdata) \
 	where i.backupset_id = '%d' and f.file_id is null", bkid)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
