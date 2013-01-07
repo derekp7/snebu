@@ -69,7 +69,7 @@ newbackup(int argc, char **argv)
         char ftype;
         int mode;
 	char devid[33];
-	int inode;
+	char inode[33];
         char auid[33];
         int nuid;
         char agid[33];
@@ -144,7 +144,7 @@ newbackup(int argc, char **argv)
        	    ftype         char, \
 	    permission    char, \
     	    device_id     char, \
-       	    inode         integer, \
+       	    inode         char, \
 	    user_name     char, \
 	    user_id       integer, \
 	    group_name    char, \
@@ -174,15 +174,15 @@ newbackup(int argc, char **argv)
 //    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     while (getdelim(&filespecs, &filespeclen, 0, stdin) > 0) {
         flen1 = 0;
-	x = sscanf(filespecs, "%c\t%o\t%32s\t%d\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d.%*d\t%n",
-	    &fs.ftype, &fs.mode, &fs.devid,
-	    &fs.inode, fs.auid, &fs.nuid, fs.agid,
+	x = sscanf(filespecs, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d.%*d\t%n",
+	    &fs.ftype, &fs.mode, fs.devid,
+	    fs.inode, fs.auid, &fs.nuid, fs.agid,
 	    &fs.ngid, &fs.filesize, fs.md5,
 	    &fs.modtime, &flen1);
 	if (flen1 == 0)
-	    x = sscanf(filespecs, "%c\t%o\t%32s\t%d\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d\t%n",
+	    x = sscanf(filespecs, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d\t%n",
 		&fs.ftype, &fs.mode, &fs.devid,
-		&fs.inode, fs.auid, &fs.nuid, fs.agid,
+		fs.inode, fs.auid, &fs.nuid, fs.agid,
 		&fs.ngid, &fs.filesize, fs.md5,
 		&fs.modtime, &flen1);
 	fs.filename = filespecs + flen1;
@@ -203,7 +203,7 @@ newbackup(int argc, char **argv)
 	    "insert or ignore into inbound_file_entities \
 	    (backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name, \
 	    group_id, size, md5, datestamp, filename, extdata) \
-	    values ('%d', '%c', '%4.4o', '%s', '%d', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%q')",
+	    values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%q')",
 	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 	    fs.filesize, fs.md5, fs.modtime, fs.filename, fs.linktarget)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
@@ -297,7 +297,7 @@ int initdb(sqlite3 *bkcatalog)
        	    ftype         char, \
 	    permission    char, \
     	    device_id     char, \
-       	    inode         integer, \
+       	    inode         char, \
 	    user_name     char, \
 	    user_id       integer, \
 	    group_name    char, \
@@ -363,7 +363,7 @@ int initdb(sqlite3 *bkcatalog)
 	create table if not exists needed_file_entities ( \
 	    backupset_id  integer, \
     	    device_id     char, \
-       	    inode         integer, \
+       	    inode         char, \
 	    filename      char, \
 	foreign key(backupset_id) references backupsets(backupset_id), \
 	unique ( \
@@ -545,7 +545,7 @@ int submitfiles(int argc, char **argv)
         char ftype;
         int mode;
 	char devid[33];
-	int inode;
+	char inode[33];
         char auid[33];
         int nuid;
         char agid[33];
@@ -977,7 +977,7 @@ int submitfiles(int argc, char **argv)
 		"insert or ignore into file_entities \
 		(ftype, permission, device_id, inode, user_name, user_id, group_name, \
 		group_id, size, md5, datestamp, filename, extdata) \
-		values ('%c', '%4.4o', '%s', '%d', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%q')",
+		values ('%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%q')",
 		fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 		fs.filesize, "0", fs.modtime, fs.filename, fs.linktarget)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
@@ -985,7 +985,7 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_prepare_v2(bkcatalog,
 		(sqlstmt = sqlite3_mprintf("select file_id from file_entities \
 		    where ftype = '%c' and permission = '%4.4o' and device_id = '%s' \
-		    and inode = '%d' and user_name = '%s' and user_id = '%d' \
+		    and inode = '%s' and user_name = '%s' and user_id = '%d' \
 		    and group_name = '%s' and group_id = '%d' and size = '%llu' \
 		    and md5 = '%s' and datestamp = '%d' and filename = '%q' \
 		    and linktarget = '%q'", fs.ftype, fs.mode, fs.devid,
@@ -1007,7 +1007,7 @@ int submitfiles(int argc, char **argv)
 		"insert or ignore into file_entities \
 		(ftype, permission, device_id, inode, user_name, user_id, group_name, \
 		group_id, size, md5, datestamp, filename) \
-		values ('%c', '%4.4o', '%s', '%d', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q')",
+		values ('%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q')",
 		fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 		fs.filesize, "0", fs.modtime, fs.filename)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
@@ -1015,7 +1015,7 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_prepare_v2(bkcatalog,
 		(sqlstmt = sqlite3_mprintf("select file_id from file_entities \
 		    where ftype = '%c' and permission = '%4.4o' and device_id = '%s' \
-		    and inode = '%d' and user_name = '%s' and user_id = '%d' \
+		    and inode = '%s' and user_name = '%s' and user_id = '%d' \
 		    and group_name = '%s' and group_id = '%d' and size = '%llu' \
 		    and md5 = '%s' and datestamp = '%d' and filename = '%q'",
 		    fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
@@ -1042,7 +1042,7 @@ int submitfiles(int argc, char **argv)
             fprintf(manifest, "%c\t%4.4o\t%s\t%d\t%s\t%d\t%llu\t%s\t%d\t%s\n",*(tarhead.ftype), mode, tarhead.auid, nuid, tarhead.agid, ngid, filesize, "0", modtime, efilename);
         }
 #endif
-//	fprintf(stdout, "'%c', '%4.4o', '%s', '%d', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%s'\n",
+//	fprintf(stdout, "'%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%s'\n",
 //		fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 //		fs.filesize, fs.md5, fs.modtime, fs.filename);
 	if (fs.filename != 0)
@@ -1256,7 +1256,7 @@ int restore(int argc, char **argv)
        	    ftype         char, \
 	    permission    char, \
     	    device_id     char, \
-       	    inode         integer, \
+       	    inode         char, \
 	    user_name     char, \
 	    user_id       integer, \
 	    group_name    char, \
@@ -1823,7 +1823,7 @@ int import(int argc, char **argv)
         char ftype;
         int mode;
 	char devid[33];
-	int inode;
+	char inode;
         char auid[33];
         char agid[33];
         int nuid;
@@ -1917,8 +1917,8 @@ int import(int argc, char **argv)
 	char *lptr;
 	char *endlptr;
 	int fnstart;
-	sscanf(instr, "%c\t%o\t%32s\t%d\t%32s\t%d\t%32s\t%d\t%Ld\t%32s\t%d\t%n",
-	    &(t.ftype), &t.mode, t.devid, &t.inode, t.auid, &t.nuid, t.agid, &t.ngid,
+	sscanf(instr, "%c\t%o\t%32s\t%d\t%32s\t%32s\t%32s\t%d\t%Ld\t%32s\t%d\t%n",
+	    &(t.ftype), &t.mode, t.devid, t.inode, t.auid, &t.nuid, t.agid, &t.ngid,
 	    &(t.filesize), md5, &t.modtime, &fnstart);
 	fptr = instr + fnstart;
 	endfptr = strstr(fptr, "\t");
@@ -1940,7 +1940,7 @@ int import(int argc, char **argv)
 	    "insert or ignore into file_entities \
 	    (ftype, permission, device_id, inode, user_name, user_id, \
 	    group_name, group_id, size, md5, datestamp, filename, extdata) \
-	    values ('%c', '%4.4o', '%s', '%d', '%s', '%d', '%s', '%d', '%llu', \
+	    values ('%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', \
 	    '%s', '%d', '%q', '%q')",
 	    t.ftype, t.mode, t.devid, t.inode, t.auid, t.nuid, t.agid, t.ngid,
 	    t.filesize,  md5, t.modtime, filename, linktarget)), 0, 0, 0);
@@ -1949,7 +1949,7 @@ int import(int argc, char **argv)
 	sqlite3_prepare_v2(bkcatalog,
 	    (sqlstmt = sqlite3_mprintf("select file_id from file_entities \
 		where ftype = '%c' and permission = '%4.4o' and device_id = '%s' \
-		and inode = '%d' and user_name = '%s' and user_id = '%d' \
+		and inode = '%s' and user_name = '%s' and user_id = '%d' \
 		and group_name = '%s' and group_id = '%d' and size = '%llu' \
 		and md5 = '%s' and datestamp = '%d' and filename = '%q' \
 		and extdata = '%q'", t.ftype, t.mode, t.devid,
@@ -1962,7 +1962,6 @@ int import(int argc, char **argv)
 		"insert or ignore into backupset_detail \
 		(backupset_id, file_id) values ('%d', '%d')",
 		bkid, fileid)), 0, 0, 0);
-	    fprintf(stderr, "%s\n", filename);
 	    fflush(stderr);
 	}
 	else
