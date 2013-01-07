@@ -195,10 +195,14 @@ newbackup(int argc, char **argv)
 
 	if (fs.ftype == 'f')
 	    fs.ftype = '0';
-	else if (fs.ftype == 'l')
+	else if (fs.ftype == 'l') {
 	    fs.ftype = '2';
-	else if (fs.ftype == 'd')
+	    fs.filesize = 0;
+	}
+	else if (fs.ftype == 'd') {
 	    fs.ftype = '5';
+	    fs.filesize = 0;
+	}
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into inbound_file_entities \
 	    (backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name, \
@@ -233,7 +237,8 @@ newbackup(int argc, char **argv)
 	(backupset_id, device_id, inode, filename) \
 	select backupset_id, i.device_id, i.inode, i.filename from inbound_file_entities i \
 	left join file_entities f on \
-	(i.ftype = f.ftype or (i.ftype = '0' and f.ftype = 'S')) and i.permission = f.permission \
+	i.ftype = case when f.ftype = 'S' then '0' else f.ftype end \
+	and i.permission = f.permission \
 	and i.device_id = f.device_id and i.inode = f.inode \
 	and i.user_name = f.user_name and i.user_id = f.user_id \
 	and i.group_name = f.group_name and i.group_id = f.group_id \
@@ -441,7 +446,7 @@ int initdb(sqlite3 *bkcatalog)
             r.md5, \
             r.datestamp, \
             l.filename, \
-            l.extdata \
+            r.extdata \
         from \
             received_file_entities_di r \
         join \
