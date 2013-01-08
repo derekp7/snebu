@@ -1864,7 +1864,7 @@ int import(int argc, char **argv)
     unsigned char *elinktarget = 0;
     char md5[33];
     struct {
-        char ftype;
+        char ftype[2];
         int mode;
 	char devid[33];
 	char inode[33];
@@ -1875,6 +1875,7 @@ int import(int argc, char **argv)
         int modtime;
         unsigned long long int filesize;
     } t;
+    int count;
 
 
 
@@ -1929,7 +1930,10 @@ int import(int argc, char **argv)
     sqlite3_open(bkcatalogp, &bkcatalog);
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
     sqlite3_exec(bkcatalog, "PRAGMA temp_store = 2", 0, 0, 0);
-//    sqlite3_exec(bkcatalog, "PRAGMA synchronous = 0", 0, 0, 0);
+// TODO These two should be set via command line options
+    sqlite3_exec(bkcatalog, "PRAGMA synchronous = OFF", 0, 0, 0);
+    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = MEMORY", 0, 0, 0);
+    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
     initdb(bkcatalog);
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -1970,7 +1974,7 @@ int import(int argc, char **argv)
 	    datestamp     integer, \
 	    filename      char, \
 	    extdata       char default '', \
-	constraint file_entitiesc1 unique ( \
+	constraint inbound_file_entitiesc1 unique ( \
 	    backupset_id, \
 	    ftype, \
 	    permission, \
@@ -1985,17 +1989,31 @@ int import(int argc, char **argv)
 	    datestamp, \
 	    filename, \
 	    extdata ))", 0, 0, 0);
+    sqlite3_exec(bkcatalog, " \
+	    create index inbound_file_entitiesi1 on inbound_file_entities ( \
+	    file_id, permission, device_id, inode, user_name, user_id, group_name, group_id, size, md5, datestamp, filename, extdata)", 0, 0, 0);
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+    sqlstmt = sqlite3_mprintf(
+	"insert or ignore into inbound_file_entities \
+	(backupset_id, ftype, permission, device_id, inode, user_name, user_id, \
+	group_name, group_id, size, md5, datestamp, filename, extdata) \
+	values (@bkid, @ftype, @mode, @devid, @inode, @auid, @nuid, @agid, \
+	@ngid, @filesize, @md5, @modtime, @filename, @linktarget)");
 
+    sqlite3_prepare_v2(bkcatalog, sqlstmt, -1, &sqlres, 0);
+
+    t.ftype[1] = 0;
+    count = 0;
     while (getline(&instr, &instrlen, catalog) > 0) {
-	sscanf(instr, "%c\t", &(t.ftype));
+	count++;
 	char *fptr;
 	char *endfptr;
 	char *lptr;
 	char *endlptr;
 	int fnstart;
-	sscanf(instr, "%c\t%o\t%32s\t%32s\t%32s\t%32s\t%32s\t%d\t%Ld\t%32s\t%d\t%n",
-	    &(t.ftype), &t.mode, t.devid, t.inode, t.auid, &t.nuid, t.agid, &t.ngid,
+	char *ascmode;
+	sscanf(instr, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%Ld\t%32s\t%d\t%n",
+	    t.ftype, &t.mode, t.devid, t.inode, t.auid, &t.nuid, t.agid, &t.ngid,
 	    &(t.filesize), md5, &t.modtime, &fnstart);
 	fptr = instr + fnstart;
 	endfptr = strstr(fptr, "\t");
@@ -2004,7 +2022,7 @@ int import(int argc, char **argv)
 	efilename[endfptr - fptr] = 0;
 	    strunesc(efilename, &filename);
 
-	if (t.ftype == '2' || t.ftype == '1' || t.ftype == 'S') {
+	if (*(t.ftype) == '2' || *(t.ftype) == '1' || *(t.ftype) == 'S') {
 	    lptr = endfptr + 1;
 	    endlptr = strstr(lptr, "\n");
 	    elinktarget = realloc(elinktarget, endlptr - lptr + 1);
@@ -2012,21 +2030,30 @@ int import(int argc, char **argv)
 	    elinktarget[endlptr - lptr] = 0;
 	    strunesc(elinktarget, &linktarget);
 	}
+	fflush(stderr);
 
-	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	    "insert or ignore into inbound_file_entities \
-	    (backupset_id, ftype, permission, device_id, inode, user_name, user_id, \
-	    group_name, group_id, size, md5, datestamp, filename, extdata) \
-	    values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', \
-	    '%s', '%d', '%q', '%q')", bkid,
-	    t.ftype, t.mode, t.devid, t.inode, t.auid, t.nuid, t.agid, t.ngid,
-	    t.filesize,  md5, t.modtime, filename, linktarget)), 0, 0, &sqlerr);
-	if (sqlerr != 0) {
-	    fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-	    sqlite3_free(sqlerr);
-	}
-	sqlite3_free(sqlstmt);
+	ascmode = sqlite3_mprintf("%4.4o", t.mode);
+	sqlite3_bind_int(sqlres, 1, bkid);
+	sqlite3_bind_text(sqlres, 2, t.ftype, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 3, ascmode, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 4, t.devid, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 5, t.inode, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 6, t.auid, -1, SQLITE_STATIC);
+	sqlite3_bind_int(sqlres, 7, t.nuid);
+	sqlite3_bind_text(sqlres, 8, t.agid, -1, SQLITE_STATIC);
+	sqlite3_bind_int(sqlres, 9, t.ngid);
+	sqlite3_bind_int64(sqlres, 10, t.filesize);
+	sqlite3_bind_text(sqlres, 11, md5, -1, SQLITE_STATIC);
+	sqlite3_bind_int(sqlres, 12, t.modtime);
+	sqlite3_bind_text(sqlres, 13, filename, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 14, linktarget, -1, SQLITE_STATIC);
+	fflush(stderr);
+	sqlite3_step(sqlres);
+	fflush(stderr);
+//	sqlite3_clear_bindings(sqlres);
+	sqlite3_reset(sqlres);
     }
+    fprintf(stderr, "Inserted %d records\n", count);
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities \
 	(ftype, permission, device_id, inode, user_name, user_id, \
@@ -2039,6 +2066,7 @@ int import(int argc, char **argv)
 	sqlite3_free(sqlerr);
     }
     sqlite3_free(sqlstmt);
+    fprintf(stderr, "Copied records to file_entities\n");
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into backupset_detail \
@@ -2058,6 +2086,7 @@ int import(int argc, char **argv)
 	sqlite3_free(sqlerr);
     }
     sqlite3_free(sqlstmt);
+    fprintf(stderr, "Created backupset_detail entries\n");
 
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 
