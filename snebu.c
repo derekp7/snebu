@@ -153,7 +153,7 @@ newbackup(int argc, char **argv)
 	    datestamp     integer, \
 	    filename      char, \
 	    extdata       char default '', \
-	constraint file_entitiesc1 unique ( \
+	constraint inbound_file_entitiesc1 unique ( \
 	    backupset_id, \
 	    ftype, \
 	    permission, \
@@ -299,7 +299,7 @@ int initdb(sqlite3 *bkcatalog)
 
     err = sqlite3_exec(bkcatalog, " \
 	create table if not exists file_entities ( \
-    	    file_id       integer primary key autoincrement, \
+    	    file_id       integer primary key, \
        	    ftype         char, \
 	    permission    char, \
     	    device_id     char, \
@@ -336,7 +336,7 @@ int initdb(sqlite3 *bkcatalog)
 
     err = sqlite3_exec(bkcatalog, " \
 	create table if not exists received_file_entities ( \
-    	    file_id       integer primary key autoincrement, \
+    	    file_id       integer primary key, \
 	    backupset_id  integer, \
        	    ftype         char, \
 	    permission    char, \
@@ -380,7 +380,7 @@ int initdb(sqlite3 *bkcatalog)
 
     err = sqlite3_exec(bkcatalog, " \
 	    create table if not exists backupsets ( \
-	    backupset_id  integer primary key autoincrement, \
+	    backupset_id  integer primary key, \
 	    name          char, \
 	    retention     char, \
 	    serial        char, \
@@ -1258,7 +1258,7 @@ int restore(int argc, char **argv)
 //  
     sqlite3_exec(bkcatalog, sqlstmt = " \
 	create temporary table if not exists restore_file_entities ( \
-    	    file_id       integer primary key autoincrement, \
+    	    file_id       integer primary key, \
        	    ftype         char, \
 	    permission    char, \
     	    device_id     char, \
