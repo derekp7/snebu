@@ -47,6 +47,8 @@ int main(int argc, char **argv)
 	listbackups(argc - 1, argv + 1);
     else if (strcmp(subfunc, "import") == 0)
 	import(argc - 1, argv + 1);
+    else if (strcmp(subfunc, "expire") == 0)
+	expire(argc - 1, argv + 1);
     else {
 	usage();
 	exit(1);
@@ -2087,4 +2089,140 @@ int import(int argc, char **argv)
 
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 
+}
+
+int expire(int argc, char **argv)
+{
+    int optc;
+    char retention[128];
+    char bkname[128];
+    int age;
+    int min = 3;
+    int foundopts = 0;
+    sqlite3 *bkcatalog;
+    sqlite3_stmt *sqlres;
+    char *bkcatalogp;
+    char *sqlstmt = 0;
+    char *sqlerr;
+    int i;
+    char catalogpath[512];
+    time_t cutoffdate;
+    bkname[0] = 0;
+
+    while ((optc = getopt(argc, argv, "r:n:a:k:")) >= 0) {
+	switch (optc) {
+	    case 'r':
+		strncpy(retention, optarg, 127);
+		retention[127] = 0;
+		foundopts |= 1;
+		break;
+	    case 'n':
+		strncpy(bkname, optarg, 127);
+		bkname[127] = 0;
+		foundopts |= 2;
+		break;
+	    case 'a':
+		age = atoi(optarg);
+		foundopts |= 4;
+		break;
+	    case 'm':
+		min = atoi(optarg);
+		foundopts |= 8;
+		break;
+	    default:
+		usage();
+		return(1);
+	}
+    }
+    if ((foundopts & 5) != 5 && (foundopts & 7) != 7) {
+        usage();
+        return(1);
+    }
+    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    sqlite3_open(bkcatalogp, &bkcatalog);
+    sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
+
+    cutoffdate = time(0) - (age * 60 * 60 * 24);
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
+	delete from needed_file_entities where backupset_id in ( \
+	select e.backupset_id from backupsets as e \
+	left join ( \
+	  select c.backupset_id, d.ranknum \
+	  from backupsets as c \
+	    inner join ( \
+	      select a.backupset_id, count(*) as ranknum \
+	      from backupsets as a \
+		inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial) \
+		where a.retention = '%q' and b.retention = '%q' \
+	      group by a.backupset_id \
+	      having ranknum <= 3 \
+	    ) as d on (c.backupset_id = d.backupset_id) \
+	  where c.retention = '%q' \
+	  order by c.name, d.ranknum \
+	) as f on e.backupset_id = f.backupset_id \
+	where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q \
+	)", retention, retention, retention, retention, cutoffdate,
+	strlen(bkname) > 0 ? " and e.name = " : "",
+	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
+	delete from backupset_detail where backupset_id in ( \
+	select e.backupset_id from backupsets as e \
+	left join ( \
+	  select c.backupset_id, d.ranknum \
+	  from backupsets as c \
+	    inner join ( \
+	      select a.backupset_id, count(*) as ranknum \
+	      from backupsets as a \
+		inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial) \
+		where a.retention = '%q' and b.retention = '%q' \
+	      group by a.backupset_id \
+	      having ranknum <= 3 \
+	    ) as d on (c.backupset_id = d.backupset_id) \
+	  where c.retention = '%q' \
+	  order by c.name, d.ranknum \
+	) as f on e.backupset_id = f.backupset_id \
+	where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q\
+	)", retention, retention, retention, retention, cutoffdate,
+	strlen(bkname) > 0 ? " and e.name = " : "",
+	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
+	delete from backupsets where backupset_id in ( \
+	select e.backupset_id from backupsets as e \
+	left join ( \
+	  select c.backupset_id, d.ranknum \
+	  from backupsets as c \
+	    inner join ( \
+	      select a.backupset_id, count(*) as ranknum \
+	      from backupsets as a \
+		inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial) \
+		where a.retention = '%q' and b.retention = '%q' \
+	      group by a.backupset_id \
+	      having ranknum <= 3 \
+	    ) as d on (c.backupset_id = d.backupset_id) \
+	  where c.retention = '%q' \
+	  order by c.name, d.ranknum \
+	) as f on e.backupset_id = f.backupset_id \
+	where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q\
+	)", retention, retention, retention, retention, cutoffdate,
+	strlen(bkname) > 0 ? " and e.name = " : "",
+	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
 }
