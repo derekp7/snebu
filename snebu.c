@@ -1721,27 +1721,11 @@ int listbackups(int argc, char **argv)
 	}
 
     }
-    else if (foundopts == 1 || foundopts == 3) {
-
-	sqlite3_prepare_v2(bkcatalog,
-	    (sqlstmt = sqlite3_mprintf("select distinct backupset_id \
-		from backupsets  where name = '%q'",
-		bkname)), -1, &sqlres, 0);
-	if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
-	    bkid = sqlite3_column_int(sqlres, 0);
-	}
-	else {
-	    fprintf(stderr, "bkid not found: %s\n", sqlstmt);
-	    return(1);
-	}
-	sqlite3_finalize(sqlres);
-	sqlite3_free(sqlstmt);
-    }
-    if (foundopts == 1) {
+    else if (foundopts == 1) {
 	sqlite3_prepare_v2(bkcatalog,
     	    (sqlstmt = sqlite3_mprintf(" \
     	    select distinct retention, serial from backupsets \
-	    where backupset_id = '%d'", bkid)),
+	    where name = '%q'", bkname)),
 	    -1, &sqlres, 0);
 	rowcount = 0;
 	printf("%s\n", bkname);
@@ -1758,7 +1742,18 @@ int listbackups(int argc, char **argv)
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
-    if (foundopts == 3) {
+    else if (foundopts == 3) {
+	sqlite3_prepare_v2(bkcatalog,
+	    (sqlstmt = sqlite3_mprintf("select distinct backupset_id \
+		from backupsets  where name = '%q' and serial = '%q'",
+		bkname, datestamp)), -1, &sqlres, 0);
+	if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
+	    bkid = sqlite3_column_int(sqlres, 0);
+	}
+	else {
+	    printf("Backup not found for %s\n", sqlstmt);
+	    exit(1);
+	}
 	sqlite3_prepare_v2(bkcatalog,
 	    (sqlstmt = sqlite3_mprintf(" \
 	    select filename from file_entities f \
