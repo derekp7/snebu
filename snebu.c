@@ -134,6 +134,8 @@ newbackup(int argc, char **argv)
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
     }
+    else
+	fprintf(stdout, "newbackup: failed to create backup id %d\n", bkid);
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
 
@@ -1893,7 +1895,7 @@ int import(int argc, char **argv)
 		break;
 	    case 'f':
 		strncpy(catalogpath, optarg, 127);
-		retention[127] = 0;
+		catalogpath[127] = 0;
 		foundopts |= 8;
 		break;
 	    default:
