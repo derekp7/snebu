@@ -128,12 +128,12 @@ newbackup(int argc, char **argv)
     x = initdb(bkcatalog);
 
     x = sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert or ignore into backupsets (name, retention, serial) \
-	values ('%s', '%s', '%s')", bkname, retention, datestamp)), 0, 0, 0);
+	"insert or ignore into backupsets (name, retention, serial)  "
+	"values ('%s', '%s', '%s')", bkname, retention, datestamp)), 0, 0, 0);
     sqlite3_free(sqlstmt);
     x = sqlite3_prepare_v2(bkcatalog,
-	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets \
-	    where name = '%s' and retention = '%s' and serial = '%s'",
+	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
+	    "where name = '%s' and retention = '%s' and serial = '%s'",
 	    bkname, retention, datestamp)), -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
@@ -143,37 +143,37 @@ newbackup(int argc, char **argv)
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
 
-    sqlite3_exec(bkcatalog, " \
-	create temporary table if not exists inbound_file_entities ( \
-       	    backupset_id     integer, \
-       	    ftype         char, \
-	    permission    char, \
-    	    device_id     char, \
-       	    inode         char, \
-	    user_name     char, \
-	    user_id       integer, \
-	    group_name    char, \
-	    group_id      integer, \
-	    size          integer, \
-	    md5           char, \
-	    datestamp     integer, \
-	    filename      char, \
-	    extdata       char default '', \
-	constraint inbound_file_entitiesc1 unique ( \
-	    backupset_id, \
-	    ftype, \
-	    permission, \
-	    device_id, \
-	    inode, \
-	    user_name, \
-	    user_id, \
-	    group_name, \
-	    group_id, \
-	    size, \
-	    md5, \
-	    datestamp, \
-	    filename, \
-	    extdata ))", 0, 0, &sqlerr);
+    sqlite3_exec(bkcatalog,
+	"create temporary table if not exists inbound_file_entities (  \n"
+	"    backupset_id     integer,  \n"
+	"    ftype         char,  \n"
+	"    permission    char,  \n"
+	"    device_id     char,  \n"
+	"    inode         char,  \n"
+	"    user_name     char,  \n"
+	"    user_id       integer,  \n"
+	"    group_name    char,  \n"
+	"    group_id      integer,  \n"
+	"    size          integer,  \n"
+	"    md5           char,  \n"
+	"    datestamp     integer,  \n"
+	"    filename      char,  \n"
+	"    extdata       char default '',  \n"
+	"constraint inbound_file_entitiesc1 unique (  \n"
+	"    backupset_id,  \n"
+	"    ftype,  \n"
+	"    permission,  \n"
+	"    device_id,  \n"
+	"    inode,  \n"
+	"    user_name,  \n"
+	"    user_id,  \n"
+	"    group_name,  \n"
+	"    group_id,  \n"
+	"    size,  \n"
+	"    md5,  \n"
+	"    datestamp,  \n"
+	"    filename,  \n"
+	"    extdata ))", 0, 0, &sqlerr);
 
 
 //    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
@@ -209,10 +209,10 @@ newbackup(int argc, char **argv)
 	    fs.filesize = 0;
 	}
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	    "insert or ignore into inbound_file_entities \
-	    (backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name, \
-	    group_id, size, md5, datestamp, filename, extdata) \
-	    values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%q')",
+	    "insert or ignore into inbound_file_entities  "
+	    "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
+	    "group_id, size, md5, datestamp, filename, extdata)  "
+	    "values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%q')",
 	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 	    fs.filesize, fs.md5, fs.modtime, fs.filename, fs.linktarget)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
@@ -226,57 +226,57 @@ newbackup(int argc, char **argv)
     }
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert or ignore into file_entities \
-	(ftype, permission, device_id, inode, user_name, user_id, group_name, \
-	group_id, size, md5, datestamp, filename, extdata) \
-	select i.ftype, permission, device_id, inode, user_name, user_id, group_name, \
-	group_id, size, md5, datestamp, filename, extdata from inbound_file_entities i \
-	where backupset_id = '%d' and (i.ftype = '5' or i.ftype = '2')", bkid)), 0, 0, &sqlerr);
+	"insert or ignore into file_entities  "
+	"(ftype, permission, device_id, inode, user_name, user_id, group_name,  "
+	"group_id, size, md5, datestamp, filename, extdata)  "
+	"select i.ftype, permission, device_id, inode, user_name, user_id, group_name,  "
+	"group_id, size, md5, datestamp, filename, extdata from inbound_file_entities i  "
+	"where backupset_id = '%d' and (i.ftype = '5' or i.ftype = '2')", bkid)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert or ignore into needed_file_entities \
-	(backupset_id, device_id, inode, filename) \
-	select backupset_id, i.device_id, i.inode, i.filename from inbound_file_entities i \
-	left join file_entities f on \
-	i.ftype = case when f.ftype = 'S' then '0' else f.ftype end \
-	and i.permission = f.permission \
-	and i.device_id = f.device_id and i.inode = f.inode \
-	and i.user_name = f.user_name and i.user_id = f.user_id \
-	and i.group_name = f.group_name and i.group_id = f.group_id \
-	and i.size = f.size and i.datestamp = f.datestamp \
-	and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S') \
-        or i.extdata = f.extdata) \
-	where i.backupset_id = '%d' and f.file_id is null", bkid)), 0, 0, &sqlerr);
+	"insert or ignore into needed_file_entities  "
+	"(backupset_id, device_id, inode, filename)  "
+	"select backupset_id, i.device_id, i.inode, i.filename from inbound_file_entities i  "
+	"left join file_entities f on  "
+	"i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
+	"and i.permission = f.permission  "
+	"and i.device_id = f.device_id and i.inode = f.inode  "
+	"and i.user_name = f.user_name and i.user_id = f.user_id  "
+	"and i.group_name = f.group_name and i.group_id = f.group_id  "
+	"and i.size = f.size and i.datestamp = f.datestamp  "
+	"and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
+        "or i.extdata = f.extdata)  "
+	"where i.backupset_id = '%d' and f.file_id is null", bkid)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert or ignore into backupset_detail \
-	(backupset_id, file_id) \
-	select i.backupset_id, f.file_id from file_entities f \
-	join inbound_file_entities i \
-	on i.ftype = case when f.ftype = 'S' then '0' else f.ftype end \
-	and i.permission = f.permission \
-	and i.device_id = f.device_id and i.inode = f.inode \
-	and i.user_name = f.user_name and i.user_id = f.user_id \
-	and i.group_name = f.group_name and i.group_id = f.group_id \
-	and i.size = f.size and i.datestamp = f.datestamp \
-	and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S') \
-	or i.extdata = f.extdata) \
-	where i.backupset_id = '%d'", bkid)), 0, 0, &sqlerr);
+	"insert or ignore into backupset_detail  "
+	"(backupset_id, file_id)  "
+	"select i.backupset_id, f.file_id from file_entities f  "
+	"join inbound_file_entities i  "
+	"on i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
+	"and i.permission = f.permission  "
+	"and i.device_id = f.device_id and i.inode = f.inode  "
+	"and i.user_name = f.user_name and i.user_id = f.user_id  "
+	"and i.group_name = f.group_name and i.group_id = f.group_id  "
+	"and i.size = f.size and i.datestamp = f.datestamp  "
+	"and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
+	"or i.extdata = f.extdata)  "
+	"where i.backupset_id = '%d'", bkid)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
       
-    sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf( "\
-	select filename from needed_file_entities \
-	where backupset_id = '%d'", bkid)), -1, &sqlres, 0);
+    sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf( 
+	"select filename from needed_file_entities  "
+	"where backupset_id = '%d'", bkid)), -1, &sqlres, 0);
     while (sqlite3_step(sqlres) == SQLITE_ROW)
 	printf("%s\n", sqlite3_column_text(sqlres, 0));
     sqlite3_finalize(sqlres);
@@ -297,48 +297,48 @@ int initdb(sqlite3 *bkcatalog)
 //  Will need this when tape library support is added.
 
 #ifdef commented_out
-    err = sqlite3_exec(bkcatalog, " \
-	    create table if not exists storagefiles ( \
-	    md5           char, \
-	    volume        char, \
-	    segment       char, \
-	    location      char, \
-	constraint storagefilesc1 unique ( \
-	    md5, \
-	    volume, \
-	    segment, \
-	    location ))", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create table if not exists storagefiles (  \n"
+	"    md5           char,  \n"
+	"    volume        char,  \n"
+	"    segment       char,  \n"
+	"    location      char,  \n"
+	"constraint storagefilesc1 unique (  \n"
+	"    md5,  \n"
+	"    volume,  \n"
+	"    segment,  \n"
+	"    location ))", 0, 0, 0);
 #endif
-    err = sqlite3_exec(bkcatalog, " \
-	create table if not exists file_entities ( \
-    	    file_id       integer primary key, \
-       	    ftype         char, \
-	    permission    char, \
-    	    device_id     char, \
-       	    inode         char, \
-	    user_name     char, \
-	    user_id       integer, \
-	    group_name    char, \
-	    group_id      integer, \
-	    size          integer, \
-	    md5           char, \
-	    datestamp     integer, \
-	    filename      char, \
-	    extdata       char default '', \
-	constraint file_entities_c1 unique ( \
-	    ftype, \
-	    permission, \
-	    device_id, \
-	    inode, \
-	    user_name, \
-	    user_id, \
-	    group_name, \
-	    group_id, \
-	    size, \
-	    md5, \
-	    datestamp, \
-	    filename, \
-	    extdata ))", 0, 0, &sqlerr);
+    err = sqlite3_exec(bkcatalog,
+	"create table if not exists file_entities (  \n"
+	"    file_id       integer primary key,  \n"
+	"    ftype         char,  \n"
+	"    permission    char,  \n"
+	"    device_id     char,  \n"
+	"    inode         char,  \n"
+	"    user_name     char,  \n"
+	"    user_id       integer,  \n"
+	"    group_name    char,  \n"
+	"    group_id      integer,  \n"
+	"    size          integer,  \n"
+	"    md5           char,  \n"
+	"    datestamp     integer,  \n"
+	"    filename      char,  \n"
+	"    extdata       char default '',  \n"
+	"constraint file_entities_c1 unique (  \n"
+	"    ftype,  \n"
+	"    permission,  \n"
+	"    device_id,  \n"
+	"    inode,  \n"
+	"    user_name,  \n"
+	"    user_id,  \n"
+	"    group_name,  \n"
+	"    group_id,  \n"
+	"    size,  \n"
+	"    md5,  \n"
+	"    datestamp,  \n"
+	"    filename,  \n"
+	"    extdata ))", 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "Create table file_entities: %s\n", sqlerr);
 	sqlite3_free(sqlerr);
@@ -346,173 +346,173 @@ int initdb(sqlite3 *bkcatalog)
     if (err != 0)
 	return(err);
 
-    err = sqlite3_exec(bkcatalog, " \
-	create table if not exists received_file_entities ( \
-    	    file_id       integer primary key, \
-	    backupset_id  integer, \
-       	    ftype         char, \
-	    permission    char, \
-	    user_name     char, \
-	    user_id       integer, \
-	    group_name    char, \
-	    group_id      integer, \
-	    size          integer, \
-	    md5           char, \
-	    datestamp     integer, \
-	    filename      char, \
-	    extdata       char default '', \
-	foreign key(backupset_id) references backupsets(backupset_id), \
-	unique ( \
-	    backupset_id, \
-	    ftype, \
-	    permission, \
-	    user_name, \
-	    user_id, \
-	    group_name, \
-	    group_id, \
-	    size, \
-	    md5, \
-	    datestamp, \
-	    filename, \
-	    extdata ))", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"create table if not exists received_file_entities (  \n"
+	"    file_id       integer primary key,  \n"
+	"    backupset_id  integer,  \n"
+	"    ftype         char,  \n"
+	"    permission    char,  \n"
+	"    user_name     char,  \n"
+	"    user_id       integer,  \n"
+	"    group_name    char,  \n"
+	"    group_id      integer,  \n"
+	"    size          integer,  \n"
+	"    md5           char,  \n"
+	"    datestamp     integer,  \n"
+	"    filename      char,  \n"
+	"    extdata       char default '',  \n"
+	"foreign key(backupset_id) references backupsets(backupset_id),  \n"
+	"unique (  \n"
+	    "backupset_id,  \n"
+	    "ftype,  \n"
+	    "permission,  \n"
+	    "user_name,  \n"
+	    "user_id,  \n"
+	    "group_name,  \n"
+	    "group_id,  \n"
+	    "size,  \n"
+	    "md5,  \n"
+	    "datestamp,  \n"
+	    "filename,  \n"
+	    "extdata ))", 0, 0, 0);
     if (err != 0)
 	return(err);
 
-    err = sqlite3_exec(bkcatalog, " \
-	create table if not exists needed_file_entities ( \
-	    backupset_id  integer, \
-    	    device_id     char, \
-       	    inode         char, \
-	    filename      char, \
-	foreign key(backupset_id) references backupsets(backupset_id), \
-	unique ( \
-	    backupset_id, \
-	    filename ))", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"create table if not exists needed_file_entities (  \n"
+	    "backupset_id  integer,  \n"
+    	    "device_id     char,  \n"
+       	    "inode         char,  \n"
+	    "filename      char,  \n"
+	"foreign key(backupset_id) references backupsets(backupset_id),  \n"
+	"unique (  \n"
+	    "backupset_id,  \n"
+	    "filename ))", 0, 0, 0);
     if (err != 0)
 	return(err);
 
-    err = sqlite3_exec(bkcatalog, " \
-	create table if not exists purgelist ( \
-	    datestamp      integer, \
-	    md5            char, \
-	unique ( \
-	    datestamp, \
-	    md5 ))", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"create table if not exists purgelist (  \n"
+	    "datestamp      integer,  \n"
+	    "md5            char,  \n"
+	"unique (  \n"
+	    "datestamp,  \n"
+	    "md5 ))", 0, 0, 0);
 
-    err = sqlite3_exec(bkcatalog, " \
-	    create table if not exists backupsets ( \
-	    backupset_id  integer primary key, \
-	    name          char, \
-	    retention     char, \
-	    serial        char, \
-	constraint backupsetsc1 unique ( \
-	    name, \
-	    serial ))", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	    "create table if not exists backupsets (  \n"
+	    "backupset_id  integer primary key,  \n"
+	    "name          char,  \n"
+	    "retention     char,  \n"
+	    "serial        char,  \n"
+	"constraint backupsetsc1 unique (  \n"
+	    "name,  \n"
+	    "serial ))", 0, 0, 0);
     if (err != 0)
 	return(err);
 
-    err = sqlite3_exec(bkcatalog, " \
-	    create table if not exists backupset_detail ( \
-	    backupset_id  integer, \
-	    file_id       integer, \
-	unique (backupset_id, file_id) \
-	foreign key(backupset_id) references backupsets(backupset_id), \
-	foreign key(file_id) references file_entities(file_id) )", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	    "create table if not exists backupset_detail (  \n"
+	    "backupset_id  integer,  \n"
+	    "file_id       integer,  \n"
+	"unique (backupset_id, file_id)  \n"
+	"foreign key(backupset_id) references backupsets(backupset_id),  \n"
+	"foreign key(file_id) references file_entities(file_id) )", 0, 0, 0);
     if (err != 0)
 	return(err);
 
 // Received file list with device_id and inode merged in
-    err = sqlite3_exec(bkcatalog, "\
-	create view if not exists \
-	    received_file_entities_di \
-	as select \
-	    file_id, \
-	    r.backupset_id, \
-	    ftype, \
-	    permission, \
-	    n.device_id, \
-	    n.inode, \
-	    user_name, \
-	    user_id, \
-	    group_name, \
-	    group_id, \
-	    size, \
-	    md5, \
-	    datestamp, \
-	    r.filename, \
-	    r.extdata \
-	from \
-	    received_file_entities r \
-	join \
-	    needed_file_entities n \
-	on \
-	    r.filename = n.filename \
-	    and r.backupset_id = n.backupset_id", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"create view if not exists  \n"
+	"    received_file_entities_di  \n"
+	"as select  \n"
+	"    file_id,  \n"
+	"    r.backupset_id,  \n"
+	"    ftype,  \n"
+	"    permission,  \n"
+	"    n.device_id,  \n"
+	"    n.inode,  \n"
+	"    user_name,  \n"
+	"    user_id,  \n"
+	"    group_name,  \n"
+	"    group_id,  \n"
+	"    size,  \n"
+	"    md5,  \n"
+	"    datestamp,  \n"
+	"    r.filename,  \n"
+	"    r.extdata  \n"
+	"from  \n"
+	"    received_file_entities r  \n"
+	"join  \n"
+	"    needed_file_entities n  \n"
+	"on  \n"
+	"    r.filename = n.filename  \n"
+	"    and r.backupset_id = n.backupset_id", 0, 0, 0);
 
-    err = sqlite3_exec(bkcatalog, "\
-        create view if not exists \
-            received_file_entities_ldi \
-        as select \
-            l.file_id, \
-            r.backupset_id, \
-            r.ftype, \
-            r.permission, \
-            r.device_id, \
-            r.inode, \
-            r.user_name, \
-            r.user_id, \
-            r.group_name, \
-            r.group_id, \
-            r.size, \
-            r.md5, \
-            r.datestamp, \
-            l.filename, \
-            r.extdata \
-        from \
-            received_file_entities_di r \
-        join \
-            received_file_entities_di l \
-        on \
-            l.extdata = r.filename \
-            and r.backupset_id = l.backupset_id \
-        where \
-            l.ftype = 1 \
-        union select \
-            file_id, \
-            backupset_id, \
-            ftype, \
-            permission, \
-            device_id, \
-            inode, \
-            user_name, \
-            user_id, \
-            group_name, \
-            group_id, \
-            size, \
-            md5, \
-            datestamp, \
-            filename, \
-            extdata \
-            from \
-            received_file_entities_di \
-        where \
-            ftype != '1'", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"create view if not exists  \n"
+	"    received_file_entities_ldi  \n"
+	"as select  \n"
+	"    l.file_id,  \n"
+	"    r.backupset_id,  \n"
+	"    r.ftype,  \n"
+	"    r.permission,  \n"
+	"    r.device_id,  \n"
+	"    r.inode,  \n"
+	"    r.user_name,  \n"
+	"    r.user_id,  \n"
+	"    r.group_name,  \n"
+	"    r.group_id,  \n"
+	"    r.size,  \n"
+	"    r.md5,  \n"
+	"    r.datestamp,  \n"
+	"    l.filename,  \n"
+	"    r.extdata  \n"
+	"from  \n"
+	"    received_file_entities_di r  \n"
+	"join  \n"
+	"    received_file_entities_di l  \n"
+	"on  \n"
+	"    l.extdata = r.filename  \n"
+	"    and r.backupset_id = l.backupset_id  \n"
+	"where  \n"
+	"    l.ftype = 1  \n"
+	"union select  \n"
+	"    file_id,  \n"
+	"    backupset_id,  \n"
+	"    ftype,  \n"
+	"    permission,  \n"
+	"    device_id,  \n"
+	"    inode,  \n"
+	"    user_name,  \n"
+	"    user_id,  \n"
+	"    group_name,  \n"
+	"    group_id,  \n"
+	"    size,  \n"
+	"    md5,  \n"
+	"    datestamp,  \n"
+	"    filename,  \n"
+	"    extdata  \n"
+	"    from  \n"
+	"    received_file_entities_di  \n"
+	"where  \n"
+	"    ftype != '1'", 0, 0, 0);
 
-    err = sqlite3_exec(bkcatalog, " \
-	    create index needed_file_entitiesi1 on file_entities ( \
-	    filename, file_id)", 0, 0, 0);
-    err = sqlite3_exec(bkcatalog, " \
-	    create index backupset_detaili1 on file_entities ( \
-	    backupset_id, file_id)", 0, 0, 0);
-    err = sqlite3_exec(bkcatalog, " \
-	    create index file_entitiesi1 on file_entities ( \
-	    filename, file_id)", 0, 0, 0);
-    err = sqlite3_exec(bkcatalog, " \
-	    create index received_file_entitiesi1 on received_file_entities ( \
-	    filename, file_id)", 0, 0, 0);
-    err = sqlite3_exec(bkcatalog, " \
-	    create index storagefilesi1 on storagefiles ( \
-	    md5)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index needed_file_entitiesi1 on file_entities (  \n"
+	"    filename, file_id)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index backupset_detaili1 on file_entities (  \n"
+	"    backupset_id, file_id)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index file_entitiesi1 on file_entities (  \n"
+	"    filename, file_id)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index received_file_entitiesi1 on received_file_entities (  \n"
+	"    filename, file_id)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index storagefilesi1 on storagefiles (  \n"
+	"    md5)", 0, 0, 0);
     return(0);
 }
 
@@ -670,8 +670,8 @@ int submitfiles(int argc, char **argv)
 //    x = initdb(bkcatalog);
 
     x = sqlite3_prepare_v2(bkcatalog,
-	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets \
-	    where name = '%s' and retention = '%s' and serial = '%s'",
+	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
+	    "where name = '%s' and retention = '%s' and serial = '%s'",
 	    bkname, retention, datestamp)), -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
@@ -696,24 +696,24 @@ int submitfiles(int argc, char **argv)
         if (tarhead.filename[0] == 0) {	// End of TAR archive
 // TODO cleanup code here
 
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(" \
-		insert or ignore into file_entities (ftype, permission, device_id, inode, \
-		user_name, user_id, group_name, group_id, size, md5, datestamp, filename, extdata) \
-		select ftype, permission, device_id, inode, user_name, user_id, group_name, \
-		group_id, size, md5, datestamp, filename, extdata from received_file_entities_ldi \
-		where backupset_id = '%d'", bkid)), 0, 0, 0);
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"insert or ignore into file_entities (ftype, permission, device_id, inode,  "
+		"user_name, user_id, group_name, group_id, size, md5, datestamp, filename, extdata)  "
+		"select ftype, permission, device_id, inode, user_name, user_id, group_name,  "
+		"group_id, size, md5, datestamp, filename, extdata from received_file_entities_ldi  "
+		"where backupset_id = '%d'", bkid)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
 
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(" \
-		insert or ignore into backupset_detail (backupset_id, file_id) select backupset_id, \
-		f.file_id from file_entities f join received_file_entities_ldi r \
-		on f.ftype = r.ftype and f.permission = r.permission \
-		and f.device_id = r.device_id and f.inode = r.inode \
-		and f.user_name = r.user_name and f.user_id = r.user_id \
-		and f.group_name = r.group_name and f.group_id = r.group_id \
-		and f.size = r.size and f.md5 = r.md5 and f.datestamp = r.datestamp \
-		and f.filename = r.filename and f.extdata = r.extdata \
-		where backupset_id = '%d'", bkid)), 0, 0, 0);
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"insert or ignore into backupset_detail (backupset_id, file_id) select backupset_id,  "
+		"f.file_id from file_entities f join received_file_entities_ldi r  "
+		"on f.ftype = r.ftype and f.permission = r.permission  "
+		"and f.device_id = r.device_id and f.inode = r.inode  "
+		"and f.user_name = r.user_name and f.user_id = r.user_id  "
+		"and f.group_name = r.group_name and f.group_id = r.group_id  "
+		"and f.size = r.size and f.md5 = r.md5 and f.datestamp = r.datestamp  "
+		"and f.filename = r.filename and f.extdata = r.extdata  "
+		"where backupset_id = '%d'", bkid)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
 
 	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
@@ -915,14 +915,16 @@ int submitfiles(int argc, char **argv)
 
 //	    Will need this when tape library support is added.  For now
 //	    it is more efficient to leave it out.
-//
-//	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(" \
-//		insert or ignore into storagefiles (md5, volume, segment, location) \
-//		values ('%s', 0, 0, '%q/%q.lzo')", cfmd5a, cfmd5d, cfmd5f)), 0, 0, &sqlerr);
-//	    if (sqlerr != 0) {
-//		fprintf(stderr, "%s\n", sqlerr);
-//		sqlite3_free(sqlerr);
-//	    }
+
+#ifdef commented_out
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"insert or ignore into storagefiles (md5, volume, segment, location)  "
+		"values ('%s', 0, 0, '%q/%q.lzo')", cfmd5a, cfmd5d, cfmd5f)), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n", sqlerr);
+		sqlite3_free(sqlerr);
+	    }
+#endif
 
 	    if (stat(destfilepathm, &tmpfstat) == 0)
 		rename(tmpfilepath, destfilepath);
@@ -955,10 +957,10 @@ int submitfiles(int argc, char **argv)
 	    }
 
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into received_file_entities \
-		(backupset_id, ftype, permission, user_name, user_id, group_name, \
-		group_id, size, md5, datestamp, filename, extdata) \
-		values ('%d', '%c', '%4.4o', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%s')",
+		"insert or ignore into received_file_entities  "
+		"(backupset_id, ftype, permission, user_name, user_id, group_name,  "
+		"group_id, size, md5, datestamp, filename, extdata)  "
+		"values ('%d', '%c', '%4.4o', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%s')",
 		bkid, fs.ftype, fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 		fs.ftype == 'S' ? s_realsize : fs.filesize, fs.md5, fs.modtime, fs.filename, fs.extdata)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
@@ -975,10 +977,10 @@ int submitfiles(int argc, char **argv)
 		if (fs.filename[strlen(fs.filename) - 1] == '/')
 		    fs.filename[strlen(fs.filename) - 1] = 0;
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into received_file_entities \
-		(backupset_id, ftype, permission, user_name, user_id, group_name, \
-		group_id, size, md5, datestamp, filename, extdata) \
-		values ('%d', '%c', '%4.4o', '%s', '%d', '%s', '%d', '%llu', '%q', '%d', '%q', '%q')",
+		"insert or ignore into received_file_entities  "
+		"(backupset_id, ftype, permission, user_name, user_id, group_name,  "
+		"group_id, size, md5, datestamp, filename, extdata)  "
+		"values ('%d', '%c', '%4.4o', '%s', '%d', '%s', '%d', '%llu', '%q', '%d', '%q', '%q')",
 		bkid, fs.ftype, fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 		fs.filesize, "0", fs.modtime, fs.filename, fs.linktarget)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
@@ -1170,8 +1172,8 @@ int restore(int argc, char **argv)
     md5filepath = malloc(strlen(srcdir) + 39);
 
     x = sqlite3_prepare_v2(bkcatalog,
-        (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets \
-            where name = '%q' and retention = '%q' and serial = '%q'",
+        (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
+            "where name = '%q' and retention = '%q' and serial = '%q'",
             bkname, retention, datestamp)), -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
@@ -1190,71 +1192,71 @@ int restore(int argc, char **argv)
     }
 
 //  
-    sqlite3_exec(bkcatalog, sqlstmt = " \
-	create temporary table if not exists restore_file_entities ( \
-    	    file_id       integer primary key, \
-       	    ftype         char, \
-	    permission    char, \
-    	    device_id     char, \
-       	    inode         char, \
-	    user_name     char, \
-	    user_id       integer, \
-	    group_name    char, \
-	    group_id      integer, \
-	    size          integer, \
-	    md5           char, \
-	    datestamp     integer, \
-	    filename      char, \
-	    extdata       char default '', \
-	constraint restore_file_entitiesc1 unique ( \
-	    ftype, \
-	    permission, \
-	    device_id, \
-	    inode, \
-	    user_name, \
-	    user_id, \
-	    group_name, \
-	    group_id, \
-	    size, \
-	    md5, \
-	    datestamp, \
-	    filename, \
-	    extdata ))", 0, 0, 0);
+    sqlite3_exec(bkcatalog, sqlstmt = "  "
+	"create temporary table if not exists restore_file_entities (  \n"
+    	    "file_id       integer primary key,  \n"
+       	    "ftype         char,  \n"
+	    "permission    char,  \n"
+    	    "device_id     char,  \n"
+       	    "inode         char,  \n"
+	    "user_name     char,  \n"
+	    "user_id       integer,  \n"
+	    "group_name    char,  \n"
+	    "group_id      integer,  \n"
+	    "size          integer,  \n"
+	    "md5           char,  \n"
+	    "datestamp     integer,  \n"
+	    "filename      char,  \n"
+	    "extdata       char default '',  \n"
+	"constraint restore_file_entitiesc1 unique (  \n"
+	    "ftype,  \n"
+	    "permission,  \n"
+	    "device_id,  \n"
+	    "inode,  \n"
+	    "user_name,  \n"
+	    "user_id,  \n"
+	    "group_name,  \n"
+	    "group_id,  \n"
+	    "size,  \n"
+	    "md5,  \n"
+	    "datestamp,  \n"
+	    "filename,  \n"
+	    "extdata ))", 0, 0, 0);
 	
-    sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(" \
-	insert or ignore into restore_file_entities \
-	(ftype, permission, device_id, inode, user_name, user_id, \
-	group_name, group_id, size, md5, datestamp, filename, extdata) \
-	select ftype, permission, device_id, inode, user_name, user_id, \
-	group_name, group_id, size, md5, datestamp, filename, extdata \
-	from file_entities f join backupset_detail d \
-	on f.file_id = d.file_id where backupset_id = '%d'%s",
+    sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
+	"insert or ignore into restore_file_entities  "
+	"(ftype, permission, device_id, inode, user_name, user_id,  "
+	"group_name, group_id, size, md5, datestamp, filename, extdata)  "
+	"select ftype, permission, device_id, inode, user_name, user_id,  "
+	"group_name, group_id, size, md5, datestamp, filename, extdata  "
+	"from file_entities f join backupset_detail d  "
+	"on f.file_id = d.file_id where backupset_id = '%d'%s",
 	bkid, filespec != 0 ?  filespec : ""), 0, 0, 0);
 
-    sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(" \
-	create temporary view hardlink_file_entities \
-	as select min(file_id) as file_id, ftype, permission, device_id, \
-	inode, user_name, user_id, group_name, group_id, size, md5, datestamp, \
-	filename, extdata from restore_file_entities where ftype = 0 group by ftype, \
-	permission, device_id, inode, user_name, user_id, group_name, \
-	group_id, size, md5, datestamp, extdata having count(*) > 1;"), 0, 0, 0);
+    sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
+	"create temporary view hardlink_file_entities  "
+	"as select min(file_id) as file_id, ftype, permission, device_id,  "
+	"inode, user_name, user_id, group_name, group_id, size, md5, datestamp,  "
+	"filename, extdata from restore_file_entities where ftype = 0 group by ftype,  "
+	"permission, device_id, inode, user_name, user_id, group_name,  "
+	"group_id, size, md5, datestamp, extdata having count(*) > 1;"), 0, 0, 0);
 
     sqlite3_prepare_v2(bkcatalog,
-	(sqlstmt = sqlite3_mprintf(" \
-	select \
-	case when b.file_id not null and a.file_id != b.file_id \
-	then 1 else a.ftype end, \
-	a.permission, a.device_id, a.inode, a.user_name, a.user_id, \
-	a.group_name, a.group_id, a.size, a.md5, a.datestamp, a.filename, \
-	case when b.file_id not null and a.file_id != b.file_id \
-	then b.filename else a.extdata end \
-	from restore_file_entities a left join hardlink_file_entities b \
-	on a.ftype = b.ftype and a.permission = b.permission \
-	and a.device_id = b.device_id and a.inode = b.inode \
-	and a.user_name = b.user_name and a.user_id = b.user_id \
-	and a.group_name = b.group_name and a.group_id = b.group_id \
-	and a.size = b.size and a.md5 = b.md5 and a.datestamp = b.datestamp \
-	and a.extdata = b.extdata")), 2000, &sqlres, 0);
+	(sqlstmt = sqlite3_mprintf(
+	"select  "
+	"case when b.file_id not null and a.file_id != b.file_id  "
+	"then 1 else a.ftype end,  "
+	"a.permission, a.device_id, a.inode, a.user_name, a.user_id,  "
+	"a.group_name, a.group_id, a.size, a.md5, a.datestamp, a.filename,  "
+	"case when b.file_id not null and a.file_id != b.file_id  "
+	"then b.filename else a.extdata end  "
+	"from restore_file_entities a left join hardlink_file_entities b  "
+	"on a.ftype = b.ftype and a.permission = b.permission  "
+	"and a.device_id = b.device_id and a.inode = b.inode  "
+	"and a.user_name = b.user_name and a.user_id = b.user_id  "
+	"and a.group_name = b.group_name and a.group_id = b.group_id  "
+	"and a.size = b.size and a.md5 = b.md5 and a.datestamp = b.datestamp  "
+	"and a.extdata = b.extdata")), 2000, &sqlres, 0);
 
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
 	t.ftype = *sqlite3_column_text(sqlres, 0);
@@ -1612,8 +1614,8 @@ int listbackups(int argc, char **argv)
 
 	if (filespec == 0) {
 	    err = sqlite3_prepare_v2(bkcatalog,
-		(sqlstmt = sqlite3_mprintf(" \
-		select distinct name from backupsets")), -1, &sqlres, 0);
+		(sqlstmt = sqlite3_mprintf(
+		"select distinct name from backupsets")), -1, &sqlres, 0);
 	    rowcount = 0;
 	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
 		rowcount++;
@@ -1626,11 +1628,11 @@ int listbackups(int argc, char **argv)
 	else {
 
 	    sqlite3_prepare_v2(bkcatalog,
-		(sqlstmt = sqlite3_mprintf(" \
-		select distinct b.name, b.serial, f.filename from backupsets b \
-		join backupset_detail d on b.backupset_id = d.backupset_id \
-		join file_entities f on d.file_id = f.file_id where \
-		%s", filespec )), -1, &sqlres, 0);
+		(sqlstmt = sqlite3_mprintf(
+		"select distinct b.name, b.serial, f.filename from backupsets b  "
+		"join backupset_detail d on b.backupset_id = d.backupset_id  "
+		"join file_entities f on d.file_id = f.file_id where  "
+		"%s", filespec )), -1, &sqlres, 0);
 	    rowcount = 0;
 	    oldbkname[0] = 0;
 	    oldbktime = 0;
@@ -1657,9 +1659,9 @@ int listbackups(int argc, char **argv)
     }
     else if (foundopts == 1) {
 	sqlite3_prepare_v2(bkcatalog,
-    	    (sqlstmt = sqlite3_mprintf(" \
-    	    select distinct retention, serial from backupsets \
-	    where name = '%q'", bkname)),
+    	    (sqlstmt = sqlite3_mprintf(
+    	    "select distinct retention, serial from backupsets  "
+	    "where name = '%q'", bkname)),
 	    -1, &sqlres, 0);
 	rowcount = 0;
 	printf("%s\n", bkname);
@@ -1678,8 +1680,8 @@ int listbackups(int argc, char **argv)
     }
     else if (foundopts == 3) {
 	sqlite3_prepare_v2(bkcatalog,
-	    (sqlstmt = sqlite3_mprintf("select distinct backupset_id \
-		from backupsets  where name = '%q' and serial = '%q'",
+	    (sqlstmt = sqlite3_mprintf("select distinct backupset_id  "
+		"from backupsets  where name = '%q' and serial = '%q'",
 		bkname, datestamp)), -1, &sqlres, 0);
 	if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
 	    bkid = sqlite3_column_int(sqlres, 0);
@@ -1689,10 +1691,10 @@ int listbackups(int argc, char **argv)
 	    exit(1);
 	}
 	sqlite3_prepare_v2(bkcatalog,
-	    (sqlstmt = sqlite3_mprintf(" \
-	    select filename from file_entities f \
-	    join backupset_detail d on f.file_id = d.file_id \
-	    where backupset_id = '%d'", bkid)),
+	    (sqlstmt = sqlite3_mprintf(
+	    "select filename from file_entities f  "
+	    "join backupset_detail d on f.file_id = d.file_id  "
+	    "where backupset_id = '%d'", bkid)),
 	    -1, &sqlres, 0);
 	rowcount = 0;
 	bktime = (time_t) strtoll(datestamp, 0, 10);
@@ -1866,12 +1868,12 @@ int import(int argc, char **argv)
     initdb(bkcatalog);
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert or ignore into backupsets (name, retention, serial) \
-	values ('%s', '%s', '%s')", bkname, retention, datestamp)), 0, 0, 0);
+	"insert or ignore into backupsets (name, retention, serial)  "
+	"values ('%s', '%s', '%s')", bkname, retention, datestamp)), 0, 0, 0);
     sqlite3_free(sqlstmt);
     sqlite3_prepare_v2(bkcatalog,
-	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets \
-	    where name = '%s' and retention = '%s' and serial = '%s'",
+	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
+	    "where name = '%s' and retention = '%s' and serial = '%s'",
 	    bkname, retention, datestamp)), -1, &sqlres, 0);
     if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
@@ -1887,47 +1889,47 @@ int import(int argc, char **argv)
 	fprintf(stderr, "Error %s opening catalog file %s\n", strerror(errno), catalogpath);
 	exit(1);
     }
-    sqlite3_exec(bkcatalog, " \
-	create temporary table if not exists inbound_file_entities ( \
-       	    backupset_id     integer, \
-       	    ftype         char, \
-	    permission    char, \
-    	    device_id     char, \
-       	    inode         char, \
-	    user_name     char, \
-	    user_id       integer, \
-	    group_name    char, \
-	    group_id      integer, \
-	    size          integer, \
-	    md5           char, \
-	    datestamp     integer, \
-	    filename      char, \
-	    extdata       char default '', \
-	constraint inbound_file_entitiesc1 unique ( \
-	    backupset_id, \
-	    ftype, \
-	    permission, \
-	    device_id, \
-	    inode, \
-	    user_name, \
-	    user_id, \
-	    group_name, \
-	    group_id, \
-	    size, \
-	    md5, \
-	    datestamp, \
-	    filename, \
-	    extdata ))", 0, 0, 0);
-    sqlite3_exec(bkcatalog, " \
-	    create index inbound_file_entitiesi1 on inbound_file_entities ( \
-	    file_id, permission, device_id, inode, user_name, user_id, group_name, group_id, size, md5, datestamp, filename, extdata)", 0, 0, 0);
+    sqlite3_exec(bkcatalog,
+	"create temporary table if not exists inbound_file_entities (  \n"
+       	    "backupset_id     integer,  \n"
+       	    "ftype         char,  \n"
+	    "permission    char,  \n"
+    	    "device_id     char,  \n"
+       	    "inode         char,  \n"
+	    "user_name     char,  \n"
+	    "user_id       integer,  \n"
+	    "group_name    char,  \n"
+	    "group_id      integer,  \n"
+	    "size          integer,  \n"
+	    "md5           char,  \n"
+	    "datestamp     integer,  \n"
+	    "filename      char,  \n"
+	    "extdata       char default '',  \n"
+	"constraint inbound_file_entitiesc1 unique (  \n"
+	    "backupset_id,  \n"
+	    "ftype,  \n"
+	    "permission,  \n"
+	    "device_id,  \n"
+	    "inode,  \n"
+	    "user_name,  \n"
+	    "user_id,  \n"
+	    "group_name,  \n"
+	    "group_id,  \n"
+	    "size,  \n"
+	    "md5,  \n"
+	    "datestamp,  \n"
+	    "filename,  \n"
+	    "extdata ))", 0, 0, 0);
+    sqlite3_exec(bkcatalog,
+	    "create index inbound_file_entitiesi1 on inbound_file_entities (  "
+	    "file_id, permission, device_id, inode, user_name, user_id, group_name, group_id, size, md5, datestamp, filename, extdata)", 0, 0, 0);
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     sqlstmt = sqlite3_mprintf(
-	"insert or ignore into inbound_file_entities \
-	(backupset_id, ftype, permission, device_id, inode, user_name, user_id, \
-	group_name, group_id, size, md5, datestamp, filename, extdata) \
-	values (@bkid, @ftype, @mode, @devid, @inode, @auid, @nuid, @agid, \
-	@ngid, @filesize, @md5, @modtime, @filename, @linktarget)");
+	"insert or ignore into inbound_file_entities  "
+	"(backupset_id, ftype, permission, device_id, inode, user_name, user_id,  "
+	"group_name, group_id, size, md5, datestamp, filename, extdata)  "
+	"values (@bkid, @ftype, @mode, @devid, @inode, @auid, @nuid, @agid,  "
+	"@ngid, @filesize, @md5, @modtime, @filename, @linktarget)");
 
     sqlite3_prepare_v2(bkcatalog, sqlstmt, -1, &sqlres, 0);
 
@@ -1984,12 +1986,12 @@ int import(int argc, char **argv)
     }
     fprintf(stderr, "Inserted %d records\n", count);
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert or ignore into file_entities \
-	(ftype, permission, device_id, inode, user_name, user_id, \
-	group_name, group_id, size, md5, datestamp, filename, extdata) \
-	select ftype, permission, device_id, inode, user_name, user_id, \
-	group_name, group_id, size, md5, datestamp, filename, extdata \
-	from inbound_file_entities")), 0, 0, &sqlerr);
+	"insert or ignore into file_entities  "
+	"(ftype, permission, device_id, inode, user_name, user_id,  "
+	"group_name, group_id, size, md5, datestamp, filename, extdata)  "
+	"select ftype, permission, device_id, inode, user_name, user_id,  "
+	"group_name, group_id, size, md5, datestamp, filename, extdata  "
+	"from inbound_file_entities")), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n", sqlerr);
 	sqlite3_free(sqlerr);
@@ -1998,17 +2000,17 @@ int import(int argc, char **argv)
     fprintf(stderr, "Copied records to file_entities\n");
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert or ignore into backupset_detail \
-	(backupset_id, file_id) \
-	select i.backupset_id, f.file_id from file_entities f \
-	join inbound_file_entities i \
-	on i.ftype = f.ftype and i.permission = f.permission \
-	and i.device_id = f.device_id and i.inode = f.inode \
-	and i.user_name = f.user_name and i.user_id = f.user_id \
-	and i.group_name = f.group_name and i.group_id = f.group_id \
-	and i.size = f.size and i.datestamp = f.datestamp \
-	and i.filename = f.filename and i.extdata = f.extdata \
-	where i.backupset_id = '%d'", bkid)), 0, 0, &sqlerr);
+	"insert or ignore into backupset_detail  "
+	"(backupset_id, file_id)  "
+	"select i.backupset_id, f.file_id from file_entities f  "
+	"join inbound_file_entities i  "
+	"on i.ftype = f.ftype and i.permission = f.permission  "
+	"and i.device_id = f.device_id and i.inode = f.inode  "
+	"and i.user_name = f.user_name and i.user_id = f.user_id  "
+	"and i.group_name = f.group_name and i.group_id = f.group_id  "
+	"and i.size = f.size and i.datestamp = f.datestamp  "
+	"and i.filename = f.filename and i.extdata = f.extdata  "
+	"where i.backupset_id = '%d'", bkid)), 0, 0, &sqlerr);
 
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n", sqlerr);
@@ -2075,24 +2077,78 @@ int expire(int argc, char **argv)
 
     cutoffdate = time(0) - (age * 60 * 60 * 24);
 
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
-	delete from received_file_entities where backupset_id in ( \
-	select e.backupset_id from backupsets as e \
-	left join ( \
-	  select c.backupset_id, d.ranknum \
-	  from backupsets as c \
-	    inner join ( \
-	      select a.backupset_id, count(*) as ranknum \
-	      from backupsets as a \
-		inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial) \
-		where a.retention = '%q' and b.retention = '%q' \
-	      group by a.backupset_id \
-	      having ranknum <= %d \
-	    ) as d on (c.backupset_id = d.backupset_id) \
-	  where c.retention = '%q' \
-	  order by c.name, d.ranknum \
-	) as f on e.backupset_id = f.backupset_id \
-	where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q \
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
+	"delete from received_file_entities where backupset_id in (  "
+	"select e.backupset_id from backupsets as e  "
+	"left join (  "
+	  "select c.backupset_id, d.ranknum  "
+	  "from backupsets as c  "
+	    "inner join (  "
+	      "select a.backupset_id, count(*) as ranknum  "
+	      "from backupsets as a  "
+		"inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial)  "
+		"where a.retention = '%q' and b.retention = '%q'  "
+	      "group by a.backupset_id  "
+	      "having ranknum <= %d  "
+	    ") as d on (c.backupset_id = d.backupset_id)  "
+	  "where c.retention = '%q'  "
+	  "order by c.name, d.ranknum  "
+	") as f on e.backupset_id = f.backupset_id  "
+	"where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q  "
+	")", retention, retention, min, retention, retention, cutoffdate,
+	strlen(bkname) > 0 ? " and e.name = " : "",
+	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
+	"delete from needed_file_entities where backupset_id in (  "
+	"select e.backupset_id from backupsets as e  "
+	"left join (  "
+	  "select c.backupset_id, d.ranknum  "
+	  "from backupsets as c  "
+	    "inner join (  "
+	      "select a.backupset_id, count(*) as ranknum  "
+	      "from backupsets as a  "
+		"inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial)  "
+		"where a.retention = '%q' and b.retention = '%q'  "
+	      "group by a.backupset_id  "
+	      "having ranknum <= %d  "
+	    ") as d on (c.backupset_id = d.backupset_id)  "
+	  "where c.retention = '%q'  "
+	  "order by c.name, d.ranknum  "
+	") as f on e.backupset_id = f.backupset_id  "
+	"where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q  "
+	")", retention, retention, min, retention, retention, cutoffdate,
+	strlen(bkname) > 0 ? " and e.name = " : "",
+	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
+	"delete from backupset_detail where backupset_id in (  "
+	"select e.backupset_id from backupsets as e  "
+	"left join (  "
+	  "select c.backupset_id, d.ranknum  "
+	  "from backupsets as c  "
+	    "inner join (  "
+	      "select a.backupset_id, count(*) as ranknum  "
+	      "from backupsets as a  "
+		"inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial)  "
+		"where a.retention = '%q' and b.retention = '%q'  "
+	      "group by a.backupset_id  "
+	      "having ranknum <= %d  "
+	    ") as d on (c.backupset_id = d.backupset_id)  "
+	  "where c.retention = '%q'  "
+	  "order by c.name, d.ranknum  "
+	") as f on e.backupset_id = f.backupset_id  "
+	"where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q\
 	)", retention, retention, min, retention, retention, cutoffdate,
 	strlen(bkname) > 0 ? " and e.name = " : "",
 	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
@@ -2102,78 +2158,24 @@ int expire(int argc, char **argv)
     }
     sqlite3_free(sqlstmt);
 
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
-	delete from needed_file_entities where backupset_id in ( \
-	select e.backupset_id from backupsets as e \
-	left join ( \
-	  select c.backupset_id, d.ranknum \
-	  from backupsets as c \
-	    inner join ( \
-	      select a.backupset_id, count(*) as ranknum \
-	      from backupsets as a \
-		inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial) \
-		where a.retention = '%q' and b.retention = '%q' \
-	      group by a.backupset_id \
-	      having ranknum <= %d \
-	    ) as d on (c.backupset_id = d.backupset_id) \
-	  where c.retention = '%q' \
-	  order by c.name, d.ranknum \
-	) as f on e.backupset_id = f.backupset_id \
-	where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q \
-	)", retention, retention, min, retention, retention, cutoffdate,
-	strlen(bkname) > 0 ? " and e.name = " : "",
-	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
-    if (sqlerr != 0) {
-	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
-	sqlite3_free(sqlerr);
-    }
-    sqlite3_free(sqlstmt);
-
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
-	delete from backupset_detail where backupset_id in ( \
-	select e.backupset_id from backupsets as e \
-	left join ( \
-	  select c.backupset_id, d.ranknum \
-	  from backupsets as c \
-	    inner join ( \
-	      select a.backupset_id, count(*) as ranknum \
-	      from backupsets as a \
-		inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial) \
-		where a.retention = '%q' and b.retention = '%q' \
-	      group by a.backupset_id \
-	      having ranknum <= %d \
-	    ) as d on (c.backupset_id = d.backupset_id) \
-	  where c.retention = '%q' \
-	  order by c.name, d.ranknum \
-	) as f on e.backupset_id = f.backupset_id \
-	where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q\
-	)", retention, retention, min, retention, retention, cutoffdate,
-	strlen(bkname) > 0 ? " and e.name = " : "",
-	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
-    if (sqlerr != 0) {
-	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
-	sqlite3_free(sqlerr);
-    }
-    sqlite3_free(sqlstmt);
-
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
-	delete from backupsets where backupset_id in ( \
-	select e.backupset_id from backupsets as e \
-	left join ( \
-	  select c.backupset_id, d.ranknum \
-	  from backupsets as c \
-	    inner join ( \
-	      select a.backupset_id, count(*) as ranknum \
-	      from backupsets as a \
-		inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial) \
-		where a.retention = '%q' and b.retention = '%q' \
-	      group by a.backupset_id \
-	      having ranknum <= %d \
-	    ) as d on (c.backupset_id = d.backupset_id) \
-	  where c.retention = '%q' \
-	  order by c.name, d.ranknum \
-	) as f on e.backupset_id = f.backupset_id \
-	where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q\
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
+	"delete from backupsets where backupset_id in (  "
+	"select e.backupset_id from backupsets as e  "
+	"left join (  "
+	  "select c.backupset_id, d.ranknum  "
+	  "from backupsets as c  "
+	    "inner join (  "
+	      "select a.backupset_id, count(*) as ranknum  "
+	      "from backupsets as a  "
+		"inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial)  "
+		"where a.retention = '%q' and b.retention = '%q'  "
+	      "group by a.backupset_id  "
+	      "having ranknum <= %d  "
+	    ") as d on (c.backupset_id = d.backupset_id)  "
+	  "where c.retention = '%q'  "
+	  "order by c.name, d.ranknum  "
+	") as f on e.backupset_id = f.backupset_id  "
+	"where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q\
 	)", retention, retention, min, retention, retention, cutoffdate,
 	strlen(bkname) > 0 ? " and e.name = " : "",
 	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
@@ -2204,28 +2206,28 @@ int purge(int argc, char **argv)
 
     purgedate = time(0);
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
-	insert into purgelist (datestamp, md5) \
-	select distinct %d, f.md5 from file_entities f \
-	left join backupset_detail d \
-	on f.file_id = d.file_id \
-	left join received_file_entities r \
-	on f.md5 = r.md5 \
-	where d.file_id is null and r.md5 is null and f.md5 != 0 \
-	", purgedate)), 0, 0, &sqlerr);
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
+	"insert into purgelist (datestamp, md5)  "
+	"select distinct %d, f.md5 from file_entities f  "
+	"left join backupset_detail d  "
+	"on f.file_id = d.file_id  "
+	"left join received_file_entities r  "
+	"on f.md5 = r.md5  "
+	"where d.file_id is null and r.md5 is null and f.md5 != 0  "
+	"", purgedate)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
-	delete from file_entities where file_id in ( \
-	select f.file_id from file_entities f \
-	left join backupset_detail d \
-	on f.file_id = d.file_id \
-	left join received_file_entities r \
-	on f.md5 = r.md5 \
-	where d.file_id is null and r.md5 is null) \
-	", purgedate)), 0, 0, &sqlerr);
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
+	"delete from file_entities where file_id in (  "
+	"select f.file_id from file_entities f  "
+	"left join backupset_detail d  "
+	"on f.file_id = d.file_id  "
+	"left join received_file_entities r  "
+	"on f.md5 = r.md5  "
+	"where d.file_id is null and r.md5 is null)  "
+	"", purgedate)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
