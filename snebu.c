@@ -518,7 +518,23 @@ int initdb(sqlite3 *bkcatalog)
 
 usage()
 {
-    printf("Usage:\n");
+    printf(
+    "Usage:\n"
+    "    snebu.sh\n"
+    "        newbackup -n backupname -d datestamp -r retention_schedule\n"
+    "\n"
+    "        submitfiles -n backupname -d datestamp -r retention_schedule\n"
+    "\n"
+    "        listbackups [ -n backupname [ -d datestamp ]] [ -p regex_search_pattern ] \n"
+    "\n"
+    "        restore -n backupname -d datestamp [ -p regex_search_pattern ]\n"
+    "\n"
+    "        expire -n backupname -r retention_schedule -a age (in days)\n"
+    "\n"
+    "        purge\n"
+
+
+    );
 }
 
 int submitfiles(int argc, char **argv)
