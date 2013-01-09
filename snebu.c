@@ -49,6 +49,8 @@ int main(int argc, char **argv)
 	import(argc - 1, argv + 1);
     else if (strcmp(subfunc, "expire") == 0)
 	expire(argc - 1, argv + 1);
+    else if (strcmp(subfunc, "purge") == 0)
+	purge(argc - 1, argv + 1);
     else {
 	usage();
 	exit(1);
@@ -291,6 +293,10 @@ int initdb(sqlite3 *bkcatalog)
     char *sqlerr;
 
     sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
+
+//  Will need this when tape library support is added.
+
+#ifdef commented_out
     err = sqlite3_exec(bkcatalog, " \
 	    create table if not exists storagefiles ( \
 	    md5           char, \
@@ -302,7 +308,7 @@ int initdb(sqlite3 *bkcatalog)
 	    volume, \
 	    segment, \
 	    location ))", 0, 0, 0);
-
+#endif
     err = sqlite3_exec(bkcatalog, " \
 	create table if not exists file_entities ( \
     	    file_id       integer primary key, \
@@ -384,6 +390,14 @@ int initdb(sqlite3 *bkcatalog)
 	    filename ))", 0, 0, 0);
     if (err != 0)
 	return(err);
+
+    err = sqlite3_exec(bkcatalog, " \
+	create table if not exists purgelist ( \
+	    datestamp      integer, \
+	    md5            char, \
+	unique ( \
+	    datestamp, \
+	    md5 ))", 0, 0, 0);
 
     err = sqlite3_exec(bkcatalog, " \
 	    create table if not exists backupsets ( \
@@ -899,41 +913,27 @@ int submitfiles(int argc, char **argv)
             sprintf((destfilepath = malloc(strlen(destdir) + strlen(cfmd5a) + 7)), "%s/%s/%s.lzo", destdir, cfmd5d, cfmd5f);
             sprintf((destfilepathm = malloc(strlen(destdir) + 4)), "%s/%s", destdir, cfmd5d);
 
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(" \
-		insert or ignore into storagefiles (md5, volume, segment, location) \
-		values ('%s', 0, 0, '%q/%q.lzo')", cfmd5a, cfmd5d, cfmd5f)), 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s\n", sqlerr);
-		sqlite3_free(sqlerr);
-	    }
+//	    Will need this when tape library support is added.  For now
+//	    it is more efficient to leave it out.
+//
+//	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(" \
+//		insert or ignore into storagefiles (md5, volume, segment, location) \
+//		values ('%s', 0, 0, '%q/%q.lzo')", cfmd5a, cfmd5d, cfmd5f)), 0, 0, &sqlerr);
+//	    if (sqlerr != 0) {
+//		fprintf(stderr, "%s\n", sqlerr);
+//		sqlite3_free(sqlerr);
+//	    }
 
-            if (stat(destfilepath, &tmpfstat) == 0) {
-                remove(tmpfilepath);
+	    if (stat(destfilepathm, &tmpfstat) == 0)
+		rename(tmpfilepath, destfilepath);
+	    else {
+		if (mkdir(destfilepathm, 0770) == 0)
+		    rename(tmpfilepath, destfilepath);
+		else {
+		    fprintf(stderr, "Error creating directory %s\n", destfilepath);
+		    return(1);
+		}
 	    }
-            else {
-                if (stat(destfilepathm, &tmpfstat) == 0)
-                    rename(tmpfilepath, destfilepath);
-                else {
-                    if (mkdir(destfilepathm, 0770) == 0)
-                        rename(tmpfilepath, destfilepath);
-                    else {
-                        fprintf(stderr, "Error creating directory %s\n", destfilepath);
-                        return(1);
-                    }
-                }
-	    }
-#ifdef notdef
-            if (*(tarhead.ftype) == 'S') {
-                fprintf(manifest, "%c\t%4.4o\t%s\t%d\t%s\t%d\t%llu\t%s\t%d\t%s\t%llu",*(tarhead.ftype), mode, tarhead.auid, nuid, tarhead.agid, ngid, s_realsize, cfmd5a, modtime, efilename, filesize);
-                for (i = 0; i < n_sparsedata; i++)
-                    fprintf(manifest,":%llu:%llu", sparsedata[i].offset, sparsedata[i].size);
-                fprintf(manifest, "\n");
-            }
-            else
-                fprintf(manifest, "%c\t%4.4o\t%s\t%d\t%s\t%d\t%llu\t%s\t%d\t%s\n",*(tarhead.ftype), mode, tarhead.auid, nuid, tarhead.agid, ngid, filesize, cfmd5a, modtime, efilename);
-
-            fflush(manifest);
-#endif
 
             if (*(tarhead.ftype) == 'S') {
 		tsparsedata = 0;
@@ -984,80 +984,7 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_free(sqlstmt);
 
 	}
-#ifdef notdef
-	else if (*(tarhead.ftype) == '2') {
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into file_entities \
-		(ftype, permission, device_id, inode, user_name, user_id, group_name, \
-		group_id, size, md5, datestamp, filename, extdata) \
-		values ('%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%q')",
-		fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
-		fs.filesize, "0", fs.modtime, fs.filename, fs.linktarget)), 0, 0, 0);
-	    sqlite3_free(sqlstmt);
 
-	    sqlite3_prepare_v2(bkcatalog,
-		(sqlstmt = sqlite3_mprintf("select file_id from file_entities \
-		    where ftype = '%c' and permission = '%4.4o' and device_id = '%s' \
-		    and inode = '%s' and user_name = '%s' and user_id = '%d' \
-		    and group_name = '%s' and group_id = '%d' and size = '%llu' \
-		    and md5 = '%s' and datestamp = '%d' and filename = '%q' \
-		    and linktarget = '%q'", fs.ftype, fs.mode, fs.devid,
-		    fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid, fs.filesize,
-		    "0", fs.modtime, fs.filename, fs.linktarget)), -1, &sqlres, 0);
-	    if (sqlite3_step(sqlres) == SQLITE_ROW) {
-		fileid = sqlite3_column_int(sqlres, 0);
-		sqlite3_exec(bkcatalog, (sqlstmt2 = sqlite3_mprintf(
-		    "insert or ignore into backupset_detail \
-		    (backupset_id, file_id) values ('%d', '%d')",
-		    bkid, fileid)), 0, 0, 0);
-		sqlite3_free(sqlstmt2);
-	    }
-	    sqlite3_finalize(sqlres);
-	    sqlite3_free(sqlstmt);
-	}
-	else if (*(tarhead.ftype) == '5') {
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into file_entities \
-		(ftype, permission, device_id, inode, user_name, user_id, group_name, \
-		group_id, size, md5, datestamp, filename) \
-		values ('%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q')",
-		fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
-		fs.filesize, "0", fs.modtime, fs.filename)), 0, 0, 0);
-	    sqlite3_free(sqlstmt);
-
-	    sqlite3_prepare_v2(bkcatalog,
-		(sqlstmt = sqlite3_mprintf("select file_id from file_entities \
-		    where ftype = '%c' and permission = '%4.4o' and device_id = '%s' \
-		    and inode = '%s' and user_name = '%s' and user_id = '%d' \
-		    and group_name = '%s' and group_id = '%d' and size = '%llu' \
-		    and md5 = '%s' and datestamp = '%d' and filename = '%q'",
-		    fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
-		    fs.filesize, "0", fs.modtime, fs.filename)), -1, &sqlres, 0);
-	    if (sqlite3_step(sqlres) == SQLITE_ROW) {
-		fileid = sqlite3_column_int(sqlres, 0);
-		sqlite3_exec(bkcatalog, (sqlstmt2 = sqlite3_mprintf(
-		    "insert or ignore into backupset_detail \
-		    (backupset_id, file_id) values ('%d', '%d')",
-		    bkid, fileid)), 0, 0, 0);
-		sqlite3_free(sqlstmt2);
-	    }
-	    sqlite3_finalize(sqlres);
-	    sqlite3_free(sqlstmt);
-	}
-#endif
-
-#ifdef notdef
-        else if (*(tarhead.ftype) == '1' || *(tarhead.ftype) == '2') {
-            fprintf(manifest, "%c\t%4.4o\t%s\t%d\t%s\t%d\t%llu\t%s\t%d\t%s\t%s\n",*(tarhead.ftype), mode, tarhead.auid, nuid, tarhead.agid, ngid, filesize, "0", modtime, efilename, elinktarget );
-        }
-        // Directory entry (type 5)
-        else if (*(tarhead.ftype) == '5') {
-            fprintf(manifest, "%c\t%4.4o\t%s\t%d\t%s\t%d\t%llu\t%s\t%d\t%s\n",*(tarhead.ftype), mode, tarhead.auid, nuid, tarhead.agid, ngid, filesize, "0", modtime, efilename);
-        }
-#endif
-//	fprintf(stdout, "'%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%s'\n",
-//		fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
-//		fs.filesize, fs.md5, fs.modtime, fs.filename);
 	if (fs.filename != 0)
 	    free(fs.filename);
 	fs.filename = 0;
@@ -2255,4 +2182,71 @@ int expire(int argc, char **argv)
 	sqlite3_free(sqlerr);
     }
     sqlite3_free(sqlstmt);
+}
+int purge(int argc, char **argv)
+{
+    sqlite3 *bkcatalog;
+    sqlite3_stmt *sqlres;
+    char *bkcatalogp;
+    char *sqlstmt = 0;
+    char *sqlerr;
+    time_t purgedate;
+    char *destdir = config.vault;
+    struct stat tmpfstat;
+    const char *md5;
+    char *destfilepath;
+    char *destfilepathd;
+
+    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    sqlite3_open(bkcatalogp, &bkcatalog);
+    sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
+
+    purgedate = time(0);
+    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
+	insert into purgelist (datestamp, md5) \
+	select distinct %d, f.md5 from file_entities f \
+	left join backupset_detail d \
+	on f.file_id = d.file_id \
+	left join received_file_entities r \
+	on f.md5 = r.md5 \
+	where d.file_id is null and r.md5 is null and f.md5 != 0 \
+	", purgedate)), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( " \
+	delete from file_entities where file_id in ( \
+	select f.file_id from file_entities f \
+	left join backupset_detail d \
+	on f.file_id = d.file_id \
+	left join received_file_entities r \
+	on f.md5 = r.md5 \
+	where d.file_id is null and r.md5 is null) \
+	", purgedate)), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+    sqlite3_prepare_v2(bkcatalog,
+	(sqlstmt = sqlite3_mprintf("select md5, datestamp from purgelist")),
+	-1, &sqlres, 0);
+    while (sqlite3_step(sqlres) == SQLITE_ROW) {
+
+	md5 = sqlite3_column_text(sqlres, 0);
+	sprintf((destfilepath = malloc(strlen(destdir) + strlen(md5) + 7)), "%s/%2.2s/%s.lzo", destdir, md5, md5 + 2);
+	sprintf((destfilepathd = malloc(strlen(destdir) + strlen(md5) + 9)), "%s/%2.2s/%s.lzo.d", destdir, md5, md5 + 2);
+	rename(destfilepath, destfilepathd);
+	if (stat(destfilepathd, &tmpfstat) == 0 && tmpfstat.st_mtime < sqlite3_column_int(sqlres, 1)) {
+	    remove(destfilepathd);
+	}
+	else {
+	    rename(destfilepathd, destfilepath);
+	}
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from purgelist where md5 = '%s'", md5)), 0, 0, &sqlerr);
+    }
 }
