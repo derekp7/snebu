@@ -646,6 +646,8 @@ int submitfiles(int argc, char **argv)
     int n_esparsedata;
     int m_sparsedata = 20;
     char *tsparsedata = 0;
+    char *destfilepaths = 0;
+    FILE *sparsefileh;
 
     
 
@@ -953,7 +955,18 @@ int submitfiles(int argc, char **argv)
 		}
 	    }
 
+
             if (*(tarhead.ftype) == 'S') {
+		sprintf((destfilepaths = realloc(destfilepaths, strlen(destdir) + strlen(cfmd5a) + 6)), "%s/%s/%s.s", destdir, cfmd5d, cfmd5f);
+		sparsefileh = fopen(destfilepaths, "w");
+		for (i = 0; i < n_sparsedata; i++) {
+		    if (i == 0)
+			fprintf(sparsefileh, "%llu:%llu:%llu", fs.filesize, sparsedata[i].offset, sparsedata[i].size);
+		    else
+			asprintf(&tsparsedata, ":%llu:%llu", sparsedata[i].offset, sparsedata[i].size);
+		}
+		fclose(sparsefileh);
+
 		tsparsedata = 0;
 		fs.extdata = 0;
 		for (i = 0; i < n_sparsedata; i++) {
@@ -1113,8 +1126,12 @@ int restore(int argc, char **argv)
     int n_sparsedata;
     int n_esparsedata;
     int m_sparsedata = 20;
-    char *ssparseinfo;
+    char *ssparseinfo = 0;
+    size_t ssparseinfosz;
+    char *destdir = config.vault;
     long long int *sparseinfo;
+    char *sparsefilepath = 0;
+    FILE *sparsefileh;
     int nsi;
     int msi;
     int x;
@@ -1154,7 +1171,7 @@ int restore(int argc, char **argv)
 		return(1);
 	}
     }
-    if (foundopts != 7) {
+    if (foundopts != 3) {
 	fprintf(stderr, "Didn't find all arguments\n");
         usage();
         return(1);
@@ -1189,8 +1206,8 @@ int restore(int argc, char **argv)
 
     x = sqlite3_prepare_v2(bkcatalog,
         (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
-            "where name = '%q' and retention = '%q' and serial = '%q'",
-            bkname, retention, datestamp)), -1, &sqlres, 0);
+            "where name = '%q' and serial = '%q'",
+            bkname, datestamp)), -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
     }
@@ -1291,8 +1308,13 @@ int restore(int argc, char **argv)
 	    t.filesize = 0;
 	}
 	else if (t.ftype == 'S') {
-	    ssparseinfo = malloc(strlen(sqlite3_column_text(sqlres, 12)));
-	    strcpy(ssparseinfo, sqlite3_column_text(sqlres, 12));
+	    asprintf(&sparsefilepath, "%s/%.2s/%s.s", destdir, md5, md5 + 2);
+	    sparsefileh = fopen(sparsefilepath, "r");
+	    if (getline(&ssparseinfo, &ssparseinfosz, sparsefileh) <= 0) {
+		fprintf(stderr, "Failed top read sparse file %s\n", sparsefilepath);
+		return(1);
+	    }
+	    free(sparsefilepath);
 	}
 
 	if (linktarget != 0) {
@@ -1805,6 +1827,9 @@ int import(int argc, char **argv)
     FILE *catalog;
     char *instr = 0;
     size_t instrlen = 0;
+    char *destdir = config.vault;
+    char *sparsefilepath = 0;
+    FILE *sparsefileh;
     unsigned char *filename = 0;
     unsigned char *efilename = 0;
     unsigned char *linktarget = 0;
@@ -1969,7 +1994,7 @@ int import(int argc, char **argv)
 	efilename[endfptr - fptr] = 0;
 	    strunesc(efilename, &filename);
 
-	if (*(t.ftype) == '2' || *(t.ftype) == '1' || *(t.ftype) == 'S') {
+	if (*(t.ftype) == '2' || *(t.ftype) == '1') {
 	    lptr = endfptr + 1;
 	    endlptr = strstr(lptr, "\n");
 	    elinktarget = realloc(elinktarget, endlptr - lptr + 1);
@@ -1977,7 +2002,23 @@ int import(int argc, char **argv)
 	    elinktarget[endlptr - lptr] = 0;
 	    strunesc(elinktarget, &linktarget);
 	}
-	fflush(stderr);
+	if (*(t.ftype) == 'S') {
+	    lptr = endfptr + 1;
+	    endlptr = strstr(lptr, "\n");
+	    elinktarget = realloc(elinktarget, endlptr - lptr + 1);
+	    strncpy(elinktarget, lptr, endlptr - lptr);
+	    elinktarget[endlptr - lptr] = 0;
+
+	    asprintf(&sparsefilepath, "%s/%.2s/%s.s", destdir, md5, md5 + 2);
+	    sparsefileh = fopen(sparsefilepath, "w");
+	    fprintf(sparsefileh, elinktarget);
+	    fclose(sparsefileh);
+	}
+
+	if (*(t.ftype) != '1' && *(t.ftype) != '2' && linktarget != 0)
+	    *linktarget = 0;
+	if (filename != 0 && strlen(filename) > 0 && filename[(strlen(filename) - 1)] == '/')
+	    filename[strlen(filename) - 1] = 0;
 
 	ascmode = sqlite3_mprintf("%4.4o", t.mode);
 	sqlite3_bind_int(sqlres, 1, bkid);
