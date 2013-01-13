@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <errno.h>
+#include <getopt.h>
 
 struct {
     char *vault;
@@ -94,9 +95,33 @@ newbackup(int argc, char **argv)
     sqlite3 *bkcatalog;
     char *bkcatalogp;
     char *sqlerr;
+    char *(*graft)[2] = 0;
+    int numgrafts = 0;
+    int maxgrafts = 0;
+    int input_terminator = 0;
+    int output_terminator = 0;
+    int force_full_backup = 0;
+    unsigned char *escfname = 0;
+    unsigned char *escltarget = 0;
+    unsigned char *unescfname = 0;
+    unsigned char *unescltarget = 0;
+    struct option longopts[] = {
+	{ "name", required_argument, NULL, 'n' },
+	{ "date", required_argument, NULL, 'd' },
+	{ "retention", required_argument, NULL, 'r' },
+	{ "graft", required_argument, NULL, 0 },
+	{ "files-from", required_argument, NULL, 'T' },
+	{ "null", no_argument, NULL, 0 },
+	{ "not-null", no_argument, NULL, 0 },
+	{ "null-output", no_argument, NULL, 0 },
+	{ "not-null-output", no_argument, NULL, 0 },
+	{ "full", no_argument, NULL, 0 },
+	{ NULL, no_argument, NULL, 0 }
+    };
+    int longoptidx;
+    int i;
 
-
-    while ((optc = getopt(argc, argv, "n:d:r:")) >= 0) 
+    while ((optc = getopt_long(argc, argv, "n:d:r:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -113,11 +138,47 @@ newbackup(int argc, char **argv)
 		retention[127] = 0;
 		foundopts |= 4;
 		break;
+	    case 0:
+		if (strcmp("graft", longopts[longoptidx].name) == 0) {
+		    char *grafteqptr;
+		    if (numgrafts + 1>= maxgrafts) {
+			maxgrafts += 16;
+			graft = realloc(graft, sizeof(*graft) * maxgrafts);
+		    }
+		    if ((grafteqptr = strchr(optarg, '=')) == 0) {
+			help("newbackup");
+			exit(1);
+		    }
+		    graft[numgrafts][0] = optarg;
+		    graft[numgrafts][1] = grafteqptr + 1;
+		    *grafteqptr = 0;
+		    grafteqptr--;
+		    while (grafteqptr > graft[numgrafts][0] &&
+			*grafteqptr == ' ')
+			*(grafteqptr--) = 0;
+		    grafteqptr = graft[numgrafts][1];
+		    while (*grafteqptr != 0 && *grafteqptr == ' ')
+			*(grafteqptr++) = 0;
+		    numgrafts++;
+
+		}
+		if (strcmp("null", longopts[longoptidx].name) == 0)
+		    input_terminator = 0;
+		if (strcmp("not-null", longopts[longoptidx].name) == 0)
+		    input_terminator = 10;
+		if (strcmp("null-output", longopts[longoptidx].name) == 0)
+		    output_terminator = 0;
+		if (strcmp("not-null-output", longopts[longoptidx].name) == 0)
+		    output_terminator = 10;
+		if (strcmp("full", longopts[longoptidx].name) == 0)
+		    force_full_backup = 1;
+		break;
 	    default:
 		usage();
 		exit(1);
+	    }
 	}
-    if (foundopts != 7) {
+    if ((foundopts & 7) != 7) {
 	fprintf(stderr, "Didn't find all arguments\n");
         usage();
         exit(1);
@@ -129,17 +190,23 @@ newbackup(int argc, char **argv)
 
     x = sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into backupsets (name, retention, serial)  "
-	"values ('%s', '%s', '%s')", bkname, retention, datestamp)), 0, 0, 0);
+	"values ('%s', '%s', '%s')", bkname, retention, datestamp)), 0, 0, &sqlerr);
     sqlite3_free(sqlstmt);
     x = sqlite3_prepare_v2(bkcatalog,
-	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
-	    "where name = '%s' and retention = '%s' and serial = '%s'",
-	    bkname, retention, datestamp)), -1, &sqlres, 0);
+	(sqlstmt = sqlite3_mprintf("select backupset_id, retention from backupsets  "
+	    "where name = '%s' and serial = '%s'",
+	    bkname, datestamp)), -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
+	if (strcmp((char *) sqlite3_column_text(sqlres, 1), retention) != 0) {
+	    fprintf(stderr, "A backup already exists for %s/%s, but with retention schedule %s\n", bkname, datestamp, (char *) sqlite3_column_text(sqlres, 1));
+	    exit(1);
+	}
     }
-    else
-	fprintf(stdout, "newbackup: failed to create backup id %d\n", bkid);
+    else {
+	fprintf(stderr, "newbackup: failed to create backup id\n");
+	exit(1);
+    }
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
 
@@ -159,6 +226,7 @@ newbackup(int argc, char **argv)
 	"    datestamp     integer,  \n"
 	"    filename      char,  \n"
 	"    extdata       char default '',  \n"
+	"    infilename    char,  \n"
 	"constraint inbound_file_entitiesc1 unique (  \n"
 	"    backupset_id,  \n"
 	"    ftype,  \n"
@@ -173,30 +241,53 @@ newbackup(int argc, char **argv)
 	"    md5,  \n"
 	"    datestamp,  \n"
 	"    filename,  \n"
+	"    infilename, \n"
 	"    extdata ))", 0, 0, &sqlerr);
 
 
 //    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
-    while (getdelim(&filespecs, &filespeclen, 0, stdin) > 0) {
+    while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
+	int pathskip = 0;
+	char *pathsub = "";
         flen1 = 0;
+	// Handle input datestamp of xxxxx.xxxxx
 	x = sscanf(filespecs, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d.%*d\t%n",
 	    &fs.ftype, &fs.mode, fs.devid,
 	    fs.inode, fs.auid, &fs.nuid, fs.agid,
 	    &fs.ngid, &fs.filesize, fs.md5,
 	    &fs.modtime, &flen1);
 	if (flen1 == 0)
+	    // Handle input datestamp of xxxxx
 	    x = sscanf(filespecs, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d\t%n",
 		&fs.ftype, &fs.mode, &fs.devid,
 		fs.inode, fs.auid, &fs.nuid, fs.agid,
 		&fs.ngid, &fs.filesize, fs.md5,
 		&fs.modtime, &flen1);
 	fs.filename = filespecs + flen1;
+	if (fs.filename[strlen(fs.filename) - 1] == '\n')
+	    fs.filename[strlen(fs.filename) - 1] = 0;
+
 	if (fs.ftype == 'l') {
-	    if (getdelim(&linkspecs, &linkspeclen, 0, stdin) > 0)
+	    if (input_terminator == 10) {
+		fs.linktarget = strchr(fs.filename, '\t');
+		if (fs.linktarget != 0) {
+		    *(fs.linktarget) = 0;
+		    fs.linktarget++;
+		}
+		else
+		    fs.linktarget = "";
+	    }
+	    else if (getdelim(&linkspecs, &linkspeclen, 0, stdin) > 0)
 		fs.linktarget = linkspecs;
+	    else
+		fs.linktarget = "";
 	}
 	else
 	    fs.linktarget = "";
+	if (input_terminator == 10) {
+	    fs.filename = strunesc(fs.filename, &unescfname);
+	    fs.linktarget = strunesc(fs.linktarget, &unescltarget);
+	}
 
 	if (fs.ftype == 'f')
 	    fs.ftype = '0';
@@ -208,13 +299,22 @@ newbackup(int argc, char **argv)
 	    fs.ftype = '5';
 	    fs.filesize = 0;
 	}
+	for (i = 0; i < numgrafts; i++) {
+	    int pathskipt = strlen(graft[i][0]);
+	    if (strncmp(fs.filename, graft[i][0], pathskipt) == 0) {
+		pathskip = pathskipt;
+		pathsub = graft[i][1];
+		break;
+	    }
+	}
+
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into inbound_file_entities  "
 	    "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
-	    "group_id, size, md5, datestamp, filename, extdata)  "
-	    "values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%q')",
+	    "group_id, size, md5, datestamp, filename, extdata, infilename)  "
+	    "values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q%q', '%q', '%q')",
 	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
-	    fs.filesize, fs.md5, fs.modtime, fs.filename, fs.linktarget)), 0, 0, &sqlerr);
+	    fs.filesize, fs.md5, fs.modtime, pathsub, fs.filename + pathskip, fs.linktarget, fs.filename)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -237,48 +337,63 @@ newbackup(int argc, char **argv)
 	sqlite3_free(sqlerr);
     }
 
+    if (force_full_backup == 1) {
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into needed_file_entities  "
-	"(backupset_id, device_id, inode, filename)  "
-	"select backupset_id, i.device_id, i.inode, i.filename from inbound_file_entities i  "
-	"left join file_entities f on  "
-	"i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
-	"and i.permission = f.permission  "
-	"and i.device_id = f.device_id and i.inode = f.inode  "
-	"and i.user_name = f.user_name and i.user_id = f.user_id  "
-	"and i.group_name = f.group_name and i.group_id = f.group_id  "
-	"and i.size = f.size and i.datestamp = f.datestamp  "
-	"and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
-        "or i.extdata = f.extdata)  "
-	"where i.backupset_id = '%d' and f.file_id is null", bkid)), 0, 0, &sqlerr);
-    if (sqlerr != 0) {
-	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
-	sqlite3_free(sqlerr);
+	"(backupset_id, device_id, inode, filename, infilename)  "
+	"select backupset_id, device_id, inode, filename, infilename from inbound_file_entities "
+	"where backupset_id = '%d' and ftype = '0'", bkid)), 0, 0, &sqlerr);
     }
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert or ignore into backupset_detail  "
-	"(backupset_id, file_id)  "
-	"select i.backupset_id, f.file_id from file_entities f  "
-	"join inbound_file_entities i  "
-	"on i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
-	"and i.permission = f.permission  "
-	"and i.device_id = f.device_id and i.inode = f.inode  "
-	"and i.user_name = f.user_name and i.user_id = f.user_id  "
-	"and i.group_name = f.group_name and i.group_id = f.group_id  "
-	"and i.size = f.size and i.datestamp = f.datestamp  "
-	"and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
-	"or i.extdata = f.extdata)  "
-	"where i.backupset_id = '%d'", bkid)), 0, 0, &sqlerr);
-    if (sqlerr != 0) {
-	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
-	sqlite3_free(sqlerr);
+    else {
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "insert or ignore into needed_file_entities  "
+	    "(backupset_id, device_id, inode, filename, infilename)  "
+	    "select backupset_id, i.device_id, i.inode, i.filename, i.infilename from inbound_file_entities i  "
+	    "left join file_entities f on  "
+	    "i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
+	    "and i.permission = f.permission  "
+	    "and i.device_id = f.device_id and i.inode = f.inode  "
+	    "and i.user_name = f.user_name and i.user_id = f.user_id  "
+	    "and i.group_name = f.group_name and i.group_id = f.group_id  "
+	    "and i.size = f.size and i.datestamp = f.datestamp  "
+	    "and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
+	    "or i.extdata = f.extdata)  "
+	    "where i.backupset_id = '%d' and f.file_id is null", bkid)), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "insert or ignore into backupset_detail  "
+	    "(backupset_id, file_id)  "
+	    "select i.backupset_id, f.file_id from file_entities f  "
+	    "join inbound_file_entities i  "
+	    "on i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
+	    "and i.permission = f.permission  "
+	    "and i.device_id = f.device_id and i.inode = f.inode  "
+	    "and i.user_name = f.user_name and i.user_id = f.user_id  "
+	    "and i.group_name = f.group_name and i.group_id = f.group_id  "
+	    "and i.size = f.size and i.datestamp = f.datestamp  "
+	    "and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
+	    "or i.extdata = f.extdata)  "
+	    "where i.backupset_id = '%d'", bkid)), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
     }
       
     sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf( 
-	"select filename from needed_file_entities  "
+	"select infilename from needed_file_entities  "
 	"where backupset_id = '%d'", bkid)), -1, &sqlres, 0);
     while (sqlite3_step(sqlres) == SQLITE_ROW)
-	printf("%s\n", sqlite3_column_text(sqlres, 0));
+	if (output_terminator == 0) {
+	    printf("%s", sqlite3_column_text(sqlres, 0));
+	    fwrite("\000", 1, 1, stdout);
+	}
+	else
+	    printf("%s\n", stresc((char *) sqlite3_column_text(sqlres, 0), &escfname));
+
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
 
@@ -384,10 +499,12 @@ int initdb(sqlite3 *bkcatalog)
     	    "device_id     char,  \n"
        	    "inode         char,  \n"
 	    "filename      char,  \n"
+	    "infilename      char,  \n"
 	"foreign key(backupset_id) references backupsets(backupset_id),  \n"
 	"unique (  \n"
 	    "backupset_id,  \n"
-	    "filename ))", 0, 0, 0);
+	    "filename, \n"
+	    "infilename ))", 0, 0, 0);
     if (err != 0)
 	return(err);
 
@@ -439,14 +556,14 @@ int initdb(sqlite3 *bkcatalog)
 	"    size,  \n"
 	"    md5,  \n"
 	"    datestamp,  \n"
-	"    r.filename,  \n"
+	"    n.filename,  \n"
 	"    r.extdata  \n"
 	"from  \n"
 	"    received_file_entities r  \n"
 	"join  \n"
 	"    needed_file_entities n  \n"
 	"on  \n"
-	"    r.filename = n.filename  \n"
+	"    r.filename = n.infilename  \n"
 	"    and r.backupset_id = n.backupset_id", 0, 0, 0);
 
     err = sqlite3_exec(bkcatalog,
@@ -474,6 +591,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    received_file_entities_di l  \n"
 	"on  \n"
 	"    l.extdata = r.filename  \n"
+	"    and l.filename != r.extdata \n"
 	"    and r.backupset_id = l.backupset_id  \n"
 	"where  \n"
 	"    l.ftype = 1  \n"
