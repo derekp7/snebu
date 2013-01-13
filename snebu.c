@@ -831,7 +831,7 @@ int submitfiles(int argc, char **argv)
     fs.filename = 0;
     fs.linktarget = 0;
     fs.extdata = 0;
-    while ((optc = getopt(argc, argv, "n:d:r:")) >= 0) 
+    while ((optc = getopt(argc, argv, "n:d:")) >= 0) 
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -852,8 +852,8 @@ int submitfiles(int argc, char **argv)
 		usage();
 		return(1);
 	}
-    if (foundopts != 7) {
-	fprintf(stderr, "Didn't find all arguments\n");
+    if (foundopts != 3) {
+	fprintf(stderr, "Didn't find all arguments %d\n", foundopts);
         usage();
         return(1);
     }
@@ -866,8 +866,8 @@ int submitfiles(int argc, char **argv)
 
     x = sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
-	    "where name = '%s' and retention = '%s' and serial = '%s'",
-	    bkname, retention, datestamp)), -1, &sqlres, 0);
+	    "where name = '%s' and serial = '%s'",
+	    bkname, datestamp)), -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
     }
