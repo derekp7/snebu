@@ -1440,7 +1440,7 @@ int restore(int argc, char **argv)
 	"select ftype, permission, device_id, inode, user_name, user_id,  "
 	"group_name, group_id, size, md5, datestamp, filename, extdata  "
 	"from file_entities f join backupset_detail d  "
-	"on f.file_id = d.file_id where backupset_id = '%d'%s",
+	"on f.file_id = d.file_id where backupset_id = '%d'%s order by filename, datestamp",
 	bkid, filespec != 0 ?  filespec : ""), 0, 0, 0);
 
     sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
@@ -1830,7 +1830,7 @@ int listbackups(int argc, char **argv)
 	if (filespec == 0) {
 	    err = sqlite3_prepare_v2(bkcatalog,
 		(sqlstmt = sqlite3_mprintf(
-		"select distinct name from backupsets")), -1, &sqlres, 0);
+		"select distinct name from backupsets order by name")), -1, &sqlres, 0);
 	    rowcount = 0;
 	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
 		rowcount++;
@@ -1875,8 +1875,8 @@ int listbackups(int argc, char **argv)
     else if (foundopts == 1) {
 	sqlite3_prepare_v2(bkcatalog,
     	    (sqlstmt = sqlite3_mprintf(
-    	    "select distinct retention, serial from backupsets  "
-	    "where name = '%q'", bkname)),
+	    "select distinct retention, serial from backupsets "
+	    "where name = '%q' order by serial, name", bkname)),
 	    -1, &sqlres, 0);
 	rowcount = 0;
 	printf("%s\n", bkname);
@@ -1909,7 +1909,7 @@ int listbackups(int argc, char **argv)
 	    (sqlstmt = sqlite3_mprintf(
 	    "select filename from file_entities f  "
 	    "join backupset_detail d on f.file_id = d.file_id  "
-	    "where backupset_id = '%d'", bkid)),
+	    "where backupset_id = '%d' order by filename, datestamp", bkid)),
 	    -1, &sqlres, 0);
 	rowcount = 0;
 	bktime = (time_t) strtoll(datestamp, 0, 10);
