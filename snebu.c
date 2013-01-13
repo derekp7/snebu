@@ -343,11 +343,11 @@ newbackup(int argc, char **argv)
     }
 
     if (force_full_backup == 1) {
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert or ignore into needed_file_entities  "
-	"(backupset_id, device_id, inode, filename, infilename)  "
-	"select backupset_id, device_id, inode, filename, infilename from inbound_file_entities "
-	"where backupset_id = '%d' and ftype = '0'", bkid)), 0, 0, &sqlerr);
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "insert or ignore into needed_file_entities  "
+	    "(backupset_id, device_id, inode, filename, infilename)  "
+	    "select backupset_id, device_id, inode, filename, infilename from inbound_file_entities "
+	    "where backupset_id = '%d' and ftype = '0'", bkid)), 0, 0, &sqlerr);
     }
     else {
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -688,8 +688,8 @@ help(char *topic)
 	    "      --null                Inbound file list is null terminated.  Default.\n"
 	    "      --not-null            Inbound file list is newline terminated, and special\n"
 	    "                            characters in filenames are escaped.\n"
-	    "      --null-results        Output of required files list is null terminated\n"
-	    "      --not-null-results    Output of required files list is newline terminated\n"
+	    "      --null-output         Output of required files list is null terminated\n"
+	    "      --not-null-output     Output of required files list is newline terminated\n"
 	    "                            and special characters are escaped.\n"
 	    "      --full                Return all file names submitted, regardless if they\n"
 	    "                            are in the backup catalog already\n"
