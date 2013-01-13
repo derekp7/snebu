@@ -52,6 +52,11 @@ int main(int argc, char **argv)
 	expire(argc - 1, argv + 1);
     else if (strcmp(subfunc, "purge") == 0)
 	purge(argc - 1, argv + 1);
+    else if (strcmp(subfunc, "help") == 0)
+	if (argc > 2)
+	    help(*(argv + 2));
+	else
+	    help("help");
     else {
 	usage();
 	exit(1);
@@ -638,10 +643,10 @@ usage()
 {
     printf(
     "Usage:\n"
-    "    snebu.sh\n"
+    "    snebu\n"
     "        newbackup -n backupname -d datestamp -r retention_schedule\n"
     "\n"
-    "        submitfiles -n backupname -d datestamp -r retention_schedule\n"
+    "        submitfiles -n backupname -d datestamp\n"
     "\n"
     "        listbackups [ -n backupname [ -d datestamp ]] [ -p regex_search_pattern ] \n"
     "\n"
@@ -650,9 +655,63 @@ usage()
     "        expire -n backupname -r retention_schedule -a age (in days)\n"
     "\n"
     "        purge\n"
+    "        help [topic]\n"
 
 
     );
+}
+
+help(char *topic)
+{
+    
+    if (strcmp(topic, "newbackup") == 0)
+	printf(
+	    "Usage: snebu newbackup\n"
+	    "Takes a tab-delimited input list of files with metadata (filesize, date,\n"
+	    "owner, etc.), checks to see which files are already on the backup server,\n"
+	    "and returns a list of files that the server doesn't already have.  References\n"
+	    "to the files already on the server are recorded in the current backup session.\n"
+	    "\n"
+	    "Required arguments:\n"
+	    " -n | --name=BACKUPNAME)    Usually the name of the host being backed up.\n"
+	    " -d | --datestamp=DATE)     The date of the backup (in seconds), also used as\n"
+	    "                            the serial number for the backup.\n"
+	    " -r | --retention=SCHEDULE) Expiration class of the backup.  Typically this will\n"
+	    "                            will be \"daily\", \"weekly\", \"monthly\", \"yearly\"\n"
+	    "                            or \"archive\".  Any name can be used though.\n"
+	    "Optional arguments:\n"
+	    "      --graft=PATHA=PATHB   Replace PATHA at the beginning of files with PATHB\n"
+	    "                            on input.  Output file paths are unaffected.  Useful\n"
+	    "                            for backing up snapshots from a temporary mount\n"
+	    "                            point.\n"
+	    " -T | --files-from=FILE     Get inbound file list from the given file\n"
+	    "      --null                Inbound file list is null terminated.  Default.\n"
+	    "      --not-null            Inbound file list is newline terminated, and special\n"
+	    "                            characters in filenames are escaped.\n"
+	    "      --null-results        Output of required files list is null terminated\n"
+	    "      --not-null-results    Output of required files list is newline terminated\n"
+	    "                            and special characters are escaped.\n"
+	    "      --full                Return all file names submitted, regardless if they\n"
+	    "                            are in the backup catalog already\n"
+	    "\n"
+	    "The input file list has the following tab delimited fields:\n"
+	    "File Type, Mode, Device, Inode, Owner, Owner Number, Group Owner, Group Number,\n"
+	    "Size, MD5, Date, Filename, SymLink Target\n"
+	    "\n"
+	    "MD5 is optional, if it is 0 then only the rest of the metadata will be examined\n"
+	    "to determine if the file has changed\n"
+	    "\n"
+	    "For null terminated input lists, the filename (last field) is followed by a null\n"
+	    "and the Symlink Target (for symbolic link file types) are again followed by a\n"
+	    "null.  If the input list is newline terminated, then there is no null between\n"
+	    "the filename and the link target.\n"
+	    "\n"
+	    "A suitable input list can be generated as follows:\n"
+	    "find /source/directory \\( -type f -o -type d \\) -printf \\\n"
+	    "    \"%%y\\t%%#m\\t%%D\\t%%i\\t%%u\\t%%U\\t%%g\\t%%G\\t%%s\\t0\\t%%T@\\t%%p\\0\"\\\n"
+	    "    -o -type l -printf \\\n"
+	    "    \"%%y\\t%%#m\\t%%D\\t%%i\\t%%u\\t%%U\\t%%g\\t%%G\\t%%s\\t0\\t%%T@\\t%%p\\0%%l\\0\"\n"
+	);
 }
 
 int submitfiles(int argc, char **argv)
