@@ -112,7 +112,7 @@ newbackup(int argc, char **argv)
     unsigned char *unescltarget = 0;
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
-	{ "date", required_argument, NULL, 'd' },
+	{ "datestamp", required_argument, NULL, 'd' },
 	{ "retention", required_argument, NULL, 'r' },
 	{ "graft", required_argument, NULL, 0 },
 	{ "files-from", required_argument, NULL, 'T' },
@@ -825,13 +825,19 @@ int submitfiles(int argc, char **argv)
     char *tsparsedata = 0;
     char *destfilepaths = 0;
     FILE *sparsefileh;
+    struct option longopts[] = {
+	{ "name", required_argument, NULL, 'n' },
+	{ "datestamp", required_argument, NULL, 'd' },
+	{ NULL, no_argument, NULL, 0 }
+    };
+    int longoptidx;
 
     
 
     fs.filename = 0;
     fs.linktarget = 0;
     fs.extdata = 0;
-    while ((optc = getopt(argc, argv, "n:d:")) >= 0) 
+    while ((optc = getopt_long(argc, argv, "n:d:", longopts, &longoptidx)) >= 0)
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -842,11 +848,6 @@ int submitfiles(int argc, char **argv)
 		strncpy(datestamp, optarg, 127);
 		datestamp[127] = 0;
 		foundopts |= 2;
-		break;
-	    case 'r':
-		strncpy(retention, optarg, 127);
-		retention[127] = 0;
-		foundopts |= 4;
 		break;
 	    default:
 		usage();
@@ -1321,12 +1322,18 @@ int restore(int argc, char **argv)
     char *filespec = 0;
     int filespeclen;
     char *sqlerr;
+    struct option longopts[] = {
+	{ "name", required_argument, NULL, 'n' },
+	{ "datestamp", required_argument, NULL, 'd' },
+	{ NULL, no_argument, NULL, 0 }
+    };
+    int longoptidx;
 
     lendian = (unsigned int) (((unsigned char *)(&lendian))[0]); // little endian test
     msi = 256;
     sparseinfo = malloc(msi * sizeof(*sparseinfo));
 
-    while ((optc = getopt(argc, argv, "n:d:r:")) >= 0) {
+    while ((optc = getopt_long(argc, argv, "n:d:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -1783,8 +1790,14 @@ int listbackups(int argc, char **argv)
     char oldbkname[128];
     time_t oldbktime;
     int err;
+    struct option longopts[] = {
+	{ "name", required_argument, NULL, 'n' },
+	{ "datestamp", required_argument, NULL, 'd' },
+	{ NULL, no_argument, NULL, 0 }
+    };
+    int longoptidx;
 
-    while ((optc = getopt(argc, argv, "n:d:")) >= 0) {
+    while ((optc = getopt_long(argc, argv, "n:d:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -2025,10 +2038,16 @@ int import(int argc, char **argv)
         unsigned long long int filesize;
     } t;
     int count;
+    struct option longopts[] = {
+	{ "name", required_argument, NULL, 'n' },
+	{ "datestamp", required_argument, NULL, 'd' },
+	{ "retention", required_argument, NULL, 'r' },
+	{ "file", required_argument, NULL, 'f' },
+	{ NULL, no_argument, NULL, 0 }
+    };
+    int longoptidx;
 
-
-
-    while ((optc = getopt(argc, argv, "n:d:r:f:")) >= 0) {
+    while ((optc = getopt_long(argc, argv, "n:d:r:f:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -2274,8 +2293,16 @@ int expire(int argc, char **argv)
     char catalogpath[512];
     time_t cutoffdate;
     bkname[0] = 0;
+    struct option longopts[] = {
+	{ "name", required_argument, NULL, 'n' },
+	{ "datestamp", required_argument, NULL, 'd' },
+	{ "age", required_argument, NULL, 'a' },
+	{ "min-keep", required_argument, NULL, 'm' },
+	{ NULL, no_argument, NULL, 0 }
+    };
+    int longoptidx;
 
-    while ((optc = getopt(argc, argv, "r:n:a:k:m:")) >= 0) {
+    while ((optc = getopt_long(argc, argv, "r:n:a:k:m:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'r':
 		strncpy(retention, optarg, 127);
