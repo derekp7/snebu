@@ -20,6 +20,10 @@ Now create a client backup script called "backup.sh" with the following:
 SNEBU="/usr/local/bin/snebu"
 # Automatically include all mounted ext2, ext3, ext4 filesystems
 INCLUDE=( $(mount |grep ext[234] |awk '{print $3}') )
+
+# If the backup drive is mounted locally, we want to exclude it
+EXCLUDE=( /var/backups )
+
 NAME=$(hostname)
 BK_SERIAL=$(date +%s)
 
@@ -39,19 +43,29 @@ fi
 FILE_PATTERN="%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%T@\t%p\0"
 LINK_PATTERN="%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%T@\t%p\0%l\0"
 
+# Build Find exclude commands from exclude list
+for i in ${EXCLUDE[@]}
+do
+    findexclude[$((j * 4 + 1))]="-path"
+    findexclude[$((j * 4 + 2))]="$i"
+    findexclude[$((j * 4 + 3))]="-prune"
+    findexclude[$((j * 4 + 4))]="-o"
+    ((j++))
+done
+
 FINDCMD() {
-    find ${INCLUDE[@]} -xdev \( -type f -o type d \) -printf ${FILE_PATTERN} \
-    -o -type l -printf "${LINK_PATTERN}
+    find ${INCLUDE[@]} -xdev "${findexclude[@]}" \( -type f -o -type d \) \
+    -printf "${FILE_PATTERN}" -o -type l -printf "${LINK_PATTERN}"
 }
 
 # Send list of files and metadata to backup
-$FINDCMD |$SNEBU newbackup --name ${NAME} --retention ${RETENTION} \
+FINDCMD |$SNEBU newbackup --name ${NAME} --retention ${RETENTION} \
     --datestamp ${BK_SERIAL} --null --null-output \
     >/tmp/backup_include.${BK_SERIAL}
 
 # Now create a tar file and send it to the backup process
 tar -P --null -T /tmp/backup_include.${BK_SERIAL} -cf - |\
-    $SNEBU submitfiles --name ${NAME} --datestamp {$BK_SERIAL}
+    $SNEBU submitfiles --name ${NAME} --datestamp ${BK_SERIAL}
 
 ########## END of script ##########
 
