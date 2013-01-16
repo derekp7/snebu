@@ -67,6 +67,8 @@ FINDCMD |$SNEBU newbackup --name ${NAME} --retention ${RETENTION} \
 tar -P --null -T /tmp/backup_include.${BK_SERIAL} -cf - |\
     $SNEBU submitfiles --name ${NAME} --datestamp ${BK_SERIAL}
 
+rm -f /tmp/backup_include.${BK_SERIAL}
+
 ########## END of script ##########
 
 If you want to adapt this script to run on a client and send the backups to a remote server, adjust the "SNEBU=" command at the top of the script to use ssh along with a private key:

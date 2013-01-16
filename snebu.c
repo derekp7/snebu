@@ -410,7 +410,7 @@ newbackup(int argc, char **argv)
 int initdb(sqlite3 *bkcatalog)
 {
     int err = 0;
-    char *sqlerr;
+    char *sqlerr = 0;
 
     sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
@@ -544,6 +544,8 @@ int initdb(sqlite3 *bkcatalog)
 	return(err);
 
 // Received file list with device_id and inode merged in
+
+#ifdef commented_out
     err = sqlite3_exec(bkcatalog,
 	"create view if not exists  \n"
 	"    received_file_entities_di  \n"
@@ -620,19 +622,34 @@ int initdb(sqlite3 *bkcatalog)
 	"    received_file_entities_di  \n"
 	"where  \n"
 	"    ftype != '1'", 0, 0, 0);
-
+#endif
     err = sqlite3_exec(bkcatalog,
-	"    create index needed_file_entitiesi1 on file_entities (  \n"
-	"    filename, file_id)", 0, 0, 0);
+	"    create index needed_file_entitiesi1 on needed_file_entities (  \n"
+	"    backupset_id, filename, infilename)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
-	"    create index backupset_detaili1 on file_entities (  \n"
+	"    create index needed_file_entitiesi2 on needed_file_entities (  \n"
+	"    backupset_id, infilename, filename)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index backupset_detaili1 on backupset_detail (  \n"
+	"    file_id, backupset_id)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index backupset_detaili2 on backupset_detail (  \n"
 	"    backupset_id, file_id)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
 	"    create index file_entitiesi1 on file_entities (  \n"
 	"    filename, file_id)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
 	"    create index received_file_entitiesi1 on received_file_entities (  \n"
-	"    filename, file_id)", 0, 0, 0);
+	"    filename)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index received_file_entitiesi2 on received_file_entities (  \n"
+	"    extdata)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index received_file_entitiesi3 on received_file_entities (  \n"
+	"    backupset_id, filename)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index received_file_entitiesi4 on received_file_entities (  \n"
+	"    backupset_id, extdata)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
 	"    create index storagefilesi1 on storagefiles (  \n"
 	"    md5)", 0, 0, 0);
@@ -648,9 +665,9 @@ usage()
     "\n"
     "        submitfiles -n backupname -d datestamp\n"
     "\n"
-    "        listbackups [ -n backupname [ -d datestamp ]] [ -p regex_search_pattern ] \n"
+    "        listbackups [ -n backupname [ -d datestamp ]] [ search_pattern ] \n"
     "\n"
-    "        restore -n backupname -d datestamp [ -p regex_search_pattern ]\n"
+    "        restore -n backupname -d datestamp [ search_pattern ]\n"
     "\n"
     "        expire -n backupname -r retention_schedule -a age (in days)\n"
     "\n"
@@ -892,27 +909,74 @@ int submitfiles(int argc, char **argv)
         if (tarhead.filename[0] == 0) {	// End of TAR archive
 // TODO cleanup code here
 
+	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "create temporary view if not exists \n"
+	    "    received_file_entities_ldi \n"
+	    "as select \n"
+	    "  ftype, permission, device_id, inode, user_name, user_id, \n"
+	    "  group_name, group_id, size, md5, datestamp, r.filename, \n"
+	    "   extdata \n"
+	    "from ( \n"
+	    "  select rr.file_id, rr.backupset_id, rr.ftype, rr.permission, \n"
+	    "    rr.user_name, rr.user_id, rr.group_name, rr.group_id, rr.size, \n"
+	    "    rr.md5, rr.datestamp, rl.filename, rr.extdata \n"
+	    "  from  \n"
+	    "    (select filename, extdata \n"
+	    "    from received_file_entities \n"
+	    "    where backupset_id = %d and ftype = 1 order by extdata) rl \n"
+	    "  join ( \n"
+	    "    select file_id, backupset_id, ftype, permission, user_name, user_id, \n"
+	    "    group_name, group_id, size, md5, datestamp, filename, extdata \n"
+	    "    from received_file_entities where backupset_id = %d \n"
+	    "    order by filename) rr \n"
+	    "  on  \n"
+	    "    rl.extdata = rr.filename \n"
+	    "union \n"
+	    "  select file_id, backupset_id, ftype, permission, user_name, user_id, \n"
+	    "  group_name, group_id, size, md5, datestamp, filename, extdata \n"
+	    "  from received_file_entities where backupset_id = %d and ftype != 1 \n"
+	    "  ) r \n"
+	    "join ( \n"
+	    "  select filename, device_id, inode from needed_file_entities \n"
+	    "  where backupset_id = %d \n"
+	    ") n \n"
+	    "on r.filename = n.filename", bkid, bkid, bkid, bkid)), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_free(sqlstmt);
+
+
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into file_entities (ftype, permission, device_id, inode,  "
 		"user_name, user_id, group_name, group_id, size, md5, datestamp, filename, extdata)  "
 		"select ftype, permission, device_id, inode, user_name, user_id, group_name,  "
 		"group_id, size, md5, datestamp, filename, extdata from received_file_entities_ldi  "
-		"where backupset_id = '%d'", bkid)), 0, 0, 0);
+		)), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
 	    sqlite3_free(sqlstmt);
 
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into backupset_detail (backupset_id, file_id) select backupset_id,  "
+		"insert or ignore into backupset_detail (backupset_id, file_id) select %d,"
 		"f.file_id from file_entities f join received_file_entities_ldi r  "
 		"on f.ftype = r.ftype and f.permission = r.permission  "
 		"and f.device_id = r.device_id and f.inode = r.inode  "
 		"and f.user_name = r.user_name and f.user_id = r.user_id  "
 		"and f.group_name = r.group_name and f.group_id = r.group_id  "
 		"and f.size = r.size and f.md5 = r.md5 and f.datestamp = r.datestamp  "
-		"and f.filename = r.filename and f.extdata = r.extdata  "
-		"where backupset_id = '%d'", bkid)), 0, 0, 0);
+		"and f.filename = r.filename and f.extdata = r.extdata  ",
+		bkid)), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
 	    sqlite3_free(sqlstmt);
 
-	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
             sqlite3_close(bkcatalog);
             return(0);
         }
@@ -2231,9 +2295,7 @@ int import(int argc, char **argv)
 	sqlite3_bind_int(sqlres, 12, t.modtime);
 	sqlite3_bind_text(sqlres, 13, filename, -1, SQLITE_STATIC);
 	sqlite3_bind_text(sqlres, 14, linktarget, -1, SQLITE_STATIC);
-	fflush(stderr);
 	sqlite3_step(sqlres);
-	fflush(stderr);
 //	sqlite3_clear_bindings(sqlres);
 	sqlite3_reset(sqlres);
     }
