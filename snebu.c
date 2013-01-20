@@ -48,6 +48,8 @@ int main(int argc, char **argv)
 	listbackups(argc - 1, argv + 1);
     else if (strcmp(subfunc, "import") == 0)
 	import(argc - 1, argv + 1);
+    else if (strcmp(subfunc, "export") == 0)
+	export(argc - 1, argv + 1);
     else if (strcmp(subfunc, "expire") == 0)
 	expire(argc - 1, argv + 1);
     else if (strcmp(subfunc, "purge") == 0)
@@ -2336,6 +2338,158 @@ int import(int argc, char **argv)
 
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 
+}
+
+int export(int argc, char **argv)
+{
+    int optc;
+    char bkname[128];
+    char datestamp[128];
+    char retention[128];
+    char *filespec = 0;
+    int filespeclen;
+    int foundopts = 0;
+    sqlite3 *bkcatalog;
+    sqlite3_stmt *sqlres;
+    char *bkcatalogp;
+    char *sqlstmt = 0;
+    char *sqlerr;
+    int bkid;
+    int fileid;
+    int i;
+    char catalogpath[512];
+    FILE *catalog;
+    char *instr = 0;
+    size_t instrlen = 0;
+    char *destdir = config.vault;
+    char *sparsefilepath = 0;
+    FILE *sparsefileh;
+    unsigned char *efilename = 0;
+    unsigned char *eextdata= 0;
+    char md5[33];
+    struct {
+        char ftype[2];
+        int mode;
+	char devid[33];
+	char inode[33];
+        char auid[33];
+        char agid[33];
+        int nuid;
+        int ngid;
+        int modtime;
+        unsigned long long int filesize;
+    } t;
+    int count;
+    struct option longopts[] = {
+	{ "name", required_argument, NULL, 'n' },
+	{ "datestamp", required_argument, NULL, 'd' },
+	{ "retention", required_argument, NULL, 'r' },
+	{ "file", required_argument, NULL, 'f' },
+	{ NULL, no_argument, NULL, 0 }
+    };
+    int longoptidx;
+
+    while ((optc = getopt_long(argc, argv, "n:d:r:f:", longopts, &longoptidx)) >= 0) {
+	switch (optc) {
+	    case 'n':
+		strncpy(bkname, optarg, 127);
+		bkname[127] = 0;
+		foundopts |= 1;
+		break;
+	    case 'd':
+		strncpy(datestamp, optarg, 127);
+		datestamp[127] = 0;
+		foundopts |= 2;
+		break;
+	    case 'r':
+		strncpy(retention, optarg, 127);
+		retention[127] = 0;
+		foundopts |= 4;
+		break;
+	    case 'f':
+		strncpy(catalogpath, optarg, 127);
+		catalogpath[127] = 0;
+		foundopts |= 8;
+		break;
+	    default:
+		usage();
+		return(1);
+	}
+    }
+    if (foundopts != 15) {
+        usage();
+        return(1);
+    }
+
+    if (argc > optind) {
+	filespeclen = 4;
+	for (i = optind; i < argc; i++)
+	    filespeclen += strlen(argv[i]) + 20;
+	filespec = malloc(filespeclen);
+	filespec[0] = 0;
+	for (i = optind; i < argc; i++) {
+	    if (i == optind)
+		strcat(filespec, " and (filename glob ");
+	    else
+		strcat(filespec, " or filename glob ");
+	    strcat(filespec, sqlite3_mprintf("'%q'", argv[i]));
+	}
+	strcat(filespec, ")");
+    }
+    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    sqlite3_open(bkcatalogp, &bkcatalog);
+    sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
+    initdb(bkcatalog);
+
+    sqlite3_prepare_v2(bkcatalog,
+	(sqlstmt = sqlite3_mprintf("select distinct backupset_id  "
+	    "from backupsets  where name = '%q' and serial = '%q'",
+	    bkname, datestamp)), -1, &sqlres, 0);
+    if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
+	bkid = sqlite3_column_int(sqlres, 0);
+    }
+    else {
+	printf("Backup not found for %s\n", sqlstmt);
+	exit(1);
+    }
+    sqlite3_free(sqlstmt);
+
+    if (strcmp(catalogpath, "-") == 0)
+	catalog = stdout;
+    else
+	catalog = fopen(catalogpath, "w");
+    if (catalog == 0) {
+	fprintf(stderr, "Error %s opening catalog file %s\n", strerror(errno), catalogpath);
+	exit(1);
+    }
+
+    sqlite3_prepare_v2(bkcatalog,
+	(sqlstmt = sqlite3_mprintf(
+	"select ftype, permission, device_id, inode, user_name, user_id, "
+	"  group_name, group_id, size, md5, datestamp, filename, extdata "
+	"  from file_entities f "
+	"  join backupset_detail d on "
+	"  f.file_id = d.file_id "
+	"  where d.backupset_id = '%d' ", bkid)), -1, &sqlres, 0);
+    while (sqlite3_step(sqlres) == SQLITE_ROW) {
+	fprintf(catalog, "%s\t%o\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%s\t%s\n",
+	sqlite3_column_text(sqlres, 0),
+	sqlite3_column_int(sqlres, 1),
+	sqlite3_column_text(sqlres, 2),
+	sqlite3_column_text(sqlres, 3),
+	sqlite3_column_text(sqlres, 4),
+	sqlite3_column_int(sqlres, 5),
+	sqlite3_column_text(sqlres, 6),
+	sqlite3_column_int(sqlres, 7),
+	sqlite3_column_int(sqlres, 8),
+	sqlite3_column_text(sqlres, 9),
+	sqlite3_column_int(sqlres, 10),
+	stresc((char *) sqlite3_column_text(sqlres, 11), &efilename),
+	stresc((char *) sqlite3_column_text(sqlres, 12), &eextdata));
+    }
+    sqlite3_free(sqlstmt);
+    fclose(catalog);
 }
 
 int expire(int argc, char **argv)
