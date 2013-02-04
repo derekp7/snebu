@@ -626,35 +626,32 @@ int initdb(sqlite3 *bkcatalog)
 	"    ftype != '1'", 0, 0, 0);
 #endif
     err = sqlite3_exec(bkcatalog,
-	"    create index needed_file_entitiesi1 on needed_file_entities (  \n"
+	"    create index if not exists needed_file_entitiesi1 on needed_file_entities (  \n"
 	"    backupset_id, filename, infilename)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
-	"    create index needed_file_entitiesi2 on needed_file_entities (  \n"
+	"    create index if not exists needed_file_entitiesi2 on needed_file_entities (  \n"
 	"    backupset_id, infilename, filename)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
-	"    create index backupset_detaili1 on backupset_detail (  \n"
+	"    create index if not exists backupset_detaili1 on backupset_detail (  \n"
 	"    file_id, backupset_id)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
-	"    create index backupset_detaili2 on backupset_detail (  \n"
+	"    create index if not exists backupset_detaili2 on backupset_detail (  \n"
 	"    backupset_id, file_id)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
-	"    create index file_entitiesi1 on file_entities (  \n"
+	"    create index if not exists file_entitiesi1 on file_entities (  \n"
 	"    filename, file_id)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
-	"    create index received_file_entitiesi1 on received_file_entities (  \n"
+	"    create index if not exists received_file_entitiesi1 on received_file_entities (  \n"
 	"    filename)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
-	"    create index received_file_entitiesi2 on received_file_entities (  \n"
+	"    create index if not exists received_file_entitiesi2 on received_file_entities (  \n"
 	"    extdata)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
-	"    create index received_file_entitiesi3 on received_file_entities (  \n"
+	"    create index if not exists received_file_entitiesi3 on received_file_entities (  \n"
 	"    backupset_id, filename)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
-	"    create index received_file_entitiesi4 on received_file_entities (  \n"
+	"    create index if not exists received_file_entitiesi4 on received_file_entities (  \n"
 	"    backupset_id, extdata)", 0, 0, 0);
-    err = sqlite3_exec(bkcatalog,
-	"    create index storagefilesi1 on storagefiles (  \n"
-	"    md5)", 0, 0, 0);
     return(0);
 }
 
@@ -881,18 +878,24 @@ int submitfiles(int argc, char **argv)
     FD_SET(0, &input_s);
     select(1, &input_s, 0, 0, 0);
     x = sqlite3_open(bkcatalogp, &bkcatalog);
+    if (x != 0) {
+	fprintf(stderr, "Error %d opening backup catalog\n", x);
+	exit(1);
+    }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
 //    x = initdb(bkcatalog);
 
     x = sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
-	    "where name = '%s' and serial = '%s'",
+	    "where name = '%q' and serial = '%q'",
 	    bkname, datestamp)), -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
     }
-    else
-	fprintf(stderr, "bkid not found: %s\n", sqlstmt);
+    else {
+	fprintf(stderr, "bkid not found 1: %d %s\n", x, sqlstmt);
+	return(1);
+    }
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
 
@@ -1447,7 +1450,7 @@ int restore(int argc, char **argv)
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
     x = sqlite3_open(bkcatalogp, &bkcatalog);
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
-    x = initdb(bkcatalog);
+//    x = initdb(bkcatalog);
 
     if (srcdir == 0)
 	srcdir = config.vault;
@@ -1458,11 +1461,13 @@ int restore(int argc, char **argv)
         (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
             "where name = '%q' and serial = '%q'",
             bkname, datestamp)), -1, &sqlres, 0);
+    if (x != 0)
+	printf("Error %d\n", x);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
     }
     else {
-        fprintf(stderr, "bkid not found: %s\n", sqlstmt);
+        fprintf(stderr, "bkid not found 2: %s\n", sqlstmt);
 	return(1);
     }
     sqlite3_finalize(sqlres);
@@ -1830,8 +1835,8 @@ int getconfig()
 
 int sqlbusy(void *x, int y)
 {
-    fprintf(stderr, "Busy %d\n", y);
-    sleep(1);
+//    fprintf(stderr, "Busy %d\n", y);
+    usleep(100000);
     return(1);
 }
 
@@ -2440,7 +2445,7 @@ int export(int argc, char **argv)
     sqlite3_open(bkcatalogp, &bkcatalog);
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
     sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
-    initdb(bkcatalog);
+//    initdb(bkcatalog);
 
     sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select distinct backupset_id  "
