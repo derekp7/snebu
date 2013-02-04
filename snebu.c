@@ -23,6 +23,14 @@ int sqlbusy(void *x, int y);
 char *stresc(char *src, unsigned char **target);
 char *strunesc(char *src, unsigned char **target);
 long int strtoln(char *nptr, char **endptr, int base, int len);
+
+int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, char **, char **), void *carg1, char **errmsg);
+int my_sqlite3_step(sqlite3_stmt *stmt);
+int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt **ppStmt, const char **pzTail);
+
+#define sqlite3_exec(a, b, c, d, e) my_sqlite3_exec(a, b, c, d, e)
+#define sqlite3_step(a) my_sqlite3_step(a)
+#define sqlite3_prepare_v2(a, b, c, d, e) my_sqlite3_prepare_v2(a, b, c, d, e)
 int main(int argc, char **argv)
 {
     sqlite3 *bkcatalog;
@@ -900,7 +908,8 @@ int submitfiles(int argc, char **argv)
     sqlite3_free(sqlstmt);
 
     tmpfiledir = config.vault;
-    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+//    TODO: Enable this option when --faster flag is specified
+//    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     sparsedata = malloc(m_sparsedata * sizeof(*sparsedata));
 
     // Read TAR file from std input
@@ -914,7 +923,7 @@ int submitfiles(int argc, char **argv)
         if (tarhead.filename[0] == 0) {	// End of TAR archive
 // TODO cleanup code here
 
-	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+//	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "create temporary view if not exists \n"
 	    "    received_file_entities_ldi \n"
@@ -2733,4 +2742,42 @@ int purge(int argc, char **argv)
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "delete from purgelist where md5 = '%s'", md5)), 0, 0, &sqlerr);
     }
+}
+#undef sqlite3_exec
+#undef sqlite3_step
+#undef sqlite3_prepare_v2
+int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, char **, char **), void *carg1, char **errmsg)
+{
+    int r = 0;
+    do {
+        r = sqlite3_exec(db, sql, callback, carg1, errmsg);
+	if (r == 5) {
+	    usleep(100000);
+	}
+    } while (r == 5);
+    if (r != 0)
+	fprintf(stderr, "sqlite3_exec_return: %d\n", r);
+    return(r);
+}
+int my_sqlite3_step(sqlite3_stmt *stmt)
+{
+    int r = 0;
+    do {
+        r = sqlite3_step(stmt);
+	if (r == 5) {
+	    usleep(100000);
+	}
+    } while (r == 5);
+    return(r);
+}
+int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt **ppStmt, const char **pzTail)
+{
+    int r = 0;
+    do {
+	r = sqlite3_prepare_v2(db, zSql, nByte, ppStmt, pzTail);
+	if (r == 5) {
+	    usleep(100000);
+	}
+    } while (r == 5);
+    return(r);
 }
