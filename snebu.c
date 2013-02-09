@@ -362,15 +362,15 @@ newbackup(int argc, char **argv)
     if (force_full_backup == 1) {
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
-	    "(backupset_id, device_id, inode, filename, infilename)  "
-	    "select backupset_id, device_id, inode, filename, infilename from inbound_file_entities "
+	    "(backupset_id, device_id, inode, filename, infilename, size)  "
+	    "select backupset_id, device_id, inode, filename, infilename, size from inbound_file_entities "
 	    "where backupset_id = '%d' and ftype = '0'", bkid)), 0, 0, &sqlerr);
     }
     else {
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
-	    "(backupset_id, device_id, inode, filename, infilename)  "
-	    "select backupset_id, i.device_id, i.inode, i.filename, i.infilename from inbound_file_entities i  "
+	    "(backupset_id, device_id, inode, filename, infilename, size)  "
+	    "select backupset_id, i.device_id, i.inode, i.filename, i.infilename, i.size from inbound_file_entities i  "
 	    "left join file_entities f on  "
 	    "i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
 	    "and i.permission = f.permission  "
@@ -521,7 +521,8 @@ int initdb(sqlite3 *bkcatalog)
     	    "device_id     char,  \n"
        	    "inode         char,  \n"
 	    "filename      char,  \n"
-	    "infilename      char,  \n"
+	    "infilename    char,  \n"
+	    "size          integer,  \n"
 	"foreign key(backupset_id) references backupsets(backupset_id),  \n"
 	"unique (  \n"
 	    "backupset_id,  \n"
@@ -859,16 +860,20 @@ int submitfiles(int argc, char **argv)
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
 	{ "datestamp", required_argument, NULL, 'd' },
+	{ "verbose", no_argument, NULL, 'v' },
 	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
+    unsigned long long est_size = 0;
+    unsigned long long bytes_read = 0;
+    int verbose = 0;
 
     
 
     fs.filename = 0;
     fs.linktarget = 0;
     fs.extdata = 0;
-    while ((optc = getopt_long(argc, argv, "n:d:", longopts, &longoptidx)) >= 0)
+    while ((optc = getopt_long(argc, argv, "n:d:v", longopts, &longoptidx)) >= 0)
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -880,11 +885,15 @@ int submitfiles(int argc, char **argv)
 		datestamp[127] = 0;
 		foundopts |= 2;
 		break;
+	    case 'v':
+		verbose = 1;
+		foundopts |= 4;
+		break;
 	    default:
 		usage();
 		return(1);
 	}
-    if (foundopts != 3) {
+    if ((foundopts | 3) != 3) {
 	fprintf(stderr, "Didn't find all arguments %d\n", foundopts);
         usage();
         return(1);
@@ -920,6 +929,21 @@ int submitfiles(int argc, char **argv)
     in_a_transaction = 1;
     sparsedata = malloc(m_sparsedata * sizeof(*sparsedata));
 
+    sqlite3_prepare_v2(bkcatalog,
+	(sqlstmt = sqlite3_mprintf("select sum(size)  "
+	    "from needed_file_entities where backupset_id = %d",
+	    bkid)), -1, &sqlres, 0);
+    if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
+        est_size = sqlite3_column_int64(sqlres, 0);
+    }
+    else {
+	fprintf(stderr, "%d: No data from %s\n", x, sqlstmt);
+    }
+    sqlite3_finalize(sqlres);
+    sqlite3_free(sqlstmt);
+
+
+
     // Read TAR file from std input
     while (1) {
         // Read tar 512 byte header into tarhead structure
@@ -929,11 +953,11 @@ int submitfiles(int argc, char **argv)
                 return (1);
         }
         if (tarhead.filename[0] == 0) {	// End of TAR archive
-// TODO cleanup code here
 
 	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 	    in_a_transaction = 0;
-	    fprintf(stderr, "\n");
+	    if (verbose == 1)
+		fprintf(stderr, "\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"create temporary view if not exists \n"
 		"    received_file_entities_ldi \n"
@@ -1291,6 +1315,9 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_free(sqlstmt);
 
 	}
+	bytes_read += fs.filesize;
+	if (verbose == 1)
+	    fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
 
 	if (fs.filename != 0)
 	    free(fs.filename);
