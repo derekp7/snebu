@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <signal.h>
+#include <stdint.h>
 
 struct {
     char *vault;
@@ -37,6 +38,27 @@ int in_a_transaction = 0;
 #define sqlite3_exec(a, b, c, d, e) my_sqlite3_exec(a, b, c, d, e)
 #define sqlite3_step(a) my_sqlite3_step(a)
 #define sqlite3_prepare_v2(a, b, c, d, e) my_sqlite3_prepare_v2(a, b, c, d, e)
+
+#include <lzo/lzoconf.h>
+#include <lzo/lzo1x.h>
+
+struct cfile *cfinit(FILE *outfile);
+int cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile);
+uint32_t *htonlp(uint32_t v);
+uint16_t *htonsp(uint16_t v);
+size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, lzo_uint32 *chksum);
+struct cfile {
+    char *buf;
+    char *bufp;
+    char *cbuf;
+    unsigned int bufsize;
+    lzo_uint cbufsize;
+    FILE *handle;
+    unsigned char *working_memory;
+};
+
+
+
 int main(int argc, char **argv)
 {
     sqlite3 *bkcatalog;
@@ -822,7 +844,7 @@ int submitfiles(int argc, char **argv)
     char *tmpfilepath;
     char *tmpfiledir;
     int curtmpfile;
-    FILE *curfile;
+    struct cfile *curfile;
     char *destdir = config.vault;
     char *destfilepath;
     char *destfilepathm;
@@ -1174,7 +1196,7 @@ int submitfiles(int argc, char **argv)
                 fprintf(stderr, "Error opening temp file %s\n", tmpfilepath);
                 return(1);
             }
-
+#ifdef notdef
 	    // Set up a pipe to run file through a compressor.
             pipe(zin);
             if ((cprocess = fork()) == 0) {
@@ -1187,7 +1209,8 @@ int submitfiles(int argc, char **argv)
             }
             close(zin[0]);
             curfile = fdopen(zin[1], "w");
-
+#endif
+	    curfile = cfinit(fdopen(curtmpfile, "w"));
             blockstoread = fullblocks + (partialblock > 0 ? 1 : 0);
             MD5_Init(&cfmd5ctl);
             for (i = 1; i <= blockstoread; i++) {
@@ -1199,19 +1222,22 @@ int submitfiles(int argc, char **argv)
 
                 if (i == blockstoread) {
                     if (partialblock > 0) {
-                        fwrite(curblock, 1, partialblock, curfile);
+//                        fwrite(curblock, 1, partialblock, curfile);
+                        cwrite(curblock, 1, partialblock, curfile);
                         MD5_Update(&cfmd5ctl, curblock, partialblock);
                         break;
                     }
                 }
-                fwrite(curblock, 512, 1, curfile);
+//                fwrite(curblock, 512, 1, curfile);
+                cwrite(curblock, 512, 1, curfile);
                 MD5_Update(&cfmd5ctl, curblock, 512);
             }
 
-            fflush(curfile);
-            fclose(curfile);
-            waitpid(cprocess, NULL, 0);
-            close(curtmpfile);
+//            fflush(curfile);
+//            fclose(curfile);
+//            waitpid(cprocess, NULL, 0);
+//            close(curtmpfile);
+	    cclose(curfile);
 	    if (in_a_transaction == 0) {
 		sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
 		in_a_transaction = 1;
@@ -2908,4 +2934,118 @@ void concurrency_request()
     for (i = 0; i < numpid; i++)
 	kill(proclist[i], SIGUSR1);
 
+}
+struct cfile *cfinit(FILE *outfile)
+{
+    struct cfile *cfile;
+    char magic[] = {  0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a };
+    uint32_t marker = 0x21212121;
+    lzo_uint32 chksum = 1;
+
+    cfile = malloc(sizeof(*cfile));
+    cfile->bufsize = 256 * 1024;
+    cfile->buf = malloc(cfile->bufsize);
+    cfile->cbuf = malloc(cfile->bufsize + 256 * 16);
+    cfile->bufp = cfile->buf;
+    cfile->working_memory = malloc(LZO1X_1_MEM_COMPRESS);
+    {
+	cfile->handle = outfile;
+	fwrite(magic, 1, sizeof(magic), cfile->handle);
+	fwritec(htonsp(0x1030), 1, 2, cfile->handle, &chksum);
+	fwritec(htonsp(lzo_version()), 1, 2, cfile->handle, &chksum);
+	fwritec(htonsp(0x0940), 1, 2, cfile->handle, &chksum);
+	fwritec("\001", 1, 1, cfile->handle, &chksum);
+	fwritec("\005", 1, 1, cfile->handle, &chksum);
+	fwritec(htonlp(0x300000d), 1, 4, cfile->handle, &chksum);
+	fwritec(htonlp(0x0), 1, 4, cfile->handle, &chksum);
+	fwritec(htonlp(0x0), 1, 4, cfile->handle, &chksum);
+	fwritec(htonlp(0x0), 1, 4, cfile->handle, &chksum);
+	fwritec("\000", 1, 1, cfile->handle, &chksum);
+	fwritec(htonlp(chksum), 1, 4, cfile->handle, &chksum);
+    }
+    return(cfile);
+}
+cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile)
+{
+    size_t bytesin = sz * count;
+    lzo_uint32 chksum;
+    int err;
+
+    do {
+	if (bytesin < cfile->bufsize - (cfile->bufp - cfile->buf)) {
+	    memcpy(cfile->bufp, buf, bytesin);
+	    cfile->bufp += bytesin;
+	    bytesin = 0;
+	}
+	else {
+	    memcpy(cfile->bufp, buf, cfile->bufsize - (cfile->bufp - cfile->buf));
+	    bytesin -= (cfile->bufsize - (cfile->bufp - cfile->buf));
+	    // compress cfile->buf, write out
+
+	    // write uncompressed block size
+	    fwrite(htonlp(cfile->bufsize), 1, 4, cfile->handle);
+	    chksum = lzo_adler32(1, cfile->buf, cfile->bufsize);
+	    err = lzo1x_1_compress(cfile->buf, cfile->bufsize, cfile->cbuf, &(cfile->cbufsize), cfile->working_memory);
+	    // write compressed block size
+	    if (cfile->cbufsize < cfile->bufsize)
+		fwrite(htonlp(cfile->cbufsize), 1, 4, cfile->handle);
+	    else
+		fwrite(htonlp(cfile->bufsize), 1, 4, cfile->handle);
+	    // write checksum
+	    fwrite(htonlp(chksum), 1, 4, cfile->handle);
+	    //write compressed data
+	    if (cfile->cbufsize < cfile->bufsize)
+		fwrite(cfile->cbuf, 1, cfile->cbufsize, cfile->handle);
+	    else
+		fwrite(cfile->buf, 1, cfile->bufsize, cfile->handle);
+	    cfile->bufp = cfile->buf;
+	}
+    } while (bytesin > 0);
+}
+cclose(struct cfile *cfile)
+{
+    int err;
+    lzo_uint32 chksum;
+    uint32_t marker = 0x21212121;
+
+    if (cfile->bufp - cfile->buf > 0) {
+	fwrite(htonlp(cfile->bufp - cfile->buf), 1, 4, cfile->handle);
+	chksum = lzo_adler32(1, cfile->buf, cfile->bufp - cfile->buf);
+	err = lzo1x_1_compress(cfile->buf, cfile->bufp - cfile->buf, cfile->cbuf, &(cfile->cbufsize), cfile->working_memory);
+	if (cfile->cbufsize < (cfile->bufp - cfile->buf))
+	    fwrite(htonlp(cfile->cbufsize), 1, 4, cfile->handle);
+	else
+	    fwrite(htonlp(cfile->bufp - cfile->buf), 1, 4, cfile->handle);
+	fwrite(htonlp(chksum), 1, 4, cfile->handle);
+	if (cfile->cbufsize < (cfile->bufp - cfile->buf))
+	    fwrite(cfile->cbuf, 1, cfile->cbufsize, cfile->handle);
+	else
+	    fwrite(cfile->buf, 1, (cfile->bufp - cfile->buf), cfile->handle);
+    }
+    fwrite(htonlp(0), 1, 4, cfile->handle);
+    fclose(cfile->handle);
+    free(cfile->buf);
+    free(cfile->cbuf);
+    free(cfile->working_memory);
+    free(cfile);
+}
+
+uint32_t *htonlp(uint32_t v)
+{
+    static uint32_t r;
+    r = htonl(v);
+    return(&r);
+}
+uint16_t *htonsp(uint16_t v)
+{
+    static uint16_t r;
+    r = htons(v);
+    return(&r);
+}
+size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, lzo_uint32 *chksum)
+{
+    size_t r;
+    fwrite(ptr, size, nmemb, stream);
+    *chksum = lzo_adler32(*chksum, ptr, size * nmemb);
+    return(r);
 }
