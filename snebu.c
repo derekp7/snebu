@@ -12,6 +12,7 @@
 #include <time.h>
 #include <errno.h>
 #include <getopt.h>
+#include <signal.h>
 
 struct {
     char *vault;
@@ -28,6 +29,11 @@ int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, c
 int my_sqlite3_step(sqlite3_stmt *stmt);
 int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt **ppStmt, const char **pzTail);
 
+void concurrency_request_signal();
+void concurrency_request();
+
+int concurrency_sleep_requested = 0;
+int in_a_transaction = 0;
 #define sqlite3_exec(a, b, c, d, e) my_sqlite3_exec(a, b, c, d, e)
 #define sqlite3_step(a) my_sqlite3_step(a)
 #define sqlite3_prepare_v2(a, b, c, d, e) my_sqlite3_prepare_v2(a, b, c, d, e)
@@ -38,6 +44,7 @@ int main(int argc, char **argv)
     char *subfunc;
     
 
+    signal(SIGUSR1, concurrency_request_signal);
     if (argc > 1)
 	subfunc = argv[1];
     else {
@@ -422,7 +429,7 @@ int initdb(sqlite3 *bkcatalog)
     int err = 0;
     char *sqlerr = 0;
 
-    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
+//    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
 //  Will need this when tape library support is added.
 
@@ -909,7 +916,8 @@ int submitfiles(int argc, char **argv)
 
     tmpfiledir = config.vault;
 //    TODO: Enable this option when --faster flag is specified
-//    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+    in_a_transaction = 1;
     sparsedata = malloc(m_sparsedata * sizeof(*sparsedata));
 
     // Read TAR file from std input
@@ -923,39 +931,41 @@ int submitfiles(int argc, char **argv)
         if (tarhead.filename[0] == 0) {	// End of TAR archive
 // TODO cleanup code here
 
-//	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
-	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	    "create temporary view if not exists \n"
-	    "    received_file_entities_ldi \n"
-	    "as select \n"
-	    "  ftype, permission, device_id, inode, user_name, user_id, \n"
-	    "  group_name, group_id, size, md5, datestamp, r.filename, \n"
-	    "   extdata \n"
-	    "from ( \n"
-	    "  select rr.file_id, rr.backupset_id, rr.ftype, rr.permission, \n"
-	    "    rr.user_name, rr.user_id, rr.group_name, rr.group_id, rr.size, \n"
-	    "    rr.md5, rr.datestamp, rl.filename, rr.extdata \n"
-	    "  from  \n"
-	    "    (select filename, extdata \n"
-	    "    from received_file_entities \n"
-	    "    where backupset_id = %d and ftype = 1 order by extdata) rl \n"
-	    "  join ( \n"
-	    "    select file_id, backupset_id, ftype, permission, user_name, user_id, \n"
-	    "    group_name, group_id, size, md5, datestamp, filename, extdata \n"
-	    "    from received_file_entities where backupset_id = %d \n"
-	    "    order by filename) rr \n"
-	    "  on  \n"
-	    "    rl.extdata = rr.filename \n"
-	    "union \n"
-	    "  select file_id, backupset_id, ftype, permission, user_name, user_id, \n"
-	    "  group_name, group_id, size, md5, datestamp, filename, extdata \n"
-	    "  from received_file_entities where backupset_id = %d and ftype != 1 \n"
-	    "  ) r \n"
-	    "join ( \n"
-	    "  select filename, device_id, inode from needed_file_entities \n"
-	    "  where backupset_id = %d \n"
-	    ") n \n"
-	    "on r.filename = n.filename", bkid, bkid, bkid, bkid)), 0, 0, &sqlerr);
+	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+	    in_a_transaction = 0;
+	    fprintf(stderr, "\n");
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"create temporary view if not exists \n"
+		"    received_file_entities_ldi \n"
+		"as select \n"
+		"  ftype, permission, device_id, inode, user_name, user_id, \n"
+		"  group_name, group_id, size, md5, datestamp, r.filename, \n"
+		"   extdata \n"
+		"from ( \n"
+		"  select rr.file_id, rr.backupset_id, rr.ftype, rr.permission, \n"
+		"    rr.user_name, rr.user_id, rr.group_name, rr.group_id, rr.size, \n"
+		"    rr.md5, rr.datestamp, rl.filename, rr.extdata \n"
+		"  from  \n"
+		"    (select filename, extdata \n"
+		"    from received_file_entities \n"
+		"    where backupset_id = %d and ftype = 1 order by extdata) rl \n"
+		"  join ( \n"
+		"    select file_id, backupset_id, ftype, permission, user_name, user_id, \n"
+		"    group_name, group_id, size, md5, datestamp, filename, extdata \n"
+		"    from received_file_entities where backupset_id = %d \n"
+		"    order by filename) rr \n"
+		"  on  \n"
+		"    rl.extdata = rr.filename \n"
+		"union \n"
+		"  select file_id, backupset_id, ftype, permission, user_name, user_id, \n"
+		"  group_name, group_id, size, md5, datestamp, filename, extdata \n"
+		"  from received_file_entities where backupset_id = %d and ftype != 1 \n"
+		"  ) r \n"
+		"join ( \n"
+		"  select filename, device_id, inode from needed_file_entities \n"
+		"  where backupset_id = %d \n"
+		") n \n"
+		"on r.filename = n.filename", bkid, bkid, bkid, bkid)), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
 		sqlite3_free(sqlerr);
@@ -1062,6 +1072,12 @@ int submitfiles(int argc, char **argv)
             strncpy((fs.linktarget = malloc(101)), tarhead.linktarget, 100);
             fs.linktarget[100] = 0;
         }
+	    // Commit transaction if in the middle of a large file
+	if (fs.filesize > 200000000) {
+	    fprintf(stderr, "submitfiles: large file, suspending transaction\n");
+	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+	    in_a_transaction = 0;
+	}
         // If this is a regular file (type 0)
         if (*(tarhead.ftype) == '0' || *(tarhead.ftype) == 'S') {
 
@@ -1172,6 +1188,10 @@ int submitfiles(int argc, char **argv)
             fclose(curfile);
             waitpid(cprocess, NULL, 0);
             close(curtmpfile);
+	    if (in_a_transaction == 0) {
+		sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+		in_a_transaction = 1;
+	    }
             MD5_Final(cfmd5, &cfmd5ctl);
             for (i = 0; i < MD5_DIGEST_LENGTH; i++)
                 sprintf(cfmd5a + i * 2, "%2.2x", (unsigned int) cfmd5[i]);
@@ -2181,7 +2201,7 @@ int import(int argc, char **argv)
 // TODO These two should be set via command line options
     sqlite3_exec(bkcatalog, "PRAGMA synchronous = OFF", 0, 0, 0);
     sqlite3_exec(bkcatalog, "PRAGMA journal_mode = MEMORY", 0, 0, 0);
-    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
+//    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
     initdb(bkcatalog);
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -2453,7 +2473,7 @@ int export(int argc, char **argv)
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
     sqlite3_open(bkcatalogp, &bkcatalog);
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
-    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
+//    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 //    initdb(bkcatalog);
 
     sqlite3_prepare_v2(bkcatalog,
@@ -2564,7 +2584,7 @@ int expire(int argc, char **argv)
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
     sqlite3_open(bkcatalogp, &bkcatalog);
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
-    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
+//    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
     cutoffdate = time(0) - (age * 60 * 60 * 24);
 
@@ -2693,7 +2713,7 @@ int purge(int argc, char **argv)
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
     sqlite3_open(bkcatalogp, &bkcatalog);
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
-    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
+//    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
     purgedate = time(0);
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
@@ -2749,7 +2769,24 @@ int purge(int argc, char **argv)
 int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, char **, char **), void *carg1, char **errmsg)
 {
     int r = 0;
+    int count = 0;
+    if (concurrency_sleep_requested == 1) {
+	concurrency_sleep_requested = 0;
+	fprintf(stderr, "sqlite3_exec pausing by request\n");
+	if (in_a_transaction == 1) {
+	    in_a_transaction = 0;
+	    my_sqlite3_exec(db, "END", 0, 0, 0);
+	    sleep(2);
+	    concurrency_sleep_requested = 0;
+	    my_sqlite3_exec(db, "BEGIN", 0, 0, 0);
+	    in_a_transaction = 1;
+	}
+	else
+	    sleep(2);
+    }
     do {
+	if ((++count) % 20 == 0)
+	    concurrency_request();
         r = sqlite3_exec(db, sql, callback, carg1, errmsg);
 	if (r == 5) {
 	    usleep(100000);
@@ -2762,7 +2799,15 @@ int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, c
 int my_sqlite3_step(sqlite3_stmt *stmt)
 {
     int r = 0;
+    int count = 0;
+    if (concurrency_sleep_requested == 1) {
+	fprintf(stderr, "sqlite3_step pausing by request\n");
+	sleep(2);
+	concurrency_sleep_requested = 0;
+    }
     do {
+	if ((++count) % 20 == 0)
+	    concurrency_request();
         r = sqlite3_step(stmt);
 	if (r == 5) {
 	    usleep(100000);
@@ -2773,11 +2818,67 @@ int my_sqlite3_step(sqlite3_stmt *stmt)
 int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt **ppStmt, const char **pzTail)
 {
     int r = 0;
+    int count = 0;
+    if (concurrency_sleep_requested == 1) {
+	fprintf(stderr, "sqlite3_prepare_v2 pausing by request\n");
+	if (in_a_transaction == 1) {
+	    my_sqlite3_exec(db, "END", 0, 0, 0);
+	    sleep(2);
+	    my_sqlite3_exec(db, "BEGIN", 0, 0, 0);
+	}
+	else
+	    sleep(2);
+	concurrency_sleep_requested = 0;
+    }
     do {
+	if ((++count) % 20 == 0)
+	    concurrency_request();
 	r = sqlite3_prepare_v2(db, zSql, nByte, ppStmt, pzTail);
 	if (r == 5) {
 	    usleep(100000);
 	}
     } while (r == 5);
     return(r);
+}
+
+//Handler function for signal USR1
+void concurrency_request_signal()
+{
+    concurrency_sleep_requested = 1;
+    fprintf(stderr, "Setting concurrency_sleep flag\n");
+    signal(SIGUSR1, concurrency_request_signal);
+}
+
+// Send a signal USR1 to all other processes named "snebu",
+// requesting them to pause for a couple seconds and commit
+// current trasaction, therefore allowing us to sneak in a
+// database transaction.
+void concurrency_request()
+{
+    FILE *pgrep_output;
+    int numproclist = 20;
+    pid_t *proclist = malloc(numproclist * sizeof(*proclist));
+    char *instr = 0;
+    size_t instrlen = 0;
+    int numpid = 0;
+    pid_t mypid;
+    char *p;
+    int i;
+
+    fprintf(stderr, "Requesting concurrency\n");
+    mypid = getpid();
+    pgrep_output = popen("pgrep snebu", "r");
+    while (getline(&instr, &instrlen, pgrep_output) > 0) {
+	if (numpid >= numproclist) {
+	    numproclist += 20;
+	    proclist = realloc(proclist, numproclist * sizeof(*proclist));
+	}
+	if (atoi(instr) != mypid) {
+	    proclist[numpid] = atoi(instr);
+	    numpid++;
+	}
+    }
+    for (i = 0; i < numpid; i++)
+	kill(proclist[i], SIGUSR1);
+
 }
