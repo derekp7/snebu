@@ -42,16 +42,19 @@ int in_a_transaction = 0;
 #include <lzo/lzoconf.h>
 #include <lzo/lzo1x.h>
 
+#define F_H_FILTER      0x00000800L
 struct cfile *cfinit(FILE *outfile);
+struct cfile *cfinit_r(FILE *infile);
 int cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile);
+int cread(void *buf, size_t sz, size_t count, struct cfile *cfile);
 uint32_t *htonlp(uint32_t v);
 uint16_t *htonsp(uint16_t v);
-size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, lzo_uint32 *chksum);
+size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, uint32_t *chksum);
 struct cfile {
     char *buf;
     char *bufp;
     char *cbuf;
-    unsigned int bufsize;
+    lzo_uint bufsize;
     lzo_uint cbufsize;
     FILE *handle;
     unsigned char *working_memory;
@@ -1414,7 +1417,8 @@ int restore(int argc, char **argv)
     char *srcdir = 0;
     char *manifestpath = 0;
     FILE *manifest;
-    FILE *curfile;
+//    FILE *curfile;
+    struct cfile *curfile;
     const unsigned char *md5;
     const unsigned char *filename = 0;
     const unsigned char *linktarget = 0;
@@ -1834,6 +1838,7 @@ int restore(int argc, char **argv)
 	    }
 	}
 	if (t.ftype == '0' || t.ftype == 'S') {
+#ifdef notdef
 	    pipe(zin);
 	    if ((cprocess = fork()) == 0) {
 		close(zin[0]);
@@ -1850,9 +1855,17 @@ int restore(int argc, char **argv)
 	    }
 	    close(zin[1]);
 	    curfile = fdopen(zin[0], "r");
+#endif
+	    md5file = open(md5filepath, O_RDONLY);
+	    if (md5file == -1) {
+		fprintf(stderr, "Can not open %s\n", md5filepath);
+		exit(1);
+	    }
+	    curfile = cfinit_r(fdopen(md5file, "r"));
 	    bytestoread = t.filesize;
 	    while (bytestoread > 512ull) {
-		count = fread(curblock, 1, 512, curfile);
+//		count = fread(curblock, 1, 512, curfile);
+		count = cread(curblock, 1, 512, curfile);
 		if (count < 512) {
 		    fprintf(stderr, "file short read\n");
 		    exit(1);
@@ -1864,13 +1877,15 @@ int restore(int argc, char **argv)
 	    if (bytestoread > 0) {
 		for (i = 0; i < 512; i++)
 		    curblock[i] = 0;
-		count = fread(curblock, 1, 512, curfile);
+//		count = fread(curblock, 1, 512, curfile);
+		count = cread(curblock, 1, 512, curfile);
 		fwrite(curblock, 1, 512, stdout);
 		tblocks++;
 	    }
-	    kill(cprocess, 9);
-	    waitpid(cprocess, NULL, 0);
-	    fclose(curfile);
+//	    kill(cprocess, 9);
+//	    waitpid(cprocess, NULL, 0);
+//	    fclose(curfile);
+	    cclose_r(curfile);
 	    for (i = 0; i < sizeof(tarhead); i++)
 		((unsigned char *) &tarhead)[i] = 0;
 	}
@@ -2935,12 +2950,16 @@ void concurrency_request()
 	kill(proclist[i], SIGUSR1);
 
 }
+
+
+// Compression version of fopen/fclose/fread/fwrite (lzo / lzop version)
+
+// Write lzop header to open file and initialize cfile structure
 struct cfile *cfinit(FILE *outfile)
 {
     struct cfile *cfile;
     char magic[] = {  0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a };
-    uint32_t marker = 0x21212121;
-    lzo_uint32 chksum = 1;
+    uint32_t chksum = 1;
 
     cfile = malloc(sizeof(*cfile));
     cfile->bufsize = 256 * 1024;
@@ -2965,14 +2984,82 @@ struct cfile *cfinit(FILE *outfile)
     }
     return(cfile);
 }
-cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile)
+
+// Read lzop header from open file and initialize cfile structure
+struct cfile *cfinit_r(FILE *infile)
+{
+    struct cfile *cfile;
+    char magic[] = {  0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a };
+    uint32_t chksum = 1;
+    uint16_t tmp16;
+    uint32_t tmp32;
+    struct {
+	char magic[sizeof(magic)];
+	uint16_t version;
+	uint16_t libversion;
+	uint16_t minversion;
+	unsigned char compmethod;
+	unsigned char level;
+	uint32_t flags;
+	uint32_t filter;
+	uint32_t mode;
+	uint32_t mtime_low;
+	uint32_t mtime_high;
+	unsigned char filename_len;
+	char filename[256];
+	uint32_t chksum;
+    } lzop_header;
+
+    cfile = malloc(sizeof(*cfile));
+    cfile->bufsize = 0;
+    cfile->buf = malloc(256 * 1024);
+    cfile->cbuf = malloc(256 * 1024 + 256 * 16);
+    cfile->bufp = cfile->buf;
+//    cfile->working_memory = malloc(LZO1X_1_MEM_COMPRESS);
+    cfile->handle = infile;
+
+    // Process header
+    fread(&(lzop_header.magic), 1, sizeof(magic), infile);
+    fread(&tmp16, 1, 2, infile);
+    lzop_header.version = ntohs(tmp16);
+    fread(&tmp16, 1, 2, infile);
+    lzop_header.libversion = ntohs(tmp16);
+    if (lzop_header.version >= 0x0940) {
+	fread(&tmp16, 1, 2, infile);
+	lzop_header.minversion = ntohl(tmp16);
+    }
+    fread(&(lzop_header.compmethod), 1, 1, infile);
+    if (lzop_header.version >= 0x0940)
+	fread(&(lzop_header.level), 1, 1, infile);
+    fread(&tmp32, 1, 4, infile);
+    lzop_header.flags = ntohl(tmp32);
+    if (lzop_header.flags & F_H_FILTER) {
+	fread(&tmp32, 1, 4, infile);
+	lzop_header.filter = ntohl(tmp32);
+    }
+    fread(&tmp32, 1, 4, infile);
+    lzop_header.mode = ntohl(tmp32);
+    fread(&tmp32, 1, 4, infile);
+    lzop_header.mtime_low = ntohl(tmp32);
+    fread(&tmp32, 1, 4, infile);
+    lzop_header.mtime_high = ntohl(tmp32);
+    fread(&(lzop_header.filename_len), 1, 1, infile);
+    if (lzop_header.filename_len > 0)
+	fread(&(lzop_header.filename), 1, lzop_header.filename_len, infile);
+    fread(&tmp32, 1, 4, infile);
+    lzop_header.chksum = ntohl(tmp32);
+    return(cfile);
+}
+
+// write lzo compressed data (lzop format)
+int cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile)
 {
     size_t bytesin = sz * count;
-    lzo_uint32 chksum;
+    uint32_t chksum;
     int err;
 
     do {
-	if (bytesin < cfile->bufsize - (cfile->bufp - cfile->buf)) {
+	if (bytesin <= cfile->bufsize - (cfile->bufp - cfile->buf)) {
 	    memcpy(cfile->bufp, buf, bytesin);
 	    cfile->bufp += bytesin;
 	    bytesin = 0;
@@ -3002,11 +3089,55 @@ cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile)
 	}
     } while (bytesin > 0);
 }
+
+int cread(void *buf, size_t sz, size_t count, struct cfile *cfile)
+{
+    size_t bytesin = sz * count;
+    uint32_t tchksum;
+    uint32_t chksum;
+    int err;
+    uint32_t tucblocksz;
+    uint32_t tcblocksz;
+    uint32_t ucblocksz;
+    uint32_t cblocksz;
+    size_t orig_bytesin = bytesin;
+
+    do {
+	if (bytesin <= cfile->buf + cfile->bufsize - cfile->bufp) {
+	    memcpy(buf, cfile->bufp, bytesin);
+	    cfile->bufp += bytesin;
+	    bytesin = 0;
+	}
+	else {
+	    memcpy(buf, cfile->bufp, cfile->buf + cfile->bufsize - cfile->bufp);
+	    bytesin -= (cfile->buf + cfile->bufsize - cfile->bufp);
+	    fread(&tucblocksz, 1, 4, cfile->handle);
+	    ucblocksz = ntohl(tucblocksz);
+	    if (ucblocksz == 0)
+		return(cfile->buf + cfile->bufsize - cfile->bufp);
+	    fread(&tcblocksz, 1, 4, cfile->handle);
+	    cblocksz = ntohl(tcblocksz);
+	    fread(&tchksum, 1, 4, cfile->handle);
+	    chksum = ntohl(tchksum);
+	    fread(cfile->cbuf, 1, cblocksz, cfile->handle);
+	    if (cblocksz < ucblocksz) {
+		lzo1x_decompress(cfile->cbuf, cblocksz, cfile->buf, &(cfile->bufsize), NULL);
+	    }
+	    else {
+		memcpy(cfile->buf, cfile->cbuf, cblocksz);
+	    }
+	    cfile->bufp = cfile->buf;
+	    cfile->bufsize = ucblocksz;
+	}
+    } while (bytesin > 0);
+    return(orig_bytesin);
+}
+
+// Close lzop file
 cclose(struct cfile *cfile)
 {
     int err;
-    lzo_uint32 chksum;
-    uint32_t marker = 0x21212121;
+    uint32_t chksum;
 
     if (cfile->bufp - cfile->buf > 0) {
 	fwrite(htonlp(cfile->bufp - cfile->buf), 1, 4, cfile->handle);
@@ -3029,6 +3160,14 @@ cclose(struct cfile *cfile)
     free(cfile->working_memory);
     free(cfile);
 }
+cclose_r(struct cfile *cfile)
+{
+    free(cfile->buf);
+    free(cfile->cbuf);
+//    free(cfile->working_memory);
+    fclose(cfile->handle);
+    free(cfile);
+}
 
 uint32_t *htonlp(uint32_t v)
 {
@@ -3042,7 +3181,8 @@ uint16_t *htonsp(uint16_t v)
     r = htons(v);
     return(&r);
 }
-size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, lzo_uint32 *chksum)
+
+size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, uint32_t *chksum)
 {
     size_t r;
     fwrite(ptr, size, nmemb, stream);
