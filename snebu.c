@@ -127,7 +127,7 @@ newbackup(int argc, char **argv)
         char agid[33];
         int ngid;
         unsigned long long int filesize;
-	char sha1[33];
+	char sha1[SHA_DIGEST_LENGTH * 2 + 1];
         int modtime;
 	char *filename;
 	char *linktarget;
@@ -828,7 +828,7 @@ int submitfiles(int argc, char **argv)
         char agid[33];
         int ngid;
         unsigned long long int filesize;
-	char sha1[33];
+	char sha1[SHA_DIGEST_LENGTH * 2 + 1];
         int modtime;
 	char *filename;
 	char *linktarget;
@@ -2192,7 +2192,7 @@ int import(int argc, char **argv)
     unsigned char *efilename = 0;
     unsigned char *linktarget = 0;
     unsigned char *elinktarget = 0;
-    char sha1[33];
+    char sha1[SHA_DIGEST_LENGTH * 2 + 1];
     struct {
         char ftype[2];
         int mode;
@@ -2468,7 +2468,7 @@ int export(int argc, char **argv)
     FILE *sparsefileh;
     unsigned char *efilename = 0;
     unsigned char *eextdata= 0;
-    char sha1[33];
+    char sha1[SHA_DIGEST_LENGTH * 2 + 1];
     struct {
         char ftype[2];
         int mode;
