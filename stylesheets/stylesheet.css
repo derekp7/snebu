@@ -331,6 +331,11 @@ Full-Width Styles
   background: url('../images/icon_download.png') no-repeat 0% 90%;
 }
 
+.v1_0_download_link{
+  position: relative;
+  top: 40px;
+  left: 30px;
+}
 .zip_download_link {
   display: block;
   float: right;
@@ -340,7 +345,6 @@ Full-Width Styles
   overflow: hidden;
   background: url(../images/sprite_download.png) no-repeat bottom left;
 }
-
 .tar_download_link {
   display: block;
   float: right;
