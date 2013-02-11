@@ -3,7 +3,7 @@
 #include <sqlite3.h>
 #include <string.h>
 #include <unistd.h>
-#include <openssl/sha.h>
+#include <openssl/md5.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -127,7 +127,7 @@ newbackup(int argc, char **argv)
         char agid[33];
         int ngid;
         unsigned long long int filesize;
-	char sha1[33];
+	char md5[33];
         int modtime;
 	char *filename;
 	char *linktarget;
@@ -269,7 +269,7 @@ newbackup(int argc, char **argv)
 	"    group_name    char,  \n"
 	"    group_id      integer,  \n"
 	"    size          integer,  \n"
-	"    sha1           char,  \n"
+	"    md5           char,  \n"
 	"    datestamp     integer,  \n"
 	"    filename      char,  \n"
 	"    extdata       char default '',  \n"
@@ -285,7 +285,7 @@ newbackup(int argc, char **argv)
 	"    group_name,  \n"
 	"    group_id,  \n"
 	"    size,  \n"
-	"    sha1,  \n"
+	"    md5,  \n"
 	"    datestamp,  \n"
 	"    filename,  \n"
 	"    infilename, \n"
@@ -301,14 +301,14 @@ newbackup(int argc, char **argv)
 	x = sscanf(filespecs, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d.%*d\t%n",
 	    &fs.ftype, &fs.mode, fs.devid,
 	    fs.inode, fs.auid, &fs.nuid, fs.agid,
-	    &fs.ngid, &fs.filesize, fs.sha1,
+	    &fs.ngid, &fs.filesize, fs.md5,
 	    &fs.modtime, &flen1);
 	if (flen1 == 0)
 	    // Handle input datestamp of xxxxx
 	    x = sscanf(filespecs, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d\t%n",
 		&fs.ftype, &fs.mode, &fs.devid,
 		fs.inode, fs.auid, &fs.nuid, fs.agid,
-		&fs.ngid, &fs.filesize, fs.sha1,
+		&fs.ngid, &fs.filesize, fs.md5,
 		&fs.modtime, &flen1);
 	fs.filename = filespecs + flen1;
 	if (fs.filename[strlen(fs.filename) - 1] == '\n')
@@ -358,10 +358,10 @@ newbackup(int argc, char **argv)
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into inbound_file_entities  "
 	    "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
-	    "group_id, size, sha1, datestamp, filename, extdata, infilename)  "
+	    "group_id, size, md5, datestamp, filename, extdata, infilename)  "
 	    "values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q%q', '%q', '%q')",
 	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
-	    fs.filesize, fs.sha1, fs.modtime, pathsub, fs.filename + pathskip, fs.linktarget, fs.filename)), 0, 0, &sqlerr);
+	    fs.filesize, fs.md5, fs.modtime, pathsub, fs.filename + pathskip, fs.linktarget, fs.filename)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -375,9 +375,9 @@ newbackup(int argc, char **argv)
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities  "
 	"(ftype, permission, device_id, inode, user_name, user_id, group_name,  "
-	"group_id, size, sha1, datestamp, filename, extdata)  "
+	"group_id, size, md5, datestamp, filename, extdata)  "
 	"select i.ftype, permission, device_id, inode, user_name, user_id, group_name,  "
-	"group_id, size, sha1, datestamp, filename, extdata from inbound_file_entities i  "
+	"group_id, size, md5, datestamp, filename, extdata from inbound_file_entities i  "
 	"where backupset_id = '%d' and (i.ftype = '5' or i.ftype = '2')", bkid)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
@@ -461,12 +461,12 @@ int initdb(sqlite3 *bkcatalog)
 #ifdef commented_out
     err = sqlite3_exec(bkcatalog,
 	"    create table if not exists storagefiles (  \n"
-	"    sha1           char,  \n"
+	"    md5           char,  \n"
 	"    volume        char,  \n"
 	"    segment       char,  \n"
 	"    location      char,  \n"
 	"constraint storagefilesc1 unique (  \n"
-	"    sha1,  \n"
+	"    md5,  \n"
 	"    volume,  \n"
 	"    segment,  \n"
 	"    location ))", 0, 0, 0);
@@ -483,7 +483,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    group_name    char,  \n"
 	"    group_id      integer,  \n"
 	"    size          integer,  \n"
-	"    sha1           char,  \n"
+	"    md5           char,  \n"
 	"    datestamp     integer,  \n"
 	"    filename      char,  \n"
 	"    extdata       char default '',  \n"
@@ -497,7 +497,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    group_name,  \n"
 	"    group_id,  \n"
 	"    size,  \n"
-	"    sha1,  \n"
+	"    md5,  \n"
 	"    datestamp,  \n"
 	"    filename,  \n"
 	"    extdata ))", 0, 0, &sqlerr);
@@ -519,7 +519,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    group_name    char,  \n"
 	"    group_id      integer,  \n"
 	"    size          integer,  \n"
-	"    sha1           char,  \n"
+	"    md5           char,  \n"
 	"    datestamp     integer,  \n"
 	"    filename      char,  \n"
 	"    extdata       char default '',  \n"
@@ -533,7 +533,7 @@ int initdb(sqlite3 *bkcatalog)
 	    "group_name,  \n"
 	    "group_id,  \n"
 	    "size,  \n"
-	    "sha1,  \n"
+	    "md5,  \n"
 	    "datestamp,  \n"
 	    "filename,  \n"
 	    "extdata ))", 0, 0, 0);
@@ -559,10 +559,10 @@ int initdb(sqlite3 *bkcatalog)
     err = sqlite3_exec(bkcatalog,
 	"create table if not exists purgelist (  \n"
 	    "datestamp      integer,  \n"
-	    "sha1            char,  \n"
+	    "md5            char,  \n"
 	"unique (  \n"
 	    "datestamp,  \n"
-	    "sha1 ))", 0, 0, 0);
+	    "md5 ))", 0, 0, 0);
 
     err = sqlite3_exec(bkcatalog,
 	    "create table if not exists backupsets (  \n"
@@ -604,7 +604,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    group_name,  \n"
 	"    group_id,  \n"
 	"    size,  \n"
-	"    sha1,  \n"
+	"    md5,  \n"
 	"    datestamp,  \n"
 	"    n.filename,  \n"
 	"    r.extdata  \n"
@@ -631,7 +631,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    r.group_name,  \n"
 	"    r.group_id,  \n"
 	"    r.size,  \n"
-	"    r.sha1,  \n"
+	"    r.md5,  \n"
 	"    r.datestamp,  \n"
 	"    l.filename,  \n"
 	"    r.extdata  \n"
@@ -657,7 +657,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    group_name,  \n"
 	"    group_id,  \n"
 	"    size,  \n"
-	"    sha1,  \n"
+	"    md5,  \n"
 	"    datestamp,  \n"
 	"    filename,  \n"
 	"    extdata  \n"
@@ -753,9 +753,9 @@ help(char *topic)
 	    "\n"
 	    "The input file list has the following tab delimited fields:\n"
 	    "File Type, Mode, Device, Inode, Owner, Owner Number, Group Owner, Group Number,\n"
-	    "Size, SHA1, Date, Filename, SymLink Target\n"
+	    "Size, MD5, Date, Filename, SymLink Target\n"
 	    "\n"
-	    "SHA1 is optional, if it is 0 then only the rest of the metadata will be examined\n"
+	    "MD5 is optional, if it is 0 then only the rest of the metadata will be examined\n"
 	    "to determine if the file has changed\n"
 	    "\n"
 	    "For null terminated input lists, the filename (last field) is followed by a null\n"
@@ -828,7 +828,7 @@ int submitfiles(int argc, char **argv)
         char agid[33];
         int ngid;
         unsigned long long int filesize;
-	char sha1[33];
+	char md5[33];
         int modtime;
 	char *filename;
 	char *linktarget;
@@ -851,11 +851,11 @@ int submitfiles(int argc, char **argv)
     char *destdir = config.vault;
     char *destfilepath;
     char *destfilepathm;
-    SHA_CTX cfsha1ctl; // current file's sha1 sum
-    unsigned char cfsha1[SHA_DIGEST_LENGTH];
-    char cfsha1a[SHA_DIGEST_LENGTH * 2 + 10];
-    char cfsha1d[SHA_DIGEST_LENGTH * 2 + 10];
-    char cfsha1f[SHA_DIGEST_LENGTH * 2 + 10];
+    MD5_CTX cfmd5ctl; // current file's md5 sum
+    unsigned char cfmd5[MD5_DIGEST_LENGTH];
+    char cfmd5a[MD5_DIGEST_LENGTH * 2 + 10];
+    char cfmd5d[MD5_DIGEST_LENGTH * 2 + 10];
+    char cfmd5f[MD5_DIGEST_LENGTH * 2 + 10];
     int zin[2]; // input pipe for compression
     int zout[2]; // output pipe for compression
     pid_t cprocess;
@@ -988,26 +988,26 @@ int submitfiles(int argc, char **argv)
 		"    received_file_entities_ldi \n"
 		"as select \n"
 		"  ftype, permission, device_id, inode, user_name, user_id, \n"
-		"  group_name, group_id, size, sha1, datestamp, r.filename, \n"
+		"  group_name, group_id, size, md5, datestamp, r.filename, \n"
 		"   extdata \n"
 		"from ( \n"
 		"  select rr.file_id, rr.backupset_id, rr.ftype, rr.permission, \n"
 		"    rr.user_name, rr.user_id, rr.group_name, rr.group_id, rr.size, \n"
-		"    rr.sha1, rr.datestamp, rl.filename, rr.extdata \n"
+		"    rr.md5, rr.datestamp, rl.filename, rr.extdata \n"
 		"  from  \n"
 		"    (select filename, extdata \n"
 		"    from received_file_entities \n"
 		"    where backupset_id = %d and ftype = 1 order by extdata) rl \n"
 		"  join ( \n"
 		"    select file_id, backupset_id, ftype, permission, user_name, user_id, \n"
-		"    group_name, group_id, size, sha1, datestamp, filename, extdata \n"
+		"    group_name, group_id, size, md5, datestamp, filename, extdata \n"
 		"    from received_file_entities where backupset_id = %d \n"
 		"    order by filename) rr \n"
 		"  on  \n"
 		"    rl.extdata = rr.filename \n"
 		"union \n"
 		"  select file_id, backupset_id, ftype, permission, user_name, user_id, \n"
-		"  group_name, group_id, size, sha1, datestamp, filename, extdata \n"
+		"  group_name, group_id, size, md5, datestamp, filename, extdata \n"
 		"  from received_file_entities where backupset_id = %d and ftype != 1 \n"
 		"  ) r \n"
 		"join ( \n"
@@ -1024,9 +1024,9 @@ int submitfiles(int argc, char **argv)
 
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into file_entities (ftype, permission, device_id, inode,  "
-		"user_name, user_id, group_name, group_id, size, sha1, datestamp, filename, extdata)  "
+		"user_name, user_id, group_name, group_id, size, md5, datestamp, filename, extdata)  "
 		"select ftype, permission, device_id, inode, user_name, user_id, group_name,  "
-		"group_id, size, sha1, datestamp, filename, extdata from received_file_entities_ldi  "
+		"group_id, size, md5, datestamp, filename, extdata from received_file_entities_ldi  "
 		)), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
@@ -1041,7 +1041,7 @@ int submitfiles(int argc, char **argv)
 		"and f.device_id = r.device_id and f.inode = r.inode  "
 		"and f.user_name = r.user_name and f.user_id = r.user_id  "
 		"and f.group_name = r.group_name and f.group_id = r.group_id  "
-		"and f.size = r.size and f.sha1 = r.sha1 and f.datestamp = r.datestamp  "
+		"and f.size = r.size and f.md5 = r.md5 and f.datestamp = r.datestamp  "
 		"and f.filename = r.filename and f.extdata = r.extdata  ",
 		bkid)), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
@@ -1215,7 +1215,7 @@ int submitfiles(int argc, char **argv)
 #endif
 	    curfile = cfinit(fdopen(curtmpfile, "w"));
             blockstoread = fullblocks + (partialblock > 0 ? 1 : 0);
-            SHA1_Init(&cfsha1ctl);
+            MD5_Init(&cfmd5ctl);
             for (i = 1; i <= blockstoread; i++) {
                 count = fread(curblock, 1, 512, stdin);
                 if (count < 512) {
@@ -1227,13 +1227,13 @@ int submitfiles(int argc, char **argv)
                     if (partialblock > 0) {
 //                        fwrite(curblock, 1, partialblock, curfile);
                         cwrite(curblock, 1, partialblock, curfile);
-                        SHA1_Update(&cfsha1ctl, curblock, partialblock);
+                        MD5_Update(&cfmd5ctl, curblock, partialblock);
                         break;
                     }
                 }
 //                fwrite(curblock, 512, 1, curfile);
                 cwrite(curblock, 512, 1, curfile);
-                SHA1_Update(&cfsha1ctl, curblock, 512);
+                MD5_Update(&cfmd5ctl, curblock, 512);
             }
 
 //            fflush(curfile);
@@ -1245,28 +1245,28 @@ int submitfiles(int argc, char **argv)
 		sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
 		in_a_transaction = 1;
 	    }
-            SHA1_Final(cfsha1, &cfsha1ctl);
-            for (i = 0; i < SHA_DIGEST_LENGTH; i++)
-                sprintf(cfsha1a + i * 2, "%2.2x", (unsigned int) cfsha1[i]);
-            cfsha1a[i * 2] = 0;
+            MD5_Final(cfmd5, &cfmd5ctl);
+            for (i = 0; i < MD5_DIGEST_LENGTH; i++)
+                sprintf(cfmd5a + i * 2, "%2.2x", (unsigned int) cfmd5[i]);
+            cfmd5a[i * 2] = 0;
             for (i = 0; i < 1; i++)
-                sprintf(cfsha1d + i * 2, "%2.2x", (unsigned int) cfsha1[i]);
-            cfsha1d[i * 2] = 0;
-            for (i = 1; i < SHA_DIGEST_LENGTH; i++)
-                sprintf(cfsha1f + (i - 1) * 2, "%2.2x", (unsigned int) cfsha1[i]);
-            cfsha1f[(i - 1) * 2] = 0;
-	    strcpy(fs.sha1, cfsha1a);
+                sprintf(cfmd5d + i * 2, "%2.2x", (unsigned int) cfmd5[i]);
+            cfmd5d[i * 2] = 0;
+            for (i = 1; i < MD5_DIGEST_LENGTH; i++)
+                sprintf(cfmd5f + (i - 1) * 2, "%2.2x", (unsigned int) cfmd5[i]);
+            cfmd5f[(i - 1) * 2] = 0;
+	    strcpy(fs.md5, cfmd5a);
 
-            sprintf((destfilepath = malloc(strlen(destdir) + strlen(cfsha1a) + 7)), "%s/%s/%s.lzo", destdir, cfsha1d, cfsha1f);
-            sprintf((destfilepathm = malloc(strlen(destdir) + 4)), "%s/%s", destdir, cfsha1d);
+            sprintf((destfilepath = malloc(strlen(destdir) + strlen(cfmd5a) + 7)), "%s/%s/%s.lzo", destdir, cfmd5d, cfmd5f);
+            sprintf((destfilepathm = malloc(strlen(destdir) + 4)), "%s/%s", destdir, cfmd5d);
 
 //	    Will need this when tape library support is added.  For now
 //	    it is more efficient to leave it out.
 
 #ifdef commented_out
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into storagefiles (sha1, volume, segment, location)  "
-		"values ('%s', 0, 0, '%q/%q.lzo')", cfsha1a, cfsha1d, cfsha1f)), 0, 0, &sqlerr);
+		"insert or ignore into storagefiles (md5, volume, segment, location)  "
+		"values ('%s', 0, 0, '%q/%q.lzo')", cfmd5a, cfmd5d, cfmd5f)), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s\n", sqlerr);
 		sqlite3_free(sqlerr);
@@ -1286,7 +1286,7 @@ int submitfiles(int argc, char **argv)
 
 
             if (*(tarhead.ftype) == 'S') {
-		sprintf((destfilepaths = realloc(destfilepaths, strlen(destdir) + strlen(cfsha1a) + 6)), "%s/%s/%s.s", destdir, cfsha1d, cfsha1f);
+		sprintf((destfilepaths = realloc(destfilepaths, strlen(destdir) + strlen(cfmd5a) + 6)), "%s/%s/%s.s", destdir, cfmd5d, cfmd5f);
 		sparsefileh = fopen(destfilepaths, "w");
 		for (i = 0; i < n_sparsedata; i++) {
 		    if (i == 0)
@@ -1317,10 +1317,10 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into received_file_entities  "
 		"(backupset_id, ftype, permission, user_name, user_id, group_name,  "
-		"group_id, size, sha1, datestamp, filename, extdata)  "
+		"group_id, size, md5, datestamp, filename, extdata)  "
 		"values ('%d', '%c', '%4.4o', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%q', '%s')",
 		bkid, fs.ftype, fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid,
-		fs.ftype == 'S' ? s_realsize : fs.filesize, fs.sha1, fs.modtime, fs.filename, fs.extdata)), 0, 0, 0);
+		fs.ftype == 'S' ? s_realsize : fs.filesize, fs.md5, fs.modtime, fs.filename, fs.extdata)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
 
             free(tmpfilepath);
@@ -1337,7 +1337,7 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into received_file_entities  "
 		"(backupset_id, ftype, permission, user_name, user_id, group_name,  "
-		"group_id, size, sha1, datestamp, filename, extdata)  "
+		"group_id, size, md5, datestamp, filename, extdata)  "
 		"values ('%d', '%c', '%4.4o', '%s', '%d', '%s', '%d', '%llu', '%q', '%d', '%q', '%q')",
 		bkid, fs.ftype, fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 		fs.filesize, "0", fs.modtime, fs.filename, fs.linktarget)), 0, 0, 0);
@@ -1419,7 +1419,7 @@ int restore(int argc, char **argv)
     FILE *manifest;
 //    FILE *curfile;
     struct cfile *curfile;
-    const unsigned char *sha1;
+    const unsigned char *md5;
     const unsigned char *filename = 0;
     const unsigned char *linktarget = 0;
     int optc;
@@ -1427,10 +1427,10 @@ int restore(int argc, char **argv)
     int i, j;
     char *p;
     unsigned long tmpchksum;
-    char *sha1filepath;
+    char *md5filepath;
     int zin[2];
     pid_t cprocess;
-    int sha1file;
+    int md5file;
     unsigned long long bytestoread;
     int count;
     char curblock[512];
@@ -1541,7 +1541,7 @@ int restore(int argc, char **argv)
     if (srcdir == 0)
 	srcdir = config.vault;
 
-    sha1filepath = malloc(strlen(srcdir) + 39);
+    md5filepath = malloc(strlen(srcdir) + 39);
 
     x = sqlite3_prepare_v2(bkcatalog,
         (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
@@ -1578,7 +1578,7 @@ int restore(int argc, char **argv)
 	    "group_name    char,  \n"
 	    "group_id      integer,  \n"
 	    "size          integer,  \n"
-	    "sha1           char,  \n"
+	    "md5           char,  \n"
 	    "datestamp     integer,  \n"
 	    "filename      char,  \n"
 	    "extdata       char default '',  \n"
@@ -1592,7 +1592,7 @@ int restore(int argc, char **argv)
 	    "group_name,  \n"
 	    "group_id,  \n"
 	    "size,  \n"
-	    "sha1,  \n"
+	    "md5,  \n"
 	    "datestamp,  \n"
 	    "filename,  \n"
 	    "extdata ))", 0, 0, 0);
@@ -1600,9 +1600,9 @@ int restore(int argc, char **argv)
     sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
 	"insert or ignore into restore_file_entities  "
 	"(ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata)  "
+	"group_name, group_id, size, md5, datestamp, filename, extdata)  "
 	"select ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata  "
+	"group_name, group_id, size, md5, datestamp, filename, extdata  "
 	"from file_entities f join backupset_detail d  "
 	"on f.file_id = d.file_id where backupset_id = '%d'%s order by filename, datestamp",
 	bkid, filespec != 0 ?  filespec : ""), 0, 0, 0);
@@ -1610,10 +1610,10 @@ int restore(int argc, char **argv)
     sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
 	"create temporary view hardlink_file_entities  "
 	"as select min(file_id) as file_id, ftype, permission, device_id,  "
-	"inode, user_name, user_id, group_name, group_id, size, sha1, datestamp,  "
+	"inode, user_name, user_id, group_name, group_id, size, md5, datestamp,  "
 	"filename, extdata from restore_file_entities where ftype = 0 group by ftype,  "
 	"permission, device_id, inode, user_name, user_id, group_name,  "
-	"group_id, size, sha1, datestamp, extdata having count(*) > 1;"), 0, 0, 0);
+	"group_id, size, md5, datestamp, extdata having count(*) > 1;"), 0, 0, 0);
 
     sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf(
@@ -1621,7 +1621,7 @@ int restore(int argc, char **argv)
 	"case when b.file_id not null and a.file_id != b.file_id  "
 	"then 1 else a.ftype end,  "
 	"a.permission, a.device_id, a.inode, a.user_name, a.user_id,  "
-	"a.group_name, a.group_id, a.size, a.sha1, a.datestamp, a.filename,  "
+	"a.group_name, a.group_id, a.size, a.md5, a.datestamp, a.filename,  "
 	"case when b.file_id not null and a.file_id != b.file_id  "
 	"then b.filename else a.extdata end  "
 	"from restore_file_entities a left join hardlink_file_entities b  "
@@ -1629,7 +1629,7 @@ int restore(int argc, char **argv)
 	"and a.device_id = b.device_id and a.inode = b.inode  "
 	"and a.user_name = b.user_name and a.user_id = b.user_id  "
 	"and a.group_name = b.group_name and a.group_id = b.group_id  "
-	"and a.size = b.size and a.sha1 = b.sha1 and a.datestamp = b.datestamp  "
+	"and a.size = b.size and a.md5 = b.md5 and a.datestamp = b.datestamp  "
 	"and a.extdata = b.extdata")), 2000, &sqlres, 0);
 
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
@@ -1640,7 +1640,7 @@ int restore(int argc, char **argv)
 	strncpy(t.agid, sqlite3_column_text(sqlres, 6), 32); t.agid[32] = 0;
 	t.ngid = sqlite3_column_int(sqlres, 7);
 	t.filesize = sqlite3_column_int64(sqlres, 8);
-	sha1 = sqlite3_column_text(sqlres, 9);
+	md5 = sqlite3_column_text(sqlres, 9);
 	t.modtime = sqlite3_column_int(sqlres, 10);
 	filename = sqlite3_column_text(sqlres, 11);
 	linktarget = 0;
@@ -1649,7 +1649,7 @@ int restore(int argc, char **argv)
 	    t.filesize = 0;
 	}
 	else if (t.ftype == 'S') {
-	    asprintf(&sparsefilepath, "%s/%.2s/%s.s", destdir, sha1, sha1 + 2);
+	    asprintf(&sparsefilepath, "%s/%.2s/%s.s", destdir, md5, md5 + 2);
 	    sparsefileh = fopen(sparsefilepath, "r");
 	    if (getline(&ssparseinfo, &ssparseinfosz, sparsefileh) <= 0) {
 		fprintf(stderr, "Failed top read sparse file %s\n", sparsefilepath);
@@ -1802,7 +1802,7 @@ int restore(int argc, char **argv)
 	    i != 0; --i, ++p)
 	    tmpchksum += 0xFF & *p;
 	sprintf(tarhead.chksum, "%6.6o", tmpchksum);
-	sprintf(sha1filepath, "%s/%c%c/%s.lzo", srcdir, sha1[0], sha1[1], sha1 + 2);
+	sprintf(md5filepath, "%s/%c%c/%s.lzo", srcdir, md5[0], md5[1], md5 + 2);
 	fwrite(&tarhead, 1, 512, stdout);
 	tblocks++;
 	if (tarhead.u.sph.isextended == 1) {
@@ -1842,13 +1842,13 @@ int restore(int argc, char **argv)
 	    pipe(zin);
 	    if ((cprocess = fork()) == 0) {
 		close(zin[0]);
-		sha1file = open(sha1filepath, O_RDONLY);
-		if (sha1file == -1) {
-		    fprintf(stderr, "Can not open %s\n", sha1filepath);
+		md5file = open(md5filepath, O_RDONLY);
+		if (md5file == -1) {
+		    fprintf(stderr, "Can not open %s\n", md5filepath);
 		    exit(1);
 		}
 		dup2(zin[1], 1);
-		dup2(sha1file, 0);
+		dup2(md5file, 0);
 		execlp("lzop", "lzop", "-d", (char *) NULL);
 		fprintf(stderr, "Error\n");
 		exit(1);
@@ -1856,12 +1856,12 @@ int restore(int argc, char **argv)
 	    close(zin[1]);
 	    curfile = fdopen(zin[0], "r");
 #endif
-	    sha1file = open(sha1filepath, O_RDONLY);
-	    if (sha1file == -1) {
-		fprintf(stderr, "Can not open %s\n", sha1filepath);
+	    md5file = open(md5filepath, O_RDONLY);
+	    if (md5file == -1) {
+		fprintf(stderr, "Can not open %s\n", md5filepath);
 		exit(1);
 	    }
-	    curfile = cfinit_r(fdopen(sha1file, "r"));
+	    curfile = cfinit_r(fdopen(md5file, "r"));
 	    bytestoread = t.filesize;
 	    while (bytestoread > 512ull) {
 //		count = fread(curblock, 1, 512, curfile);
@@ -2192,7 +2192,7 @@ int import(int argc, char **argv)
     unsigned char *efilename = 0;
     unsigned char *linktarget = 0;
     unsigned char *elinktarget = 0;
-    char sha1[33];
+    char md5[33];
     struct {
         char ftype[2];
         int mode;
@@ -2306,7 +2306,7 @@ int import(int argc, char **argv)
 	    "group_name    char,  \n"
 	    "group_id      integer,  \n"
 	    "size          integer,  \n"
-	    "sha1           char,  \n"
+	    "md5           char,  \n"
 	    "datestamp     integer,  \n"
 	    "filename      char,  \n"
 	    "extdata       char default '',  \n"
@@ -2321,20 +2321,20 @@ int import(int argc, char **argv)
 	    "group_name,  \n"
 	    "group_id,  \n"
 	    "size,  \n"
-	    "sha1,  \n"
+	    "md5,  \n"
 	    "datestamp,  \n"
 	    "filename,  \n"
 	    "extdata ))", 0, 0, 0);
     sqlite3_exec(bkcatalog,
 	    "create index inbound_file_entitiesi1 on inbound_file_entities (  "
-	    "file_id, permission, device_id, inode, user_name, user_id, group_name, group_id, size, sha1, datestamp, filename, extdata)", 0, 0, 0);
+	    "file_id, permission, device_id, inode, user_name, user_id, group_name, group_id, size, md5, datestamp, filename, extdata)", 0, 0, 0);
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     sqlstmt = sqlite3_mprintf(
 	"insert or ignore into inbound_file_entities  "
 	"(backupset_id, ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata)  "
+	"group_name, group_id, size, md5, datestamp, filename, extdata)  "
 	"values (@bkid, @ftype, @mode, @devid, @inode, @auid, @nuid, @agid,  "
-	"@ngid, @filesize, @sha1, @modtime, @filename, @linktarget)");
+	"@ngid, @filesize, @md5, @modtime, @filename, @linktarget)");
 
     sqlite3_prepare_v2(bkcatalog, sqlstmt, -1, &sqlres, 0);
 
@@ -2350,7 +2350,7 @@ int import(int argc, char **argv)
 	char *ascmode;
 	sscanf(instr, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%Ld\t%32s\t%d\t%n",
 	    t.ftype, &t.mode, t.devid, t.inode, t.auid, &t.nuid, t.agid, &t.ngid,
-	    &(t.filesize), sha1, &t.modtime, &fnstart);
+	    &(t.filesize), md5, &t.modtime, &fnstart);
 	fptr = instr + fnstart;
 	endfptr = strstr(fptr, "\t");
 	efilename = realloc(efilename, endfptr - fptr + 1);
@@ -2373,7 +2373,7 @@ int import(int argc, char **argv)
 	    strncpy(elinktarget, lptr, endlptr - lptr);
 	    elinktarget[endlptr - lptr] = 0;
 
-	    asprintf(&sparsefilepath, "%s/%.2s/%s.s", destdir, sha1, sha1 + 2);
+	    asprintf(&sparsefilepath, "%s/%.2s/%s.s", destdir, md5, md5 + 2);
 	    sparsefileh = fopen(sparsefilepath, "w");
 	    fprintf(sparsefileh, elinktarget);
 	    fclose(sparsefileh);
@@ -2395,7 +2395,7 @@ int import(int argc, char **argv)
 	sqlite3_bind_text(sqlres, 8, t.agid, -1, SQLITE_STATIC);
 	sqlite3_bind_int(sqlres, 9, t.ngid);
 	sqlite3_bind_int64(sqlres, 10, t.filesize);
-	sqlite3_bind_text(sqlres, 11, sha1, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 11, md5, -1, SQLITE_STATIC);
 	sqlite3_bind_int(sqlres, 12, t.modtime);
 	sqlite3_bind_text(sqlres, 13, filename, -1, SQLITE_STATIC);
 	sqlite3_bind_text(sqlres, 14, linktarget, -1, SQLITE_STATIC);
@@ -2407,9 +2407,9 @@ int import(int argc, char **argv)
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities  "
 	"(ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata)  "
+	"group_name, group_id, size, md5, datestamp, filename, extdata)  "
 	"select ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata  "
+	"group_name, group_id, size, md5, datestamp, filename, extdata  "
 	"from inbound_file_entities")), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n", sqlerr);
@@ -2468,7 +2468,7 @@ int export(int argc, char **argv)
     FILE *sparsefileh;
     unsigned char *efilename = 0;
     unsigned char *eextdata= 0;
-    char sha1[33];
+    char md5[33];
     struct {
         char ftype[2];
         int mode;
@@ -2569,7 +2569,7 @@ int export(int argc, char **argv)
     sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf(
 	"select ftype, permission, device_id, inode, user_name, user_id, "
-	"  group_name, group_id, size, sha1, datestamp, filename, extdata "
+	"  group_name, group_id, size, md5, datestamp, filename, extdata "
 	"  from file_entities f "
 	"  join backupset_detail d on "
 	"  f.file_id = d.file_id "
@@ -2774,7 +2774,7 @@ int purge(int argc, char **argv)
     time_t purgedate;
     char *destdir = config.vault;
     struct stat tmpfstat;
-    const char *sha1;
+    const char *md5;
     char *destfilepath;
     char *destfilepathd;
 
@@ -2786,13 +2786,13 @@ int purge(int argc, char **argv)
     purgedate = time(0);
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
-	"insert into purgelist (datestamp, sha1)  "
-	"select distinct %d, f.sha1 from file_entities f  "
+	"insert into purgelist (datestamp, md5)  "
+	"select distinct %d, f.md5 from file_entities f  "
 	"left join backupset_detail d  "
 	"on f.file_id = d.file_id  "
 	"left join received_file_entities r  "
-	"on f.sha1 = r.sha1  "
-	"where d.file_id is null and r.sha1 is null and f.sha1 != 0  "
+	"on f.md5 = r.md5  "
+	"where d.file_id is null and r.md5 is null and f.md5 != 0  "
 	"", purgedate)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
@@ -2804,8 +2804,8 @@ int purge(int argc, char **argv)
 	"left join backupset_detail d  "
 	"on f.file_id = d.file_id  "
 	"left join received_file_entities r  "
-	"on f.sha1 = r.sha1  "
-	"where d.file_id is null and r.sha1 is null)  "
+	"on f.md5 = r.md5  "
+	"where d.file_id is null and r.md5 is null)  "
 	"", purgedate)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
@@ -2813,13 +2813,13 @@ int purge(int argc, char **argv)
     }
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
     sqlite3_prepare_v2(bkcatalog,
-	(sqlstmt = sqlite3_mprintf("select sha1, datestamp from purgelist")),
+	(sqlstmt = sqlite3_mprintf("select md5, datestamp from purgelist")),
 	-1, &sqlres, 0);
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
 
-	sha1 = sqlite3_column_text(sqlres, 0);
-	sprintf((destfilepath = malloc(strlen(destdir) + strlen(sha1) + 7)), "%s/%2.2s/%s.lzo", destdir, sha1, sha1 + 2);
-	sprintf((destfilepathd = malloc(strlen(destdir) + strlen(sha1) + 9)), "%s/%2.2s/%s.lzo.d", destdir, sha1, sha1 + 2);
+	md5 = sqlite3_column_text(sqlres, 0);
+	sprintf((destfilepath = malloc(strlen(destdir) + strlen(md5) + 7)), "%s/%2.2s/%s.lzo", destdir, md5, md5 + 2);
+	sprintf((destfilepathd = malloc(strlen(destdir) + strlen(md5) + 9)), "%s/%2.2s/%s.lzo.d", destdir, md5, md5 + 2);
 	rename(destfilepath, destfilepathd);
 	if (stat(destfilepathd, &tmpfstat) == 0 && tmpfstat.st_mtime < sqlite3_column_int(sqlres, 1)) {
 	    remove(destfilepathd);
@@ -2828,7 +2828,7 @@ int purge(int argc, char **argv)
 	    rename(destfilepathd, destfilepath);
 	}
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	    "delete from purgelist where sha1 = '%s'", sha1)), 0, 0, &sqlerr);
+	    "delete from purgelist where md5 = '%s'", md5)), 0, 0, &sqlerr);
     }
 }
 #undef sqlite3_exec
