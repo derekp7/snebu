@@ -1,3 +1,9 @@
+/* Snebu -- Simple Network Backup Utility
+ * Copyright 2012, 2013 Derek Pressnall
+ * This program may be distributed under the terms of the
+ * GNU General Public License (GPL) Version 3.  See the file
+ * COPYING.txt for details.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>
