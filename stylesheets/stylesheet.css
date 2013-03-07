@@ -336,6 +336,11 @@ Full-Width Styles
   top: 40px;
   left: 30px;
 }
+.v1_0_srpm_download_link{
+  position: relative;
+  top: 40px;
+  left: 30px;
+}
 .zip_download_link {
   display: block;
   float: right;
