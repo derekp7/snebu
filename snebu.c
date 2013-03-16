@@ -924,7 +924,7 @@ int submitfiles(int argc, char **argv)
 		usage();
 		return(1);
 	}
-    if ((foundopts | 3) != 3) {
+    if ((foundopts & 3) != 3) {
 	fprintf(stderr, "Didn't find all arguments %d\n", foundopts);
         usage();
         return(1);
@@ -2970,7 +2970,7 @@ struct cfile *cfinit(FILE *outfile)
     cfile = malloc(sizeof(*cfile));
     cfile->bufsize = 256 * 1024;
     cfile->buf = malloc(cfile->bufsize);
-    cfile->cbuf = malloc(cfile->bufsize + 256 * 16);
+    cfile->cbuf = malloc(256 * 1024 + 256 * 64 + 64 + 3);
     cfile->bufp = cfile->buf;
     cfile->working_memory = malloc(LZO1X_1_MEM_COMPRESS);
     {
@@ -3019,7 +3019,7 @@ struct cfile *cfinit_r(FILE *infile)
     cfile = malloc(sizeof(*cfile));
     cfile->bufsize = 0;
     cfile->buf = malloc(256 * 1024);
-    cfile->cbuf = malloc(256 * 1024 + 256 * 16);
+    cfile->cbuf = malloc(256 * 1024 + 256 * 64 + 64 + 3);
     cfile->bufp = cfile->buf;
 //    cfile->working_memory = malloc(LZO1X_1_MEM_COMPRESS);
     cfile->handle = infile;
