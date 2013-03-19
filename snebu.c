@@ -437,8 +437,10 @@ newbackup(int argc, char **argv)
     }
       
     sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf( 
-	"select infilename from needed_file_entities  "
-	"where backupset_id = '%d'", bkid)), -1, &sqlres, 0);
+	"select n.infilename from needed_file_entities n "
+	"join inbound_file_entities i "
+	"on n.infilename = i.infilename "
+	"where n.backupset_id = '%d'", bkid)), -1, &sqlres, 0);
     while (sqlite3_step(sqlres) == SQLITE_ROW)
 	if (output_terminator == 0) {
 	    printf("%s", sqlite3_column_text(sqlres, 0));
