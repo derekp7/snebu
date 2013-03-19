@@ -2607,7 +2607,9 @@ int expire(int argc, char **argv)
     int optc;
     char retention[128];
     char bkname[128];
+    char datestamp[128];
     int age;
+    int bkid;
     int min = 3;
     int foundopts = 0;
     sqlite3 *bkcatalog;
@@ -2628,7 +2630,8 @@ int expire(int argc, char **argv)
     };
     int longoptidx;
 
-    while ((optc = getopt_long(argc, argv, "r:n:a:k:m:", longopts, &longoptidx)) >= 0) {
+    *datestamp = 0;
+    while ((optc = getopt_long(argc, argv, "r:n:a:k:m:d:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'r':
 		strncpy(retention, optarg, 127);
@@ -2648,12 +2651,18 @@ int expire(int argc, char **argv)
 		min = atoi(optarg);
 		foundopts |= 8;
 		break;
+	    case 'd':
+		strncpy(datestamp, optarg, 127);
+		datestamp[127] = 0;
+		foundopts |= 16;
+		break;
 	    default:
 		usage();
 		return(1);
 	}
     }
-    if ((foundopts & 5) != 5 && (foundopts & 7) != 7) {
+    if ((foundopts & 5) != 5 && (foundopts & 7) != 7 && (foundopts & 18) != 18) {
+        fprintf(stderr, "foundopts = %d\n", foundopts);
         usage();
         return(1);
     }
@@ -2663,6 +2672,39 @@ int expire(int argc, char **argv)
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
     cutoffdate = time(0) - (age * 60 * 60 * 24);
+
+    if (*datestamp != 0) {
+	sqlite3_prepare_v2(bkcatalog,
+	    (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
+		"where name = '%s' and serial = '%s'",
+		bkname, datestamp)), -1, &sqlres, 0);
+	if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
+	    bkid = sqlite3_column_int(sqlres, 0);
+	}
+        else {
+	    fprintf(stderr, "Can't find specified backupset\n");
+	    exit(1);
+	}
+	sqlite3_finalize(sqlres);
+	sqlite3_free(sqlstmt);
+	fprintf(stderr, "Deleting %d from received_file_entities\n", bkid);
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from received_file_entities where backupset_id = %d ",
+	    bkid)), 0, 0, &sqlerr);
+	fprintf(stderr, "Deleting %d from needed_file_entities\n", bkid);
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from needed_file_entities where backupset_id = %d ",
+	    bkid)), 0, 0, &sqlerr);
+	fprintf(stderr, "Deleting %d from backupset_detail\n", bkid);
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from backupset_detail where backupset_id = %d ",
+	    bkid)), 0, 0, &sqlerr);
+	fprintf(stderr, "Deleting %d from backupsets\n", bkid);
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from backupsets where backupset_id = %d ",
+	    bkid)), 0, 0, &sqlerr);
+	exit(0);
+    }
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"delete from received_file_entities where backupset_id in (  "
