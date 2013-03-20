@@ -997,7 +997,7 @@ int submitfiles(int argc, char **argv)
 		"    received_file_entities_ldi \n"
 		"as select \n"
 		"  ftype, permission, device_id, inode, user_name, user_id, \n"
-		"  group_name, group_id, size, sha1, datestamp, r.filename, \n"
+		"  group_name, group_id, size, sha1, datestamp, n.filename, \n"
 		"   extdata \n"
 		"from ( \n"
 		"  select rr.file_id, rr.backupset_id, rr.ftype, rr.permission, \n"
@@ -1020,10 +1020,10 @@ int submitfiles(int argc, char **argv)
 		"  from received_file_entities where backupset_id = %d and ftype != 1 \n"
 		"  ) r \n"
 		"join ( \n"
-		"  select filename, device_id, inode from needed_file_entities \n"
+		"  select filename, infilename, device_id, inode from needed_file_entities \n"
 		"  where backupset_id = %d \n"
 		") n \n"
-		"on r.filename = n.filename", bkid, bkid, bkid, bkid)), 0, 0, &sqlerr);
+		"on r.filename = n.infilename", bkid, bkid, bkid, bkid)), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
 		sqlite3_free(sqlerr);
