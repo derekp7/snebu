@@ -900,8 +900,7 @@ int submitfiles(int argc, char **argv)
     unsigned long long est_size = 0;
     unsigned long long bytes_read = 0;
     int verbose = 0;
-
-    
+    char statusline[80];
 
     fs.filename = 0;
     fs.linktarget = 0;
@@ -976,6 +975,8 @@ int submitfiles(int argc, char **argv)
     sqlite3_free(sqlstmt);
 
 
+    if (verbose == 1)
+	fprintf(stderr, "%45s", " ");
 
     // Read TAR file from std input
     while (1) {
@@ -1353,8 +1354,11 @@ int submitfiles(int argc, char **argv)
 
 	}
 	bytes_read += fs.filesize;
-	if (verbose == 1)
-	    fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
+	if (verbose == 1) {
+	    sprintf(statusline, "%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
+	    fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b%45s", statusline);
+//	    fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
+	}
 
 	if (fs.filename != 0)
 	    free(fs.filename);
