@@ -1029,7 +1029,53 @@ int submitfiles(int argc, char **argv)
 		sqlite3_free(sqlerr);
 	    }
 	    sqlite3_free(sqlstmt);
+	    sqlite3_exec(bkcatalog,
+		"create temporary table if not exists received_file_entities_ldi_t (  \n"
+		"    ftype         char,  \n"
+		"    permission    char,  \n"
+		"    device_id     char,  \n"
+		"    inode         char,  \n"
+		"    user_name     char,  \n"
+		"    user_id       integer,  \n"
+		"    group_name    char,  \n"
+		"    group_id      integer,  \n"
+		"    size          integer,  \n"
+		"    sha1           char,  \n"
+		"    datestamp     integer,  \n"
+		"    filename      char,  \n"
+		"    extdata       char default '',  \n"
+		"constraint received_file_entities_ldi_t_c1 unique (  \n"
+		"    ftype,  \n"
+		"    permission,  \n"
+		"    device_id,  \n"
+		"    inode,  \n"
+		"    user_name,  \n"
+		"    user_id,  \n"
+		"    group_name,  \n"
+		"    group_id,  \n"
+		"    size,  \n"
+		"    sha1,  \n"
+		"    datestamp,  \n"
+		"    filename,  \n"
+		"    extdata ))", 0, 0, &sqlerr);
 
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"insert or ignore into received_file_entities_ldi_t (ftype, permission, device_id, inode,  "
+		"user_name, user_id, group_name, group_id, size, sha1, datestamp, filename, extdata)  "
+		"select ftype, permission, device_id, inode, user_name, user_id, group_name,  "
+		"group_id, size, sha1, datestamp, filename, extdata from received_file_entities_ldi  "
+		)), 0, 0, &sqlerr);
+
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_free(sqlstmt);
 
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into file_entities (ftype, permission, device_id, inode,  "
@@ -1045,7 +1091,7 @@ int submitfiles(int argc, char **argv)
 
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into backupset_detail (backupset_id, file_id) select %d,"
-		"f.file_id from file_entities f join received_file_entities_ldi r  "
+		"f.file_id from file_entities f join received_file_entities_ldi_t r  "
 		"on f.ftype = r.ftype and f.permission = r.permission  "
 		"and f.device_id = r.device_id and f.inode = r.inode  "
 		"and f.user_name = r.user_name and f.user_id = r.user_id  "
@@ -2839,6 +2885,7 @@ int purge(int argc, char **argv)
 
     purgedate = time(0);
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+    fprintf(stderr, "Creating purge list\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
 	"insert into purgelist (datestamp, sha1)  "
 	"select distinct %d, f.sha1 from file_entities f  "
@@ -2852,6 +2899,7 @@ int purge(int argc, char **argv)
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
+    fprintf(stderr, "Removing entries from file_entities\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
 	"delete from file_entities where file_id in (  "
 	"select f.file_id from file_entities f  "
@@ -2865,7 +2913,6 @@ int purge(int argc, char **argv)
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
-    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
     sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select sha1, datestamp from purgelist")),
 	-1, &sqlres, 0);
@@ -2876,14 +2923,17 @@ int purge(int argc, char **argv)
 	sprintf((destfilepathd = malloc(strlen(destdir) + strlen(sha1) + 9)), "%s/%2.2s/%s.lzo.d", destdir, sha1, sha1 + 2);
 	rename(destfilepath, destfilepathd);
 	if (stat(destfilepathd, &tmpfstat) == 0 && tmpfstat.st_mtime < sqlite3_column_int(sqlres, 1)) {
+	    fprintf(stderr, "Removing %s\n", destfilepath);
 	    remove(destfilepathd);
 	}
 	else {
+	    fprintf(stderr, "    Restoring %s\n", destfilepath);
 	    rename(destfilepathd, destfilepath);
 	}
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "delete from purgelist where sha1 = '%s'", sha1)), 0, 0, &sqlerr);
     }
+    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 }
 #undef sqlite3_exec
 #undef sqlite3_step
