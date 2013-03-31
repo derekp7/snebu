@@ -43,16 +43,16 @@ defaults_post()
 		retention="daily"
 	    fi
 	fi
-	if [ -n "${filelist[@]}" ]
+	if [ ${#filelist[@]} != 0 ]
 	then
 	    INCLUDE=( "${filelist[@]}" )
 	fi
     fi
-    if [ -z "${INCLUDE[@]}" ]
+    if [ "${#INCLUDE[@]}" = 0 ]
     then
 	INCLUDE=( $(mount |egrep "ext[234]|btrfs" |awk '{print $3}') )
     fi
-    if [ -z "${EXCLUDE[@]}" ]
+    if [ "${#EXCLUDE[@]}" = 0 ]
     then
 	EXCLUDE=( /tmp /var/tmp /mnt /media )
     fi
