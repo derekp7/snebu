@@ -2719,6 +2719,8 @@ int expire(int argc, char **argv)
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
     sqlite3_open(bkcatalogp, &bkcatalog);
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    sqlite3_exec(bkcatalog, "PRAGMA synchronous = OFF", 0, 0, 0);
+    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = MEMORY", 0, 0, 0);
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
     cutoffdate = time(0) - (age * 60 * 60 * 24);
@@ -2737,6 +2739,7 @@ int expire(int argc, char **argv)
 	}
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
+	sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
 	fprintf(stderr, "Deleting %d from received_file_entities\n", bkid);
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "delete from received_file_entities where backupset_id = %d ",
@@ -2753,6 +2756,7 @@ int expire(int argc, char **argv)
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "delete from backupsets where backupset_id = %d ",
 	    bkid)), 0, 0, &sqlerr);
+	sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 	exit(0);
     }
 
@@ -3039,7 +3043,7 @@ void concurrency_request()
 
     fprintf(stderr, "Requesting concurrency\n");
     mypid = getpid();
-    pgrep_output = popen("pgrep snebu", "r");
+    pgrep_output = popen("pgrep -x snebu", "r");
     while (getline(&instr, &instrlen, pgrep_output) > 0) {
 	if (numpid >= numproclist) {
 	    numproclist += 20;
