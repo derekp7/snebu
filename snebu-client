@@ -60,7 +60,7 @@ defaults()
     eval "${savevars}"
 
     # Process configuration file
-    . "${configfile}"
+    [ -f "${configfile}" ] && . "${configfile}"
 
     # Now re-process command line vars, as they trump config file.
     eval "${savevars}"
@@ -327,15 +327,16 @@ do_backup()
 {
     # Create list of files and metadata to backup, send to Snebu, and
     # store received file list in tmp file.
-    echo "$SNEBU"
-    echo "backupname = ${backupname} retention = ${retention} datestamp = ${datestamp}"  
+    [ -n "${graftdir}" ] && newbackupopts=( "${newbackupopts[@]}" --graft "${graftdir}" )
+    [ "${force_full}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" -f )
+    [ "${verbose}" = 1 ] && ( submitfilesopts=( "${submitfileopts[@]}" -v ); newbackupopts=( "${newbackupopts[@]}" -v ) )
     FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
-        --datestamp ${datestamp} --null --not-null-output \
+        --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" \
         >/tmp/backup_include.${datestamp}
 
     # Now create a tar file and send it to Snebu
     tar --one-file-system --no-recursion -P -T /tmp/backup_include.${datestamp} -cf - |\
-        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp}
+        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfileopts[@]}"
 
     rm -f /tmp/backup_include.${datestamp}
 }
