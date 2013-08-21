@@ -1,0 +1,259 @@
+#!/bin/bash
+
+process_cmdline()
+{
+    if [ "$1" == "backup" ]
+    then
+        target=do_backup
+        shift
+    elif [ "$1" == "restore" ]
+    then
+        target=do_restore
+        shift
+    elif [ "$1" == "listbackups" ]
+    then
+        target=listbackups
+        shift
+    else
+        usage
+        exit
+    fi
+
+    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,retention:,date:,force-full,changedir:,graft:,plugin:,help" -o "c:n:r:d:fC:h" -- "$@")")
+    then
+        usage target
+        exit 1
+    fi
+    eval set -- "${args[@]}"
+    while [ -n "$1" ]
+    do
+        case $1 in
+	    -c|config) configfile=$@; shift; shift;;
+            -n|--name) backupname=$2; shift; shift;;
+            --remote-client) clientname=$2; shift; shift;;
+            --backup-server) bksvrname=$2; shift; shift;;
+            -r|--retention) retention=$2; shift; shift;;
+	    -d|--date) datestamp=$2; shift; shift;;
+	    -f|--force-full) force_full=1; shift;;
+	    -C|--changedir) tgtdirectory=$2; shift; shift;;
+	    --graft) graftdir=$2; shift; shift;;
+	    --plugin) plugin=$2; shift; shift;;
+            -h|--help) shift; usage $target;;
+            --) shift; break;;
+        esac
+    done
+    filelist=( "$@" )
+
+    # Command line variables trump environment variables, which trump config
+    # file vars, which trump defaults. Therefore, save cmdline vars for later.
+    savevars="$(declare -p backupname clientname bksvrname retention datestamp force_full tgtdirectory graftdir plugin 2>/dev/null)"
+}
+
+defaults()
+{
+    configfile=/etc/snebuc.conf
+    SNEBU=snebu
+    # Need to bring back command line vars, go get config file name override
+    eval "${savevars}"
+
+    # Process configuration file
+    . "${configfile}"
+
+    # Now re-process command line vars, as they trump config file.
+    eval "${savevars}"
+
+
+    # Set the name of the backup to the same as remote client, if backup name
+    # not specified
+    if [ -z "${backupname}" -a -n "${clientname}" ]
+    then
+	backupname="${clientname}"
+    fi
+    if [[ -z "${backupname}" && ( "${target}" = "do_backup" || "${target}" = "restore" ) ]]
+    then
+        backupname="$(uname -n)"
+    fi
+
+    # Set default retention schecdule based on date/weekday
+    if [ ${target} = "do_backup" ]
+    then
+        datestamp=$(date +%s)
+        DAY_OF_WEEK=$(date -d @${datestamp} +%u)
+        DAY_OF_MONTH=$(date -d @${datestamp} +%d)
+        if [ -z "${retention}" ]
+        then
+            if [ ${DAY_OF_MONTH}  = "01" ]
+            then
+                retention="monthly"
+            elif [ ${DAY_OF_WEEK}  = "6" ]
+            then
+                retention="weekly"
+            else
+                retention="daily"
+            fi
+        fi
+
+	# Set include list
+        if [ ${#filelist[@]} != 0 ]
+        then
+            INCLUDE=( "${filelist[@]}" )
+        fi
+	if [ -n "${bksvrname}" ]
+	then
+	    SNEBU=do_rsnebu
+	fi
+    fi
+    if [ -n "${clientname}" -a -z "${rmtuser}" ]
+    then
+        rmtuser="root"
+    fi
+    if [ -n "${bksvrname}" -a -z "${bkuser}" ]
+    then
+        bkuser="backup"
+    fi
+
+}
+
+rsnebu()
+{
+    lzop -d |snebu "${@}" |lzop
+}
+
+do_rsnebu()
+{
+    lzop |rpcsh -h ${bksvrname} -u ${bkuser} -f rsnebu -m rsnebu -- "${@}" |lzop -d
+}
+
+usage()
+{
+    cat <<-EOT
+	Usage:
+	snebuc
+	    backup  -n backupname [ --remote-name servername ] -d datestamp -r retention_schedule
+
+	    restore -n backupname [ --remote-name servername ] -d datestamp [ files... ]
+
+	    listbackups [ -n backupname [ -d datestamp ] ]
+	EOT
+}
+
+main()
+{
+    process_cmdline "$@"
+    defaults
+    if [ -z "${clientname}" ]
+    then
+	${target} "${filelist[@]}"
+    else
+	if [ -n "${client_keyprint}" -o -n "${snebu_keyprint}" ]
+	then
+	    start_agent
+	fi
+	rpcsh -a -h ${clientname} -u ${rmtuser} -f "FINDCMD do_backup do_restore rpcsh do_rsnebu rsnebu" -v "INCLUDE EXCLUDE backupname bksvrname retention datestamp force_full tgtdirectory graftdir SNEBU bkuser" -m "${target}" "${filelist[@]}"
+    fi
+}
+
+start_agent() {
+    if [ -f ~/.ssh_backup_agent_env ]
+    then
+        . ~/.ssh_backup_agent_env >/dev/null 2>&1
+    fi
+    if [ -z "${SSH_AGENT_PID}" ] || ! kill -0 ${SSH_AGENT_PID} >/dev/null 2>&1
+    then
+        ssh-agent >${snebu_sshagent_env}
+        . ${snebu_sshagent_env}
+    fi
+
+    if [ -n "${snebu_keyprint}" -a -n "${snebu_sshkey}" ] && ! ssh-add -l |grep "$snebu_keyprint" >/dev/null 2>&1
+    then
+        ssh-add "${snebu_sshkey}"
+    fi
+
+    if [ -n "${client_keyprint}" -a -n "${client_sshkey}" ] && ! ssh-add -l |grep "$client_keyprint" >/dev/null 2>&1
+    then
+        ssh-add "${client_sshkey}"
+    fi
+}
+
+rpcsh() {
+    if ! args=("$(getopt -l "rmthost:,rmthostport:,rmtlogin:,pushvars:,pushfuncs:,rmtmain:" -o "h:p:u:v:f:m:a" -- "$@")")
+    then
+        exit 1
+    fi
+
+    eval set -- "${args[@]}"
+    while [ -n "$1" ]
+    do
+        case $1 in
+            -h|--rmthost) rmthost=$2; shift; shift;;
+            -p|--rmtport) sshvars=( "${sshvars[@]}" -p $2 ); shift; shift;;
+            -u|--rmtlogin) rmtlogin=$2; shift; shift;;
+            -v|--pushvars) pushvars=$2; shift; shift;;
+            -f|--pushfuncs) pushfuncs=$2; shift; shift;;
+            -m|--rmtmain) rmtmain=$2; shift; shift;;
+            -a) sshvars=( "${sshvars[@]}" -a ); shift;;
+            --) shift; break;;
+        esac
+    done
+    rmtargs=( "$@" )
+
+    ssh ${sshvars[@]} ${rmtlogin}@${rmthost} "
+        $(declare -p rmtargs 2>/dev/null)
+        $([ -n "$pushvars" ] && declare -p $pushvars 2>/dev/null)
+        $(declare -f $pushfuncs 2>/dev/null)
+        $rmtmain \"\${rmtargs[@]}\"
+    "
+}
+
+FINDCMD() {
+    # Printf's used in find commandline
+    FILE_PATTERN="%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%T@\t%p\0"
+    LINK_PATTERN="%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%T@\t%p\0%l\0"
+
+    # Build Find exclude commands from exclude list
+    for i in "${EXCLUDE[@]}"
+    do
+        findexclude=( "${findexclude[@]}" -path "$(echo "$i" |sed "s/\/$//")" -prune -o )
+    done
+    for i in "${EXCLUDEPAT[@]}"
+    do
+        findexclude=( "${findexclude[@]}" -path "$i" -o )
+    done
+    find ${INCLUDE[@]} -xdev "${findexclude[@]}" \( -type f -o -type d \) \
+    -printf "${FILE_PATTERN}" -o -type l -printf "${LINK_PATTERN}"
+}
+
+do_backup()
+{
+    # Create list of files and metadata to backup, send to Snebu, and
+    # store received file list in tmp file.
+    echo "$SNEBU"
+    echo "backupname = ${backupname} retention = ${retention} datestamp = ${datestamp}"  
+    FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
+        --datestamp ${datestamp} --null --not-null-output \
+        >/tmp/backup_include.${datestamp}
+
+    # Now create a tar file and send it to Snebu
+    tar --one-file-system --no-recursion -P -T /tmp/backup_include.${datestamp} -cf - |\
+        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp}
+
+    rm -f /tmp/backup_include.${datestamp}
+}
+
+do_restore()
+{
+    if [ -n "${tgtdirectory}" ]
+    then
+        tarargs=( "${tarargs[@]}" -C $tgtdirectory )
+    fi
+
+    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${filelist[@]}" </dev/null |tar "${tarargs[@]}" -xvf -
+}
+
+listbackups()
+{
+    [ -n "${backupname}" ] && sargs=( "${sargs[@]}" -n ${backupname} )
+    [ -n "${datestamp}" ] && sargs=( "${sargs[@]}" -d ${datestamp} )
+    $SNEBU listbackups "${sargs[@]}"
+}
+main "${@}"
