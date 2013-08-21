@@ -114,6 +114,10 @@ defaults()
     then
         bkuser="backup"
     fi
+    if [ -n "${snebu_sshagent_env}" ]
+    then
+        snebu_sshagent_env=~/.ssh_backup_agent_env
+    fi
 
 }
 
@@ -249,14 +253,14 @@ main()
 	then
 	    start_agent
 	fi
-	rpcsh -a -h ${clientname} -u ${rmtuser} -f "FINDCMD do_backup do_restore rpcsh do_rsnebu rsnebu" -v "INCLUDE EXCLUDE backupname bksvrname retention datestamp force_full tgtdirectory graftdir SNEBU bkuser" -m "${target}" "${filelist[@]}"
+	rpcsh -A -h ${clientname} -u ${rmtuser} -f "FINDCMD do_backup do_restore rpcsh do_rsnebu rsnebu autoinclude" -v "INCLUDE EXCLUDE backupname bksvrname retention datestamp force_full tgtdirectory graftdir SNEBU bkuser" -m "${target}" "${filelist[@]}"
     fi
 }
 
 start_agent() {
-    if [ -f ~/.ssh_backup_agent_env ]
+    if [ -f ${snebu_sshagent_env} ]
     then
-        . ~/.ssh_backup_agent_env >/dev/null 2>&1
+        . ${snebu_sshagent_env} >/dev/null 2>&1
     fi
     if [ -z "${SSH_AGENT_PID}" ] || ! kill -0 ${SSH_AGENT_PID} >/dev/null 2>&1
     then
@@ -274,13 +278,17 @@ start_agent() {
         ssh-add "${client_sshkey}"
     fi
 }
+autoinclude() {
+    mount |egrep "ext[234]|btrfs" |awk '{print $3}'
+}
 
 rpcsh() {
-    if ! args=("$(getopt -l "rmthost:,rmthostport:,rmtlogin:,pushvars:,pushfuncs:,rmtmain:" -o "h:p:u:v:f:m:a" -- "$@")")
+    if ! args=("$(getopt -l "rmthost:,rmthostport:,rmtlogin:,pushvars:,pushfuncs:,rmtmain:" -o "h:p:u:v:f:m:A" -- "$@")")
     then
         exit 1
     fi
 
+    sshvars=( -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null )
     eval set -- "${args[@]}"
     while [ -n "$1" ]
     do
@@ -291,7 +299,8 @@ rpcsh() {
             -v|--pushvars) pushvars=$2; shift; shift;;
             -f|--pushfuncs) pushfuncs=$2; shift; shift;;
             -m|--rmtmain) rmtmain=$2; shift; shift;;
-            -a) sshvars=( "${sshvars[@]}" -a ); shift;;
+            -A) sshvars=( "${sshvars[@]}" -A ); shift;;
+	    -i) sshvars=( "${sshvars[@]}" -i $2 ); shift; shift;;
             --) shift; break;;
         esac
     done
@@ -330,6 +339,10 @@ do_backup()
     [ -n "${graftdir}" ] && newbackupopts=( "${newbackupopts[@]}" --graft "${graftdir}" )
     [ "${force_full}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" -f )
     [ "${verbose}" = 1 ] && ( submitfilesopts=( "${submitfileopts[@]}" -v ); newbackupopts=( "${newbackupopts[@]}" -v ) )
+
+    # Call autoinclude function if INCLUDE is not set
+    [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(autoinclude) )
+
     FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
         --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" \
         >/tmp/backup_include.${datestamp}
