@@ -1,40 +1,93 @@
-The snebu-client script is a simple front-end to the snebu program.  It takes care of finding files to back up, sending the files to snebu, along with restoring files and listing available backups.  Usage is fairly straight forward.  The first argument is the sub-module to call (backup, restore, listbackups).  The remaining arguments are as follows:
+Usage: snebu-client [ subcommand ] [ options ]
+ snebu-client is the client front end for snebu.  Use it to easily
+ back up a local or remote host, to either local a local storage
+ device, or to a remote backup server.  Use it with one of the
+ following subcommands.
 
-snebu-client backup
-Executes a backup operation.  The options are as follows:
-    -n | --name backupname)
-        This is the name of a given backup.  Defaults to the current host name.
 
-    -d | --datestamp date)
-        The date/time for the backup -- given as a number representing the number of seconds since Jan 1 1970.  Can be generated with the `date +%s` command.  This functions as a serial number for the current backup.  Defaults to the current date/time.  Note, that if you use the same host name and datestamp from a previous backup, that backup will be appended to.  This is useful, for example, if you need to execute a command between groups of files (such as putting a database in hot backup mode).
-	
-    -r | --retention schedule_name)
-        The name of the retention schedule.  Typical schedules are `monthly`, `weekly`, and `daily`.  This is used to specify a group of backups when executing an expiration operation.  If not specified, a default is chosen as follows:  The first of the month specifies a monthly retention schedule, Saturday specifies a weekly retention schedule, and any other day specifies a daily retention schedule.
-    [ file list ]
-        include list of files.  This can override the default specified in the config file, or the built-in default consisting of all mounted file systems.
+Documentation on the individual sub commands are as follows:
 
-snebu-client listbackups
-Lists available backups to restore.  Specify either --name or both --name and --datestamp parameters.
+Usage: snebu-client backup [ -n backupname ] [ -d datestamp ] [ -r schedule ]
+ Initiates a system backup.  By default, it will back up the local
+ host to a local snebu install.  You can also use this command to back
+ up to a remote backup server, back up a remote host to either a local
+ snebu instalation, or back up a remote host to another remote backup
+ server, depending on which options are chosen.
 
-    -n | --name backupname
-        This is the name of a given backup.  Defaults to the current host name.  Specify "all" to get a list of all hosts that have been backed up.  Otherwise, a list of backups for the given host (or current host, if not specified) are displayed.
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu-client.conf.
 
-    -d | --datestamp date)
-        The date/time (serial number) for the backup -- given as a number representing the number of seconds since Jan 1 1970.  Pick one that is given with the output of the "-n" parameter.
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
 
-        If only "-n" is specified, you get a list of backups for the given host.  If both "-n" and "-d" are specified, a list of files for that specific backup set is given.
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
 
-snebu-client restore
-Restores files from a given backup set.  Requires both the --n and -d parameters.
+ -r, --retention schedule   Retention schedule for this backup set.  Typical
+                            values are "daily", "weekly", "monthly", "yearly".
 
-    -n | --name backupname
-        Host name of backup to restore
+     --remote-client hostname 
+                            Host name / IP address of remote server.  Used to
+                            backup a remote server to local host.
 
-    -d | --datestamp date
-        Date stamp of backup to restore
+     --backup-server hostname 
+                            Host name / IP address of backup server.  Used to
+                            backup to a remote server.
 
-    -C --directory DIR
-        Changes to the given directory before starting restore.
+ -f, --force-full           Force a full backup
 
-    [ file list ]
-        Optional list of files to restore.  The default is all files in this backup set.
+ -C, --changedir path       Changes to the given directory path before
+                            backing up or restoring.
+
+     --graft /path/name/=/new/name/ 
+                            Re-write path names beginning with "/path/name/"
+                            to "/new/name/"
+
+     --plugin scriptname    Specifies an optional plug in script.  Usually
+                            used to perform database-specific operations
+                            (such as enabling hot backup mode) for systems
+                            with a DB installed.
+
+
+Usage: snebu-client restore [ -n backupname ] [ -d datestamp ]
+ Restores a given backup session identified by "-n" and "-d"
+ parameters.  Use the "listbackups" subcommand to get a list of
+ available backup sessions.
+
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu-client.conf.
+
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
+
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
+
+ -C, --changedir path       Changes to the given directory path before
+                            backing up or restoring.
+
+
+Usage: snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
+ With no arguments specified, "listbackups" will return a list of all
+ systems that are contained in the backup catalog.  Otherwise, when
+ specifying the -n parameter, a list of backup sets for that host is
+ returned.
+
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu-client.conf.
+
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
+
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
+
+
+Usage: snebu help [ topic ]
+ Displays help text [on the given topic].
