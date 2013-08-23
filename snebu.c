@@ -2890,29 +2890,46 @@ int purge(int argc, char **argv)
     purgedate = time(0);
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     fprintf(stderr, "Creating purge list\n");
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+    	"create temporary view  if not exists "
+	"file_entities_to_delete "
+	"as select f.file_id, f.sha1 from file_entities f "
+	"left join backupset_detail d "
+	"on f.file_id = d.file_id "
+	"left join received_file_entities r "
+	"on f.sha1 = r.sha1 "
+	"where d.file_id is null and r.sha1 is null and f.sha1 != 0")),
+	0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"create temporary view if not exists "
+	"file_entities_to_keep "
+	"as select f.file_id, f.sha1 from file_entities f "
+	"left join file_entities_to_delete d "
+	"on f.file_id = d.file_id "
+	"where d.file_id is null")),0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert into purgelist (datestamp, sha1)  "
-	"select distinct %d, f.sha1 from file_entities f  "
-	"left join backupset_detail d  "
-	"on f.file_id = d.file_id  "
-	"left join received_file_entities r  "
-	"on f.sha1 = r.sha1  "
-	"where d.file_id is null and r.sha1 is null and f.sha1 != 0  "
-	"", purgedate)), 0, 0, &sqlerr);
+	"select distinct %d, d.sha1 from file_entities_to_delete d "
+	"left join file_entities_to_keep k "
+	"on d.sha1 = k.sha1 "
+	"where k.sha1 is null", purgedate)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
     fprintf(stderr, "Removing entries from file_entities\n");
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf( "  "
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"delete from file_entities where file_id in (  "
-	"select f.file_id from file_entities f  "
-	"left join backupset_detail d  "
-	"on f.file_id = d.file_id  "
-	"left join received_file_entities r  "
-	"on f.sha1 = r.sha1  "
-	"where d.file_id is null and r.sha1 is null)  "
-	"", purgedate)), 0, 0, &sqlerr);
+	"select file_id from file_entities_to_delete)")),
+	0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
