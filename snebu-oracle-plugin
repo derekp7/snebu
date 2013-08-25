@@ -1,0 +1,91 @@
+# Oracle plugin for snebu-client
+
+# Run a given sql script as Oracle user
+sql() {
+    su - oracle -c "ORACLE_SID=$2 sqlplus -s / as sysdba" <<-EOT
+	set pages 0
+	set heading off
+	set feedback off
+	$1
+	exit
+	EOT
+}
+
+# Begin hot backup
+ora_hbb() {
+    sql "alter database begin backup;" $1
+}
+
+# End hot backup
+ora_hbe() {
+    sql "alter database end backup;
+	alter database backup controlfile to '${archlogdest}/control0x.ctl' reuse;
+	alter system archive log current;" $1
+}
+
+# Put database in archivelog mode
+ora_arc() {
+    sql "alter system archive log current;" $1
+}
+
+# Get list of Oracle data files used for various purposes
+dbfiles() {
+    dbfilelist=( $(sql "select name from v\$datafile;" $1) )
+    dbtempfilelist=( $(sql "select name from v\$tempfile;" $1) )
+    archlogdest=( $(sql "select destination from v\$archive_dest where destination is not null;" $1) )
+    controlfilelist=( $(sql "select name from v\$controlfile;" $1) )
+    loglist=( $(sql "select member from v\$logfile;" $1) )
+    spfile=( $(sql "select value from v\$parameter where name = 'spfile';" $1) )
+}
+
+ora_backup() {
+    for sid in $(grep ':Y$' /etc/oratab |cut -d: -f1)
+    do 
+	OLD_INCLUDE=( "${INCLUDE[@]}" )
+	OLD_EXCLUDE=( "${EXCLUDE[@]}" )
+	OLD_EXCLUDEPAT=( "${EXCLUDEPAT[@]}" )
+	EXCLUDE=( )
+	EXCLUDEPAT=( )
+	dbfiles $sid
+	INCLUDE=( "${dbfilelist[@]}" "${dbtempfilelist[@]}" "${loglist[@]}" "${controlfilelist[@]}" )
+	if [ "${retention}" != "daily" ]
+	then
+	    echo "Putting $sid in hot backup mode"
+	    ora_hbb $sid
+	    if [ "${#INCLUDE[@]}" -gt 0 ]
+	    then
+		FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
+		    --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" \
+		    >/tmp/backup_include.${datestamp}
+
+		# Now create a tar file and send it to Snebu
+		tar --one-file-system --no-recursion -P -T /tmp/backup_include.${datestamp} -cf - |\
+		    $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfileopts[@]}"
+		rm -f /tmp/backup_include.${datestamp}
+	    fi
+	    echo "Taking $sid out of hot backup mode"
+	    ora_hbe $sid
+	else
+	    ora_arc $sid
+	fi
+	INCLUDE=("${archlogdest[@]}" "${spfile[@]}" )
+	if [ "${#INCLUDE[@]}" -gt 0 ]
+	then
+	    FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
+		--datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" \
+		>/tmp/backup_include.${datestamp}
+
+	    # Now create a tar file and send it to Snebu
+	    tar --one-file-system --no-recursion -P -T /tmp/backup_include.${datestamp} -cf - |\
+		$SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfileopts[@]}"
+	    rm -f /tmp/backup_include.${datestamp}
+	fi
+	INCLUDE=( "${OLD_INCLUDE[@]}" )
+	EXCLUDE=( "${OLD_EXCLUDE[@]}" "${dbfilelist[@]}" "${dbtempfilelist[@]}" "${loglist[@]}" "${controlfilelist[@]}" "${archlogdest[@]}" "${spfile[@]}"  )
+	EXCLUDEPAT=( "${OLD_EXCLUDEPAT[@]}" )
+    done
+}
+
+pluginfuncs="sql ora_hbb ora_hbe ora_arc dbfiles ora_backup"
+pluginvars="pluginpre pluginpost"
+pluginpre=ora_backup
