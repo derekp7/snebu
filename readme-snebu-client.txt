@@ -70,6 +70,13 @@ Options:
  -C, --changedir path       Changes to the given directory path before
                             backing up or restoring.
 
+     --remote-client hostname 
+                            Host name / IP address of remote server.  Used to
+                            backup a remote server to local host.
+
+     --backup-server hostname 
+                            Host name / IP address of backup server.  Used to
+                            backup to a remote server.
 
 Usage: snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
  With no arguments specified, "listbackups" will return a list of all
@@ -87,6 +94,10 @@ Options:
  -d, --date datestamp       Date stamp for this backup set.  The format is in
                             time_t format, sames as the output of the "date
                             +%s" command.
+
+     --backup-server hostname 
+                            Host name / IP address of backup server.  Used to
+                            backup to a remote server.
 
 
 Usage: snebu help [ topic ]
