@@ -22,7 +22,7 @@ process_cmdline()
         exit
     fi
 
-    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help" -o "c:n:r:d:fvC:h" -- "$@")")
+    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,retention:,date:,force-full,changedir:,graft:,plugin:,help" -o "c:n:r:d:fC:h" -- "$@")")
     then
         usage target
         exit 1
@@ -42,7 +42,6 @@ process_cmdline()
 	    --graft) graftdir=$2; shift; shift;;
 	    --plugin) plugin=$2; shift; shift;;
             -h|--help) shift; usage $target;;
-            -v|--verbose) verbose=1; shift;;
             --) shift; break;;
         esac
     done
@@ -56,7 +55,7 @@ process_cmdline()
 defaults()
 {
     configfile=/etc/snebu-client.conf
-    SNEBU=snebu
+    SNEBU=~derekp/snebu/snebu
     # Need to bring back command line vars, go get config file name override
     eval "${savevars}"
 
@@ -119,7 +118,6 @@ defaults()
     then
         snebu_sshagent_env=~/.ssh_backup_agent_env
     fi
-    [ -n "${plugin}" ] && . ${plugin}
 
 }
 
@@ -218,6 +216,14 @@ usage()
 	
 	 -C, --changedir path       Changes to the given directory path before
 	                            backing up or restoring.
+
+	     --remote-client hostname
+	                            Host name / IP address of remote server.  Used to
+	                            backup a remote server to local host.
+	
+	     --backup-server hostname
+	                            Host name / IP address of backup server.  Used to
+	                            backup to a remote server.
 	EOT
     elif [ "$1" = "listbackups" ]; then
 	cat <<-EOT
@@ -255,7 +261,7 @@ main()
 	then
 	    start_agent
 	fi
-	rpcsh -A -h ${clientname} -u ${rmtuser} -f "FINDCMD do_backup do_restore rpcsh do_rsnebu rsnebu autoinclude ${pluginfuncs}" -v "INCLUDE EXCLUDE backupname bksvrname retention datestamp force_full tgtdirectory graftdir SNEBU bkuser verbose ${pluginvars}" -m "${target}" "${filelist[@]}"
+	rpcsh -A -h ${clientname} -u ${rmtuser} -f "FINDCMD do_backup do_restore rpcsh do_rsnebu rsnebu autoinclude" -v "INCLUDE EXCLUDE backupname bksvrname retention datestamp force_full tgtdirectory graftdir SNEBU bkuser" -m "${target}" "${filelist[@]}"
     fi
 }
 
@@ -340,23 +346,19 @@ do_backup()
     # store received file list in tmp file.
     [ -n "${graftdir}" ] && newbackupopts=( "${newbackupopts[@]}" --graft "${graftdir}" )
     [ "${force_full}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" --full )
-    [ "${verbose}" = 1 ] && submitfilesopts=( "${submitfilesopts[@]}" -v )
-#    [ "${verbose}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" -v )
+    [ "${verbose}" = 1 ] && ( submitfilesopts=( "${submitfileopts[@]}" -v ); newbackupopts=( "${newbackupopts[@]}" -v ) )
 
     # Call autoinclude function if INCLUDE is not set
     [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(autoinclude) )
 
-    [ -n "${pluginpre}" ] && $pluginpre
-
-    FINDCMD |$SNEBU newbackup  --name ${backupname} --retention ${retention} \
+    FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
         --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" \
         >/tmp/backup_include.${datestamp}
 
     # Now create a tar file and send it to Snebu
     tar --one-file-system --no-recursion -P -T /tmp/backup_include.${datestamp} -cf - |\
-        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
+        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfileopts[@]}"
 
-    [ -n "${pluginpost}" ] && $pluginpost
     rm -f /tmp/backup_include.${datestamp}
 }
 
