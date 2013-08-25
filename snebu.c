@@ -1861,6 +1861,15 @@ int restore(int argc, char **argv)
 	    tmpchksum += 0xFF & *p;
 	sprintf(tarhead.chksum, "%6.6o", tmpchksum);
 	sprintf(sha1filepath, "%s/%c%c/%s.lzo", srcdir, sha1[0], sha1[1], sha1 + 2);
+	if (strcmp(sha1, "0") != 0) {
+	    sha1file = open(sha1filepath, O_RDONLY);
+	    if (sha1file == -1) {
+		fprintf(stderr, "Can not restore %s -- missing backing file %s\n", filename, sha1filepath);
+		filename = 0;
+		linktarget = 0;
+		continue;
+	    }
+	}
 	fwrite(&tarhead, 1, 512, stdout);
 	tblocks++;
 	if (tarhead.u.sph.isextended == 1) {
@@ -1914,11 +1923,7 @@ int restore(int argc, char **argv)
 	    close(zin[1]);
 	    curfile = fdopen(zin[0], "r");
 #endif
-	    sha1file = open(sha1filepath, O_RDONLY);
-	    if (sha1file == -1) {
-		fprintf(stderr, "Can not open %s\n", sha1filepath);
-		exit(1);
-	    }
+
 	    curfile = cfinit_r(fdopen(sha1file, "r"));
 	    bytestoread = t.filesize;
 	    while (bytestoread > 512ull) {
