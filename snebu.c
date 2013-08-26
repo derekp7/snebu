@@ -2388,9 +2388,6 @@ int import(int argc, char **argv)
 	    "datestamp,  \n"
 	    "filename,  \n"
 	    "extdata ))", 0, 0, 0);
-    sqlite3_exec(bkcatalog,
-	    "create index inbound_file_entitiesi1 on inbound_file_entities (  "
-	    "file_id, permission, device_id, inode, user_name, user_id, group_name, group_id, size, sha1, datestamp, filename, extdata)", 0, 0, 0);
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     sqlstmt = sqlite3_mprintf(
 	"insert or ignore into inbound_file_entities  "
@@ -2403,6 +2400,8 @@ int import(int argc, char **argv)
 
     t.ftype[1] = 0;
     count = 0;
+    linktarget=malloc(1);
+    *linktarget = '\0';
     while (getline(&instr, &instrlen, catalog) > 0) {
 	count++;
 	char *fptr;
@@ -2411,11 +2410,15 @@ int import(int argc, char **argv)
 	char *endlptr;
 	int fnstart;
 	char *ascmode;
-	sscanf(instr, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%Ld\t%32s\t%d\t%n",
+	sscanf(instr, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%Ld\t%40s\t%d\t%n",
 	    t.ftype, &t.mode, t.devid, t.inode, t.auid, &t.nuid, t.agid, &t.ngid,
 	    &(t.filesize), sha1, &t.modtime, &fnstart);
 	fptr = instr + fnstart;
 	endfptr = strstr(fptr, "\t");
+	if (endfptr == 0) {
+	    endfptr = strlen(fptr) + fptr;
+	    fprintf(stderr, "Debug: fptr -> %s :: fptr = %d :: endfptr = %d\n", fptr, fptr, endfptr);
+	}
 	efilename = realloc(efilename, endfptr - fptr + 1);
 	strncpy(efilename, fptr, endfptr - fptr);
 	efilename[endfptr - fptr] = 0;
@@ -2444,7 +2447,7 @@ int import(int argc, char **argv)
 
 	if (*(t.ftype) != '1' && *(t.ftype) != '2' && linktarget != 0)
 	    *linktarget = 0;
-	if (filename != 0 && strlen(filename) > 0 && filename[(strlen(filename) - 1)] == '/')
+	if (filename != 0 && strlen(filename) > 1 && filename[(strlen(filename) - 1)] == '/')
 	    filename[strlen(filename) - 1] = 0;
 
 	ascmode = sqlite3_mprintf("%4.4o", t.mode);
@@ -2638,9 +2641,9 @@ int export(int argc, char **argv)
 	"  f.file_id = d.file_id "
 	"  where d.backupset_id = '%d' ", bkid)), -1, &sqlres, 0);
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
-	fprintf(catalog, "%s\t%o\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%s\t%s\n",
+	fprintf(catalog, "%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%s\t%s\n",
 	sqlite3_column_text(sqlres, 0),
-	sqlite3_column_int(sqlres, 1),
+	sqlite3_column_text(sqlres, 1),
 	sqlite3_column_text(sqlres, 2),
 	sqlite3_column_text(sqlres, 3),
 	sqlite3_column_text(sqlres, 4),
