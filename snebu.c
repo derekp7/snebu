@@ -436,7 +436,7 @@ newbackup(int argc, char **argv)
 	}
     }
       
-    sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf( 
+    sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"select n.infilename from needed_file_entities n "
 	"join inbound_file_entities i "
 	"on n.infilename = i.infilename "
@@ -2897,51 +2897,52 @@ int purge(int argc, char **argv)
 
     purgedate = time(0);
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
-    fprintf(stderr, "Creating purge list\n");
+    fprintf(stderr, "Creating purge list 1\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-    	"create temporary view  if not exists "
-	"file_entities_to_delete "
-	"as select f.file_id, f.sha1 from file_entities f "
+	"create temporary table if not exists purgelist1 ( \n"
+	"    file_id	integer primary key, "
+	"    sha1	char)")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"insert into purgelist1 (file_id, sha1) "
+	"select f.file_id, f.sha1 from file_entities f "
 	"left join backupset_detail d "
 	"on f.file_id = d.file_id "
+	"where d.file_id is null")),
+    0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+
+    fprintf(stderr, "Purging from file_entities\n");
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"delete from file_entities where file_id in ( "
+	"select file_id from purgelist1) ")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+
+    fprintf(stderr, "Creating final purge list\n");
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"insert into purgelist (datestamp, sha1) "
+	"select distinct %d, p.sha1 from purgelist1 p "
+	"left join file_entities f "
+	"on p.sha1 = f.sha1 "
 	"left join received_file_entities r "
-	"on f.sha1 = r.sha1 "
-	"where d.file_id is null and r.sha1 is null and f.sha1 != 0")),
-	0, 0, &sqlerr);
+	"on p.sha1 = r.sha1 "
+	"where  f.sha1 is null and r.sha1 is null and f.sha1 != '0'", purgedate)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"create temporary view if not exists "
-	"file_entities_to_keep "
-	"as select f.file_id, f.sha1 from file_entities f "
-	"left join file_entities_to_delete d "
-	"on f.file_id = d.file_id "
-	"where d.file_id is null")),0, 0, &sqlerr);
-    if (sqlerr != 0) {
-	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
-	sqlite3_free(sqlerr);
-    }
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert into purgelist (datestamp, sha1)  "
-	"select distinct %d, d.sha1 from file_entities_to_delete d "
-	"left join file_entities_to_keep k "
-	"on d.sha1 = k.sha1 "
-	"where k.sha1 is null", purgedate)), 0, 0, &sqlerr);
-    if (sqlerr != 0) {
-	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
-	sqlite3_free(sqlerr);
-    }
-    fprintf(stderr, "Removing entries from file_entities\n");
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"delete from file_entities where file_id in (  "
-	"select file_id from file_entities_to_delete)")),
-	0, 0, &sqlerr);
-    if (sqlerr != 0) {
-	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
-	sqlite3_free(sqlerr);
-    }
+
+    fprintf(stderr, "Removing files\n");
     sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select sha1, datestamp from purgelist")),
 	-1, &sqlres, 0);
@@ -2950,14 +2951,15 @@ int purge(int argc, char **argv)
 	sha1 = sqlite3_column_text(sqlres, 0);
 	sprintf((destfilepath = malloc(strlen(destdir) + strlen(sha1) + 7)), "%s/%2.2s/%s.lzo", destdir, sha1, sha1 + 2);
 	sprintf((destfilepathd = malloc(strlen(destdir) + strlen(sha1) + 9)), "%s/%2.2s/%s.lzo.d", destdir, sha1, sha1 + 2);
-	rename(destfilepath, destfilepathd);
-	if (stat(destfilepathd, &tmpfstat) == 0 && tmpfstat.st_mtime < sqlite3_column_int(sqlres, 1)) {
-	    fprintf(stderr, "Removing %s\n", destfilepath);
-	    remove(destfilepathd);
-	}
-	else {
-	    fprintf(stderr, "    Restoring %s\n", destfilepath);
-	    rename(destfilepathd, destfilepath);
+	if (rename(destfilepath, destfilepathd)); {
+	    if (stat(destfilepathd, &tmpfstat) == 0 && tmpfstat.st_mtime < sqlite3_column_int(sqlres, 1)) {
+		fprintf(stderr, "Removing %s\n", destfilepath);
+		remove(destfilepathd);
+	    }
+	    else {
+		fprintf(stderr, "    Restoring %s\n", destfilepath);
+		rename(destfilepathd, destfilepath);
+	    }
 	}
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "delete from purgelist where sha1 = '%s'", sha1)), 0, 0, &sqlerr);
