@@ -2951,10 +2951,12 @@ int purge(int argc, char **argv)
 	sha1 = sqlite3_column_text(sqlres, 0);
 	sprintf((destfilepath = malloc(strlen(destdir) + strlen(sha1) + 7)), "%s/%2.2s/%s.lzo", destdir, sha1, sha1 + 2);
 	sprintf((destfilepathd = malloc(strlen(destdir) + strlen(sha1) + 9)), "%s/%2.2s/%s.lzo.d", destdir, sha1, sha1 + 2);
-	if (rename(destfilepath, destfilepathd)); {
+	if (rename(destfilepath, destfilepathd)) {
 	    if (stat(destfilepathd, &tmpfstat) == 0 && tmpfstat.st_mtime < sqlite3_column_int(sqlres, 1)) {
 		fprintf(stderr, "Removing %s\n", destfilepath);
 		remove(destfilepathd);
+		sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		    "delete from diskfiles where sha1 = '%s'", sha1)), 0, 0, &sqlerr);
 	    }
 	    else {
 		fprintf(stderr, "    Restoring %s\n", destfilepath);
