@@ -411,7 +411,10 @@ newbackup(int argc, char **argv)
 	    "and i.size = f.size and i.datestamp = f.datestamp  "
 	    "and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
 	    "or i.extdata = f.extdata)  "
-	    "where i.backupset_id = '%d' and f.file_id is null", bkid)), 0, 0, &sqlerr);
+	    "left join diskfiles d "
+	    "on f.sha1 = d.sha1 "
+	    "where i.backupset_id = '%d' and (f.file_id is null or "
+	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))", bkid)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -479,6 +482,18 @@ int initdb(sqlite3 *bkcatalog)
 	"    segment,  \n"
 	"    location ))", 0, 0, 0);
 #endif
+    err = sqlite3_exec(bkcatalog,
+	"create table if not exists diskfiles ( \n"
+	"    sha1          char, \n"
+	"constraint diskfilesc1 unique ( \n"
+	"    sha1))", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "Create table diskfiles: %s\n", sqlerr);
+	sqlite3_free(sqlerr);
+    }
+    if (err != 0)
+	return(err);
+
     err = sqlite3_exec(bkcatalog,
 	"create table if not exists file_entities (  \n"
 	"    file_id       integer primary key,  \n"
@@ -1327,12 +1342,28 @@ int submitfiles(int argc, char **argv)
 		sqlite3_free(sqlerr);
 	    }
 #endif
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"insert or ignore into diskfiles (sha1)  "
+		"values ('%s')", cfsha1a)), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n", sqlerr);
+		sqlite3_free(sqlerr);
+	    }
 
-	    if (stat(destfilepathm, &tmpfstat) == 0)
-		rename(tmpfilepath, destfilepath);
+
+	    if (stat(destfilepathm, &tmpfstat) == 0) // If the directory exists
+		rename(tmpfilepath, destfilepath);   // move temp file to directory
 	    else {
-		if (mkdir(destfilepathm, 0770) == 0)
+		if (mkdir(destfilepathm, 0770) == 0) { // else make the directory first
 		    rename(tmpfilepath, destfilepath);
+		    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+			"insert or ignore into diskfiles (sha1)  "
+			"values ('%s')", cfsha1a)), 0, 0, &sqlerr);
+		    if (sqlerr != 0) {
+			fprintf(stderr, "%s\n", sqlerr);
+			sqlite3_free(sqlerr);
+		    }
+		}
 		else {
 		    fprintf(stderr, "Error creating directory %s\n", destfilepath);
 		    return(1);
