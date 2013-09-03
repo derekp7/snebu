@@ -1895,9 +1895,10 @@ int restore(int argc, char **argv)
 	    tmpchksum += 0xFF & *p;
 	sprintf(tarhead.chksum, "%6.6o", tmpchksum);
 	sprintf(sha1filepath, "%s/%c%c/%s.lzo", srcdir, sha1[0], sha1[1], sha1 + 2);
-	if (strcmp(sha1, "0") != 0) {
+	if (t.ftype == '0' || t.ftype == 'S') {
 	    sha1file = open(sha1filepath, O_RDONLY);
 	    if (sha1file == -1) {
+		perror("restore: open backing file:");
 		fprintf(stderr, "Can not restore %s -- missing backing file %s\n", filename, sha1filepath);
 		filename = 0;
 		linktarget = 0;
