@@ -411,7 +411,10 @@ newbackup(int argc, char **argv)
 	    "and i.size = f.size and i.datestamp = f.datestamp  "
 	    "and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
 	    "or i.extdata = f.extdata)  "
-	    "where i.backupset_id = '%d' and f.file_id is null", bkid)), 0, 0, &sqlerr);
+	    "left join diskfiles d "
+	    "on f.sha1 = d.sha1 "
+	    "where i.backupset_id = '%d' and (f.file_id is null or "
+	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))", bkid)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -479,6 +482,18 @@ int initdb(sqlite3 *bkcatalog)
 	"    segment,  \n"
 	"    location ))", 0, 0, 0);
 #endif
+    err = sqlite3_exec(bkcatalog,
+	"create table if not exists diskfiles ( \n"
+	"    sha1          char, \n"
+	"constraint diskfilesc1 unique ( \n"
+	"    sha1))", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "Create table diskfiles: %s\n", sqlerr);
+	sqlite3_free(sqlerr);
+    }
+    if (err != 0)
+	return(err);
+
     err = sqlite3_exec(bkcatalog,
 	"create table if not exists file_entities (  \n"
 	"    file_id       integer primary key,  \n"
@@ -701,6 +716,9 @@ int initdb(sqlite3 *bkcatalog)
     err = sqlite3_exec(bkcatalog,
 	"    create index if not exists received_file_entitiesi4 on received_file_entities (  \n"
 	"    backupset_id, extdata)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index if not exists received_file_entitiesi5 on received_file_entities (  \n"
+	"    sha1, filename)", 0, 0, 0);
     return(0);
 }
 
@@ -1327,12 +1345,28 @@ int submitfiles(int argc, char **argv)
 		sqlite3_free(sqlerr);
 	    }
 #endif
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"insert or ignore into diskfiles (sha1)  "
+		"values ('%s')", cfsha1a)), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n", sqlerr);
+		sqlite3_free(sqlerr);
+	    }
 
-	    if (stat(destfilepathm, &tmpfstat) == 0)
-		rename(tmpfilepath, destfilepath);
+
+	    if (stat(destfilepathm, &tmpfstat) == 0) // If the directory exists
+		rename(tmpfilepath, destfilepath);   // move temp file to directory
 	    else {
-		if (mkdir(destfilepathm, 0770) == 0)
+		if (mkdir(destfilepathm, 0770) == 0) { // else make the directory first
 		    rename(tmpfilepath, destfilepath);
+		    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+			"insert or ignore into diskfiles (sha1)  "
+			"values ('%s')", cfsha1a)), 0, 0, &sqlerr);
+		    if (sqlerr != 0) {
+			fprintf(stderr, "%s\n", sqlerr);
+			sqlite3_free(sqlerr);
+		    }
+		}
 		else {
 		    fprintf(stderr, "Error creating directory %s\n", destfilepath);
 		    return(1);
@@ -1861,9 +1895,10 @@ int restore(int argc, char **argv)
 	    tmpchksum += 0xFF & *p;
 	sprintf(tarhead.chksum, "%6.6o", tmpchksum);
 	sprintf(sha1filepath, "%s/%c%c/%s.lzo", srcdir, sha1[0], sha1[1], sha1 + 2);
-	if (strcmp(sha1, "0") != 0) {
+	if (t.ftype == '0' || t.ftype == 'S') {
 	    sha1file = open(sha1filepath, O_RDONLY);
 	    if (sha1file == -1) {
+		perror("restore: open backing file:");
 		fprintf(stderr, "Can not restore %s -- missing backing file %s\n", filename, sha1filepath);
 		filename = 0;
 		linktarget = 0;
@@ -2930,13 +2965,16 @@ int purge(int argc, char **argv)
 
     fprintf(stderr, "Creating final purge list\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert into purgelist (datestamp, sha1) "
-	"select distinct %d, p.sha1 from purgelist1 p "
+	"insert into purgelist (datestamp, sha1)  "
+	"select %d, p1.sha1 from ( "
+	"select distinct p.sha1 from purgelist1 p "
 	"left join file_entities f "
 	"on p.sha1 = f.sha1 "
+	"where f.sha1 is null "
+	") p1 "
 	"left join received_file_entities r "
-	"on p.sha1 = r.sha1 "
-	"where  f.sha1 is null and r.sha1 is null and f.sha1 != '0'", purgedate)), 0, 0, &sqlerr);
+	"on p1.sha1 = r.sha1 "
+	"where  r.sha1 is null and p1.sha1 != '0'", purgedate)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
@@ -2951,7 +2989,7 @@ int purge(int argc, char **argv)
 	sha1 = sqlite3_column_text(sqlres, 0);
 	sprintf((destfilepath = malloc(strlen(destdir) + strlen(sha1) + 7)), "%s/%2.2s/%s.lzo", destdir, sha1, sha1 + 2);
 	sprintf((destfilepathd = malloc(strlen(destdir) + strlen(sha1) + 9)), "%s/%2.2s/%s.lzo.d", destdir, sha1, sha1 + 2);
-	if (rename(destfilepath, destfilepathd)) {
+	if (rename(destfilepath, destfilepathd) == 0) {
 	    if (stat(destfilepathd, &tmpfstat) == 0 && tmpfstat.st_mtime < sqlite3_column_int(sqlres, 1)) {
 		fprintf(stderr, "Removing %s\n", destfilepath);
 		remove(destfilepathd);
