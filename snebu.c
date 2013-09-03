@@ -716,6 +716,9 @@ int initdb(sqlite3 *bkcatalog)
     err = sqlite3_exec(bkcatalog,
 	"    create index if not exists received_file_entitiesi4 on received_file_entities (  \n"
 	"    backupset_id, extdata)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index if not exists received_file_entitiesi5 on received_file_entities (  \n"
+	"    sha1, filename)", 0, 0, 0);
     return(0);
 }
 
@@ -2961,13 +2964,16 @@ int purge(int argc, char **argv)
 
     fprintf(stderr, "Creating final purge list\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert into purgelist (datestamp, sha1) "
-	"select distinct %d, p.sha1 from purgelist1 p "
+	"insert into purgelist (datestamp, sha1)  "
+	"select %d, p1.sha1 from ( "
+	"select distinct p.sha1 from purgelist1 p "
 	"left join file_entities f "
 	"on p.sha1 = f.sha1 "
+	"where f.sha1 is null "
+	") p1 "
 	"left join received_file_entities r "
-	"on p.sha1 = r.sha1 "
-	"where  f.sha1 is null and r.sha1 is null and f.sha1 != '0'", purgedate)), 0, 0, &sqlerr);
+	"on p1.sha1 = r.sha1 "
+	"where  r.sha1 is null and p1.sha1 != '0'", purgedate)), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
