@@ -290,6 +290,20 @@ autoinclude() {
     mount |egrep "ext[234]|btrfs" |awk '{print $3}'
 }
 
+# rpcsh -- Runs a function on a remote host
+# This function pushes out a given set of variables and functions to
+# another host via ssh, then runs a given function with optional arguments.
+# Usage:
+#   rpcsh -h remote_host [ -p ssh-port ] -u remote_login -v "variable list" \
+#     -f "function list" -m mainfunc
+#
+# The "function list" is a list of shell functions to push to the remote host
+# (including the main function to execute, and any functions that it calls)
+# Use the "variable list" to send a group of variables to the remote host.
+# Finally "mainfunc" is the name of the function (from "function list") 
+# to execute on the remote side.  Any additional parameters specified gets
+# passed along to mainfunc.
+
 rpcsh() {
     if ! args=("$(getopt -l "rmthost:,rmthostport:,rmtlogin:,pushvars:,pushfuncs:,rmtmain:" -o "h:p:u:v:f:m:A" -- "$@")")
     then
