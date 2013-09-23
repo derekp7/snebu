@@ -101,10 +101,10 @@ defaults()
         then
             INCLUDE=( "${filelist[@]}" )
         fi
-	if [ -n "${bksvrname}" ]
-	then
-	    SNEBU=do_rsnebu
-	fi
+    fi
+    if [ -n "${bksvrname}" ]
+    then
+	SNEBU=do_rsnebu
     fi
     if [ -n "${clientname}" -a -z "${rmtuser}" ]
     then
