@@ -263,7 +263,7 @@ main()
     then
 	${target} "${filelist[@]}"
     else
-	rpcsh -A -h ${clientname} -u ${rmtuser} -f "FINDCMD do_backup do_restore rpcsh do_rsnebu rsnebu autoinclude" -v "INCLUDE EXCLUDE backupname bksvrname retention datestamp force_full tgtdirectory graftdir SNEBU bkuser verbose" -m "${target}" "${filelist[@]}"
+	rpcsh -A -h ${clientname} -u ${rmtuser} -f "FINDCMD do_backup do_restore rpcsh do_rsnebu rsnebu autoinclude ${pluginfuncs}" -v "INCLUDE EXCLUDE backupname bksvrname retention datestamp force_full tgtdirectory graftdir SNEBU bkuser verbose ${pluginvars}" -m "${target}" "${filelist[@]}"
     fi
 }
 
@@ -367,6 +367,8 @@ do_backup()
     # Call autoinclude function if INCLUDE is not set
     [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(autoinclude) )
 
+    [ -n "${pluginpre}" ] && $pluginpre
+
     FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
         --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" \
         >/tmp/backup_include.${datestamp}
@@ -375,6 +377,7 @@ do_backup()
     tar --one-file-system --no-recursion -P -T /tmp/backup_include.${datestamp} -cf - |\
         $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
+    [ -n "${pluginpost}" ] && $pluginpost
     rm -f /tmp/backup_include.${datestamp}
 }
 
