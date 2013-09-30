@@ -388,7 +388,7 @@ do_restore()
         tarargs=( "${tarargs[@]}" -C $tgtdirectory )
     fi
 
-    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${filelist[@]}" </dev/null |tar "${tarargs[@]}" -xvf -
+    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${@}" </dev/null |tar "${tarargs[@]}" -xvf -
 }
 
 listbackups()
