@@ -32,16 +32,16 @@ process_cmdline()
     do
         case $1 in
 	    -c|config) configfile=$@; shift; shift;;
-            -n|--name) backupname=$2; shift; shift;;
-            --remote-client) clientname=$2; shift; shift;;
-            --backup-server) bksvrname=$2; shift; shift;;
-            -r|--retention) retention=$2; shift; shift;;
+	    -n|--name) backupname=$2; shift; shift;;
+	    --remote-client) clientname=$2; shift; shift;;
+	    --backup-server) bksvrname=$2; shift; shift;;
+	    -r|--retention) retention=$2; shift; shift;;
 	    -d|--date) datestamp=$2; shift; shift;;
 	    -f|--force-full) force_full=1; shift;;
 	    -C|--changedir) tgtdirectory=$2; shift; shift;;
 	    --graft) graftdir=$2; shift; shift;;
 	    --plugin) plugin=$2; shift; shift;;
-            -h|--help) shift; usage $target;;
+	    -h|--help) shift; usage $target;;
 	    -v|--verbose) verbose=1; shift;;
             --) shift; break;;
         esac
