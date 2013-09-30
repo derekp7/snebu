@@ -255,14 +255,14 @@ main()
 {
     process_cmdline "$@"
     defaults
+    if [[ -n "${bksvrname}" && ( -n "${client_keyprint}" || -n "${snebu_keyprint}" ) ]]
+    then
+	start_agent
+    fi
     if [ -z "${clientname}" ]
     then
 	${target} "${filelist[@]}"
     else
-	if [ -n "${client_keyprint}" -o -n "${snebu_keyprint}" ]
-	then
-	    start_agent
-	fi
 	rpcsh -A -h ${clientname} -u ${rmtuser} -f "FINDCMD do_backup do_restore rpcsh do_rsnebu rsnebu autoinclude" -v "INCLUDE EXCLUDE backupname bksvrname retention datestamp force_full tgtdirectory graftdir SNEBU bkuser verbose" -m "${target}" "${filelist[@]}"
     fi
 }
