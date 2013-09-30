@@ -119,17 +119,18 @@ defaults()
     then
         snebu_sshagent_env=~/.ssh_backup_agent_env
     fi
+    [ -n "${plugin}" ] && . ${plugin}
 
 }
 
 rsnebu()
 {
-    lzop -d |snebu "${@}" |lzop
+    lzop -d |snebu "${@}" |lzop -f
 }
 
 do_rsnebu()
 {
-    lzop |rpcsh -h ${bksvrname} -u ${bkuser} -f rsnebu -m rsnebu -- "${@}" |lzop -d
+    lzop |rpcsh -h ${bksvrname} -u ${bkuser} -f rsnebu -m rsnebu -- "${@}" |lzop -d -f
 }
 
 usage()
