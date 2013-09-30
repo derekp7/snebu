@@ -362,7 +362,7 @@ do_backup()
     # store received file list in tmp file.
     [ -n "${graftdir}" ] && newbackupopts=( "${newbackupopts[@]}" --graft "${graftdir}" )
     [ "${force_full}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" --full )
-    [ "${verbose}" = 1 ] && submitfileopts=( "${submitfilesopts[@]}" -v )
+    [ "${verbose}" = 1 ] && submitfilesopts=( "${submitfilesopts[@]}" -v )
 
     # Call autoinclude function if INCLUDE is not set
     [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(autoinclude) )
@@ -373,7 +373,7 @@ do_backup()
 
     # Now create a tar file and send it to Snebu
     tar --one-file-system --no-recursion -P -T /tmp/backup_include.${datestamp} -cf - |\
-        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfileopts[@]}"
+        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
     rm -f /tmp/backup_include.${datestamp}
 }
