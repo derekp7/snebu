@@ -155,6 +155,7 @@ usage()
     elif [ "$1" = "backup" ]; then
 	cat <<-EOT
 	Usage: snebu-client backup [ -n backupname ] [ -d datestamp ] [ -r schedule ]
+	    [ file-list ]
 	 Initiates a system backup.  By default, it will back up the local
 	 host to a local snebu install.  You can also use this command to back
 	 up to a remote backup server, back up a remote host to either a local
@@ -196,11 +197,12 @@ usage()
 	                            used to perform database-specific operations
 	                            (such as enabling hot backup mode) for systems
 	                            with a DB installed.
-	
+
+	 [ file-list ]              List of files to backup -- overrides default
 	EOT
     elif [ "$1" = "restore" ]; then
 	cat <<-EOT
-	Usage: snebu-client restore [ -n backupname ] [ -d datestamp ]
+	Usage: snebu-client restore [ -n backupname ] [ -d datestamp ] [ file-list ]
 	 Restores a given backup session identified by "-n" and "-d"
 	 parameters.  Use the "listbackups" subcommand to get a list of
 	 available backup sessions.
@@ -226,6 +228,8 @@ usage()
 	     --backup-server hostname
 	                            Host name / IP address of backup server.  Used to
 	                            backup to a remote server.
+
+	 [ file-list ]              List of files to restore.  Defaults to all.
 	EOT
     elif [ "$1" = "listbackups" ]; then
 	cat <<-EOT
