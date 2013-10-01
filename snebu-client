@@ -395,6 +395,6 @@ listbackups()
 {
     [ -n "${backupname}" ] && sargs=( "${sargs[@]}" -n ${backupname} )
     [ -n "${datestamp}" ] && sargs=( "${sargs[@]}" -d ${datestamp} )
-    $SNEBU listbackups "${sargs[@]}"
+    $SNEBU listbackups "${sargs[@]}" "${@}" </dev/null
 }
 main "${@}"
