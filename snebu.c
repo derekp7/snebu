@@ -31,6 +31,7 @@ int sqlbusy(void *x, int y);
 char *stresc(char *src, unsigned char **target);
 char *strunesc(char *src, unsigned char **target);
 long int strtoln(char *nptr, char **endptr, int base, int len);
+int parsex(char *instr, char p, char ***b, int max);
 
 int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, char **, char **), void *carg1, char **errmsg);
 int my_sqlite3_step(sqlite3_stmt *stmt);
@@ -120,6 +121,7 @@ newbackup(int argc, char **argv)
     char retention[128];
     int foundopts = 0;
     char *filespecs = 0;
+    char **filespecsl = NULL;
     size_t filespeclen = 0;
     char *linkspecs = 0;
     size_t linkspeclen = 0;
@@ -173,6 +175,7 @@ newbackup(int argc, char **argv)
     };
     int longoptidx;
     int i;
+    int numfld;
 
     while ((optc = getopt_long(argc, argv, "n:d:r:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
@@ -304,19 +307,22 @@ newbackup(int argc, char **argv)
 	char *pathsub = "";
         flen1 = 0;
 	// Handle input datestamp of xxxxx.xxxxx
-	x = sscanf(filespecs, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d.%*d\t%n",
-	    &fs.ftype, &fs.mode, fs.devid,
-	    fs.inode, fs.auid, &fs.nuid, fs.agid,
-	    &fs.ngid, &fs.filesize, fs.sha1,
-	    &fs.modtime, &flen1);
-	if (flen1 == 0)
-	    // Handle input datestamp of xxxxx
-	    x = sscanf(filespecs, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%llu\t%32s\t%d\t%n",
-		&fs.ftype, &fs.mode, &fs.devid,
-		fs.inode, fs.auid, &fs.nuid, fs.agid,
-		&fs.ngid, &fs.filesize, fs.sha1,
-		&fs.modtime, &flen1);
-	fs.filename = filespecs + flen1;
+	numfld = parsex(filespecs, '\t', &filespecsl, 13);
+	fs.ftype = *(filespecsl[0]);
+	fs.mode = (int) strtol(filespecsl[1], NULL, 8);
+	strncpy(fs.devid, filespecsl[2], 32);
+	strncpy(fs.inode, filespecsl[3], 32);
+	strncpy(fs.auid, filespecsl[4], 32);
+	fs.nuid = atoi(filespecsl[5]);
+	strncpy(fs.agid, filespecsl[6], 32);
+	fs.ngid = atoi(filespecsl[7]);
+	fs.filesize = strtoull(filespecsl[8], NULL, 10);
+	strncpy(fs.sha1, filespecsl[9], 32);
+	if (strchr(filespecsl[10], '.') != NULL)
+	    *(strchr(filespecsl[10], '.')) = '\0';
+	fs.modtime = atoi(filespecsl[10]);
+	fs.filename = filespecsl[11];
+
 	if (fs.filename[strlen(fs.filename) - 1] == '\n')
 	    fs.filename[strlen(fs.filename) - 1] = 0;
 
@@ -361,6 +367,15 @@ newbackup(int argc, char **argv)
 	    }
 	}
 
+//	fprintf(stderr,
+//	    "insert or ignore into inbound_file_entities  "
+//	    "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
+//	    "group_id, size, sha1, datestamp, filename, extdata, infilename)  "
+//	    "values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%s%s', '%s', '%s')\n\n",
+//	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
+//	    fs.filesize, fs.sha1, fs.modtime, pathsub, fs.filename + pathskip, fs.linktarget, fs.filename);
+
+
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into inbound_file_entities  "
 	    "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
@@ -375,7 +390,6 @@ newbackup(int argc, char **argv)
 //	else
 //	    fprintf(stderr, "%s\n", fs.filename);
 	sqlite3_free(sqlstmt);
-
     }
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -2103,8 +2117,11 @@ int getconfig()
     struct stat tmpfstat;
     char configpath[256];
     FILE *configfile;
-    char configvar[256];
-    char configvalue[256];
+    char *configvar;
+    char *configvalue;
+    char **configlinel = NULL;
+    int i;
+    int j;
 
     config.vault = 0;
     config.meta = 0;
@@ -2114,11 +2131,22 @@ int getconfig()
     if (stat(configpath, &tmpfstat) == 0) {
 	configfile = fopen(configpath, "r");
 	while (getline(&configline, &configlinesz, configfile) > 0) {
-	    sscanf(configline, "%s = %s", configvar, configvalue);
-	    if (strcmp(configvar, "vault") == 0)
-		asprintf(&(config.vault), configvalue);
-	    if (strcmp(configvar, "meta") == 0)
-		asprintf(&(config.meta), configvalue);
+	    if ((j = parsex(configline, '=', &configlinel, 2) == 2)) {
+		configvar = configlinel[0];
+		configvalue = configlinel[1];
+		while (strchr(" \t\r\n", *configvar)  && *configvar != '\0')
+		    configvar++;
+		while (strchr(" \t\r\n", *configvalue) && *configvalue != '\0')
+		    configvalue++;
+		for (i = strlen(configvar) - 1; i >= 0 && strchr(" \t\r\n", configvar[i]); i--)
+		    configvar[i] = '\0';
+		for (i = strlen(configvalue) - 1; i >= 0 && strchr(" \t\r\n", configvalue[i]); i--)
+		    configvalue[i] = '\0';
+		if (strcmp(configvar, "vault") == 0)
+		    asprintf(&(config.vault), configvalue);
+		if (strcmp(configvar, "meta") == 0)
+		    asprintf(&(config.meta), configvalue);
+	    }
 	}
     }
     else
@@ -3464,4 +3492,24 @@ size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, uint32_
     fwrite(ptr, size, nmemb, stream);
     *chksum = lzo_adler32(*chksum, ptr, size * nmemb);
     return(r);
+}
+
+// Parses inbound instr, splitting it on character p
+// Returns number of fields, replacing instance of p with null
+int parsex(char *instr, char p, char ***b, int max)
+{
+    int i = 0;
+    char *a[256];
+    a[i] = instr;
+    while (*instr != '\0' && i < max) {
+	if (*instr == p) {
+	    *instr = '\0';
+	    a[++i] = instr + 1;
+	}
+	instr++;
+    }
+    i++;
+    *b = realloc(*b, i * sizeof(char *));
+    memcpy(*b, a, i * sizeof(char *));
+    return(i);
 }
