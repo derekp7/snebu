@@ -356,7 +356,7 @@ FINDCMD() {
     do
         findexclude=( "${findexclude[@]}" -path "$i" -o )
     done
-    find ${INCLUDE[@]} -xdev "${findexclude[@]}" \( -type f -o -type d \) \
+    find "${INCLUDE[@]}" -xdev "${findexclude[@]}" \( -type f -o -type d \) \
     -printf "${FILE_PATTERN}" -o -type l -printf "${LINK_PATTERN}"
 }
 
