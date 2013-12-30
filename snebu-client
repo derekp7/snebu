@@ -31,7 +31,7 @@ process_cmdline()
     while [ -n "$1" ]
     do
         case $1 in
-	    -c|config) configfile=$@; shift; shift;;
+	    -c|--config) configfile=$2; shift; shift;;
 	    -n|--name) backupname=$2; shift; shift;;
 	    --remote-client) clientname=$2; shift; shift;;
 	    --backup-server) bksvrname=$2; shift; shift;;
@@ -55,7 +55,7 @@ process_cmdline()
 
 defaults()
 {
-    configfile=/etc/snebu-client.conf
+    configfile=${configfile:-/etc/snebu-client.conf}
     SNEBU=snebu
     # Need to bring back command line vars, go get config file name override
     eval "${savevars}"
