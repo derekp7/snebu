@@ -344,8 +344,8 @@ rpcsh() {
 
 FINDCMD() {
     # Printf's used in find commandline
-    FILE_PATTERN="%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%T@\t%p\0"
-    LINK_PATTERN="%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%T@\t%p\0%l\0"
+    FILE_PATTERN="%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0"
+    LINK_PATTERN="%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0%l\0"
 
     # Build Find exclude commands from exclude list
     for i in "${EXCLUDE[@]}"
