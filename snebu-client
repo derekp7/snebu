@@ -378,7 +378,7 @@ do_backup()
         >/tmp/backup_include.${datestamp}
 
     # Now create a tar file and send it to Snebu
-    tar --one-file-system --no-recursion -P -T /tmp/backup_include.${datestamp} -cf - |\
+    tar --one-file-system --no-recursion --xattrs -P -T /tmp/backup_include.${datestamp} -cf - |\
         $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
     [ -n "${pluginpost}" ] && $pluginpost
