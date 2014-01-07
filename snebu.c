@@ -402,6 +402,9 @@ newbackup(int argc, char **argv)
 	sqlite3_free(sqlstmt);
     }
 
+#ifdef PRELOAD_DIRS_AND_SYMLINKS
+// This code will create entries for any directories / symlinks in input
+// file list, so they don't have to be submitted by submitfiles() tar
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities  "
 	"(ftype, permission, device_id, inode, user_name, user_id, group_name,  "
@@ -413,6 +416,7 @@ newbackup(int argc, char **argv)
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
+#endif
 
     if (force_full_backup == 1) {
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
