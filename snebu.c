@@ -284,7 +284,6 @@ newbackup(int argc, char **argv)
 	"    datestamp     integer,  \n"
 	"    filename      char,  \n"
 	"    extdata       char default '',  \n"
-	"    xheader       blob default '',  \n"
 	"    infilename    char,  \n"
 	"constraint inbound_file_entitiesc1 unique (  \n"
 	"    backupset_id,  \n"
@@ -302,8 +301,7 @@ newbackup(int argc, char **argv)
 	"    datestamp,  \n"
 	"    filename,  \n"
 	"    infilename, \n"
-	"    extdata, \n"
-	"    xheader))", 0, 0, &sqlerr);
+	"    extdata))", 0, 0, &sqlerr);
 
 //    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
@@ -1060,6 +1058,7 @@ int submitfiles(int argc, char **argv)
     fs.linktarget = 0;
     fs.extdata = 0;
     fs.xheader = 0;
+    fs.xheaderlen = 0;
     while ((optc = getopt_long(argc, argv, "n:d:v", longopts, &longoptidx)) >= 0)
 	switch (optc) {
 	    case 'n':
@@ -1314,7 +1313,6 @@ int submitfiles(int argc, char **argv)
             continue;
         }
 	// File type "x" is an extended header for the following file
-	fs.xheaderlen = 0;
 	if (*(tarhead.ftype) == 'x') {
             bytestoread=strtoull(tarhead.size, 0, 8);
 	    fs.xheaderlen = bytestoread;
@@ -1650,6 +1648,7 @@ int submitfiles(int argc, char **argv)
 	if (fs.xheader != 0)
 	    free(fs.xheader);
 	fs.xheader = 0;
+	fs.xheaderlen = 0;
     }
 
 }
