@@ -1175,43 +1175,6 @@ int submitfiles(int argc, char **argv)
 	    in_a_transaction = 0;
 	    if (verbose == 1)
 		fprintf(stderr, "\n");
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"create temporary view if not exists \n"
-		"    received_file_entities_ldi \n"
-		"as select \n"
-		"  ftype, permission, device_id, inode, user_name, user_id, \n"
-		"  group_name, group_id, size, sha1, cdatestamp, datestamp, n.filename, \n"
-		"   extdata, xheader \n"
-		"from ( \n"
-		"  select rr.file_id, rr.backupset_id, rr.ftype, rr.permission, \n"
-		"    rr.user_name, rr.user_id, rr.group_name, rr.group_id, rr.size, \n"
-		"    rr.sha1, rr.datestamp, rl.filename, rr.extdata, rr.xheader \n"
-		"  from  \n"
-		"    (select filename, extdata \n"
-		"    from received_file_entities \n"
-		"    where backupset_id = %d and ftype = 1 order by extdata) rl \n"
-		"  join ( \n"
-		"    select file_id, backupset_id, ftype, permission, user_name, user_id, \n"
-		"    group_name, group_id, size, sha1, datestamp, filename, extdata, xheader \n"
-		"    from received_file_entities where backupset_id = %d \n"
-		"    order by filename) rr \n"
-		"  on  \n"
-		"    rl.extdata = rr.filename \n"
-		"union \n"
-		"  select file_id, backupset_id, ftype, permission, user_name, user_id, \n"
-		"  group_name, group_id, size, sha1, datestamp, filename, extdata, xheader \n"
-		"  from received_file_entities where backupset_id = %d and ftype != 1 \n"
-		"  ) r \n"
-		"join ( \n"
-		"  select filename, infilename, device_id, inode, cdatestamp from needed_file_entities \n"
-		"  where backupset_id = %d \n"
-		") n \n"
-		"on r.filename = n.infilename", bkid, bkid, bkid, bkid)), 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
-	    sqlite3_free(sqlstmt);
 	    sqlite3_exec(bkcatalog,
 		"create temporary table if not exists received_file_entities_ldi_t (  \n"
 		"    ftype         char,  \n"
@@ -1251,12 +1214,80 @@ int submitfiles(int argc, char **argv)
 		sqlite3_free(sqlerr);
 	    }
 
+            sqlite3_exec(bkcatalog,
+                "create temporary table if not exists needed_file_entities_current ( "
+		"    device_id     char, "
+		"    inode         char, "
+		"    filename      char, "
+		"    infilename    char, "
+		"    size          integer, "
+		"    cdatestamp    integer, "
+		"unique ( "
+		"    filename, "
+		"    infilename ))", 0, 0, &sqlerr);
+
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+
+	    sqlite3_exec(bkcatalog,
+		"create index if not exists "
+		"needed_file_entities_current_i1 "
+		"on needed_file_entities_current ( "
+		"infilename, filename)", 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into received_file_entities_ldi_t (ftype, permission, device_id, inode,  "
-		"user_name, user_id, group_name, group_id, size, sha1, cdatestamp, datestamp, filename, extdata, xheader)  "
-		"select ftype, permission, device_id, inode, user_name, user_id, group_name,  "
-		"group_id, size, sha1, cdatestamp, datestamp, filename, extdata, xheader from received_file_entities_ldi  "
-		)), 0, 0, &sqlerr);
+		"insert into needed_file_entities_current "
+		"    select device_id, inode, filename, infilename, size, cdatestamp "
+		"    from needed_file_entities "
+		"    where backupset_id = %d; ", bkid
+	    )), 0, 0, &sqlerr);
+    
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_free(sqlstmt);
+
+	    fprintf(stderr, "Creating internal list of received files files\n");
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"insert into received_file_entities_ldi_t "
+		"    select rr.ftype, rr.permission, "
+		"    n.device_id, n.inode, "
+		"    rr.user_name, rr.user_id, rr.group_name, rr.group_id, rr.size, "
+		"    rr.sha1, n.cdatestamp, rr.datestamp, rl.filename, rr.extdata, rr.xheader "
+		" from received_file_entities rr "
+		"    join received_file_entities rl "
+		"    on rl.extdata = rr.filename "
+		"    join needed_file_entities_current n "
+		"    on rr.filename = n.infilename "
+		"    where rr.backupset_id = %d and "
+		"    rl.backupset_id = %d and "
+		"    rl.ftype = 1; ", bkid, bkid
+	    )), 0, 0, &sqlerr);
+
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_free(sqlstmt);
+
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"insert into received_file_entities_ldi_t "
+		"    select ftype, permission, n.device_id, n.inode, "
+		"    user_name, user_id, "
+		"    group_name, group_id, r.size, sha1, n.cdatestamp, datestamp, "
+		"    r.filename, extdata, xheader "
+		"    from received_file_entities r "
+		"    join needed_file_entities_current n "
+		"    on r.filename = n.infilename "
+		"    where r.backupset_id = %d and ftype != 1", bkid
+	    )), 0, 0, &sqlerr);
 
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
@@ -1268,7 +1299,7 @@ int submitfiles(int argc, char **argv)
 		"insert or ignore into file_entities (ftype, permission, device_id, inode,  "
 		"user_name, user_id, group_name, group_id, size, sha1, cdatestamp, datestamp, filename, extdata, xheader)  "
 		"select ftype, permission, device_id, inode, user_name, user_id, group_name,  "
-		"group_id, size, sha1, cdatestamp, datestamp, filename, extdata, xheader from received_file_entities_ldi  "
+		"group_id, size, sha1, cdatestamp, datestamp, filename, extdata, xheader from received_file_entities_ldi_t  "
 		)), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
@@ -2480,19 +2511,24 @@ char *stresc(char *src, unsigned char **target)
     int i;
     int j;
     int e = 0;
+    int len;
+    static int tlen = 16384;
 
-    for (i = 0; i < strlen(src); i++)
+    if (*target == 0)
+	*target = malloc(tlen);
+    len = strlen(src);
+    for (i = 0; i < len; i++)
 	if (src[i] <= 32 || src[i] >= 127 || src[i] == 92)
 	    e++;
-    *target = realloc(*target, strlen(src) + e * 4 + 1);
+//    *target = realloc(*target, len  + e * 4 + 1);
     (*target)[0] = 0;
     i = 0;
-    while (i < strlen(src)) {
-	for (j = i; i < strlen(src) && src[i] > 32 &&
+    while (i < len) {
+	for (j = i; i < len && src[i] > 32 &&
 	    src[i] < 127 && src[i] != 92; i++)
 	    ;
 	strncat(*target, src + j, i - j);
-	if (i < strlen(src)) {
+	if (i < len) {
 	    sprintf((*target) + strlen(*target), "\\%3.3o",
 		(unsigned char) src[i]);
 	    i++;
