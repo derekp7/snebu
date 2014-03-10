@@ -300,8 +300,22 @@ newbackup(int argc, char **argv)
 	"    cdatestamp,  \n"
 	"    datestamp,  \n"
 	"    filename,  \n"
-	"    infilename, \n"
-	"    extdata))", 0, 0, &sqlerr);
+	"    extdata, \n"
+	"    infilename))", 0, 0, &sqlerr);
+
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n\n\n",sqlerr);
+	    sqlite3_free(sqlerr);
+	}
+
+	sqlite3_exec(bkcatalog,
+        "create index if not exists inbound_file_entitiesi1 on inbound_file_entities (  \n"
+	"    infilename)", 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n\n\n",sqlerr);
+	    sqlite3_free(sqlerr);
+	}
+
 
 //    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
@@ -726,6 +740,12 @@ int initdb(sqlite3 *bkcatalog)
 	"    create index if not exists needed_file_entitiesi2 on needed_file_entities (  \n"
 	"    backupset_id, infilename, filename)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
+	"    create index if not exists needed_file_entitiesi3 on needed_file_entities (  \n"
+	"    infilename, filename)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index if not exists needed_file_entitiesi4 on needed_file_entities (  \n"
+	"    filename, infilename)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
 	"    create index if not exists backupset_detaili1 on backupset_detail (  \n"
 	"    file_id, backupset_id)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
@@ -740,12 +760,12 @@ int initdb(sqlite3 *bkcatalog)
     err = sqlite3_exec(bkcatalog,
 	"    create index if not exists received_file_entitiesi2 on received_file_entities (  \n"
 	"    extdata)", 0, 0, 0);
-    err = sqlite3_exec(bkcatalog,
-	"    create index if not exists received_file_entitiesi3 on received_file_entities (  \n"
-	"    backupset_id, filename)", 0, 0, 0);
-    err = sqlite3_exec(bkcatalog,
-	"    create index if not exists received_file_entitiesi4 on received_file_entities (  \n"
-	"    backupset_id, extdata)", 0, 0, 0);
+//    err = sqlite3_exec(bkcatalog,
+//	"    create index if not exists received_file_entitiesi3 on received_file_entities (  \n"
+//	"    backupset_id, filename)", 0, 0, 0);
+//    err = sqlite3_exec(bkcatalog,
+//	"    create index if not exists received_file_entitiesi4 on received_file_entities (  \n"
+//	"    backupset_id, extdata)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
 	"    create index if not exists received_file_entitiesi5 on received_file_entities (  \n"
 	"    sha1, filename)", 0, 0, 0);
@@ -1572,9 +1592,6 @@ int submitfiles(int argc, char **argv)
 		    free(tsparsedata);
 		}
 	    }
-
-
-
 
 	    sqlite3_bind_int(inbfrec, 1, bkid);
 	    sqlite3_bind_text(inbfrec, 2, sqlite3_mprintf("%c", fs.ftype), -1, SQLITE_STATIC);
