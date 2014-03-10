@@ -166,6 +166,7 @@ newbackup(int argc, char **argv)
     unsigned char *escltarget = 0;
     unsigned char *unescfname = 0;
     unsigned char *unescltarget = 0;
+    int verbose = 0;
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
 	{ "datestamp", required_argument, NULL, 'd' },
@@ -177,13 +178,14 @@ newbackup(int argc, char **argv)
 	{ "null-output", no_argument, NULL, 0 },
 	{ "not-null-output", no_argument, NULL, 0 },
 	{ "full", no_argument, NULL, 0 },
+	{ "verbose", no_argument, NULL, 'v' },
 	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
     int i;
     int numfld;
 
-    while ((optc = getopt_long(argc, argv, "n:d:r:", longopts, &longoptidx)) >= 0) {
+    while ((optc = getopt_long(argc, argv, "n:d:r:v", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -199,6 +201,10 @@ newbackup(int argc, char **argv)
 		strncpy(retention, optarg, 127);
 		retention[127] = 0;
 		foundopts |= 4;
+		break;
+	    case 'v':
+		verbose = 1;
+		foundopts |= 8;
 		break;
 	    case 0:
 		if (strcmp("graft", longopts[longoptidx].name) == 0) {
@@ -323,6 +329,8 @@ newbackup(int argc, char **argv)
 
 
 //    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+    if (verbose == 1)
+	fprintf(stderr, "Receiving input file list\n");
     while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
 	int pathskip = 0;
 	char *pathsub = "";
@@ -419,6 +427,8 @@ newbackup(int argc, char **argv)
 #ifdef PRELOAD_DIRS_AND_SYMLINKS
 // This code will create entries for any directories / symlinks in input
 // file list, so they don't have to be submitted by submitfiles() tar
+    if (verbose == 1)
+	fprintf(stderr, "Pre-loading directory and symlink entries\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities  "
 	"(ftype, permission, device_id, inode, user_name, user_id, group_name,  "
@@ -433,6 +443,8 @@ newbackup(int argc, char **argv)
 #endif
 
     if (force_full_backup == 1) {
+	if (verbose == 1)
+	    fprintf(stderr, "Forced full backup\n");
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
 	    "(backupset_id, device_id, inode, filename, infilename, size, cdatestamp)  "
@@ -440,6 +452,8 @@ newbackup(int argc, char **argv)
 	    "where backupset_id = '%d' and ftype = '0'", bkid)), 0, 0, &sqlerr);
     }
     else {
+	if (verbose == 1)
+	    fprintf(stderr, "Generating required files list\n");
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
 	    "(backupset_id, device_id, inode, filename, infilename, size, cdatestamp)  "
@@ -461,6 +475,8 @@ newbackup(int argc, char **argv)
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
 	}
+	if (verbose == 1)
+	    fprintf(stderr, "Loading existing files into backupset detail\n");
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into backupset_detail  "
 	    "(backupset_id, file_id)  "
@@ -480,7 +496,8 @@ newbackup(int argc, char **argv)
 	    sqlite3_free(sqlerr);
 	}
     }
-      
+    if (verbose == 1)
+	fprintf(stderr, "Printing required-file list\n");
     sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"select n.infilename from needed_file_entities n "
 	"join inbound_file_entities i "
@@ -1187,6 +1204,10 @@ int submitfiles(int argc, char **argv)
 	    in_a_transaction = 0;
 	    if (verbose == 1)
 		fprintf(stderr, "\n");
+
+	    if (verbose == 1)
+		fprintf(stderr, "Finished receiving files\n");
+
 	    sqlite3_exec(bkcatalog,
 		"create temporary table if not exists received_file_entities_ldi_t (  \n"
 		"    ftype         char,  \n"
@@ -1266,7 +1287,8 @@ int submitfiles(int argc, char **argv)
 	    }
 	    sqlite3_free(sqlstmt);
 
-	    fprintf(stderr, "Creating internal list of received files files\n");
+	    if (verbose == 1)
+		fprintf(stderr, "Creating internal list of received files files\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert into received_file_entities_ldi_t "
 		"    select rr.ftype, rr.permission, "
@@ -1305,8 +1327,11 @@ int submitfiles(int argc, char **argv)
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
 		sqlite3_free(sqlerr);
 	    }
+
 	    sqlite3_free(sqlstmt);
 
+	    if (verbose == 1)
+		fprintf(stderr, "Copying to file_entities\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into file_entities (ftype, permission, device_id, inode,  "
 		"user_name, user_id, group_name, group_id, size, sha1, cdatestamp, datestamp, filename, extdata, xheader)  "
@@ -1319,6 +1344,8 @@ int submitfiles(int argc, char **argv)
 	    }
 	    sqlite3_free(sqlstmt);
 
+	    if (verbose == 1)
+		fprintf(stderr, "Creating backupset_detail\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into backupset_detail (backupset_id, file_id) select %d,"
 		"f.file_id from file_entities f join received_file_entities_ldi_t r  "
