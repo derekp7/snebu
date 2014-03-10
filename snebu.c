@@ -57,6 +57,11 @@ int cread(void *buf, size_t sz, size_t count, struct cfile *cfile);
 uint32_t *htonlp(uint32_t v);
 uint16_t *htonsp(uint16_t v);
 size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, uint32_t *chksum);
+int getpaxvar(char *paxdata, int paxlen, char *name, char **rvalue, int *rvaluelen); 
+int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int invaluelen);
+int delpaxvar(char **paxdata, int *paxlen, char *inname);
+unsigned int ilog10(unsigned int n);
+
 struct cfile {
     char *buf;
     char *bufp;
@@ -1073,6 +1078,13 @@ int submitfiles(int argc, char **argv)
     unsigned long long bytes_read = 0;
     int verbose = 0;
     char statusline[80];
+    char *paxpath = NULL;
+    char *paxlinkpath = NULL;
+    int paxpathlen = 0;
+    int paxlinkpathlen = 0;
+    char *paxsize;
+    int paxsizelen;
+    int usepaxsize = 0;
 
     fs.filename = 0;
     fs.linktarget = 0;
@@ -1368,7 +1380,8 @@ int submitfiles(int argc, char **argv)
             bytestoread=strtoull(tarhead.size, 0, 8);
 	    fs.xheaderlen = bytestoread;
             blockpad = 512 - (bytestoread % 512);
-            fs.xheader = malloc(bytestoread + 1);
+//            fs.xheader = malloc(bytestoread + 1);
+            fs.xheader = malloc(bytestoread);
             tcount = 0;
             while (bytestoread - tcount > 0) {
                 count = fread(fs.xheader + tcount, 1, bytestoread - tcount, stdin);
@@ -1379,17 +1392,39 @@ int submitfiles(int argc, char **argv)
                 count = fread(junk, 1, blockpad - tcount, stdin);
                 tcount += count;
             }
-	    fs.xheader[bytestoread] = 0;
-            continue;
+//	    fs.xheader[bytestoread] = 0;
+	    if (getpaxvar(fs.xheader, fs.xheaderlen, "path", &paxpath, &paxpathlen) == 0) {
+		fs.filename = malloc(paxpathlen);
+		strncpy(fs.filename, paxpath, paxpathlen);
+		fs.filename[paxpathlen - 1] = '\0';
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "path");
+	    }
+	    if (getpaxvar(fs.xheader, fs.xheaderlen, "linkpath", &paxlinkpath, &paxlinkpathlen) == 0) {
+		fs.linktarget = malloc(paxlinkpathlen);
+		strncpy(fs.linktarget, paxlinkpath, paxlinkpathlen);
+		fs.linktarget[paxlinkpathlen - 1] = '\0';
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "linkpath");
+	    }
+	    if (getpaxvar(fs.xheader, fs.xheaderlen, "size", &paxsize, &paxsizelen) == 0) {
+		fs.filesize = strtoull(paxsize, 0, 10);
+		usepaxsize = 1;
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "size");
+	    }
 
+            continue;
 	}
 	// Process TAR header
-        fs.filesize = 0;
-        if ((unsigned char) tarhead.size[0] == 128)
-            for (i = 0; i < 8; i++)
-                fs.filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
-        else
-            fs.filesize=strtoull(tarhead.size, 0, 8);
+	if (usepaxsize == 0) {
+	    fs.filesize = 0;
+	    if ((unsigned char) tarhead.size[0] == 128)
+		for (i = 0; i < 8; i++)
+		    fs.filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
+	    else
+		fs.filesize=strtoull(tarhead.size, 0, 8);
+	}
+	else {
+	    usepaxsize = 0;
+	}
 	fs.ftype = *tarhead.ftype;
         fs.nuid=strtol(tarhead.nuid, 0, 8);
         fs.ngid=strtol(tarhead.ngid, 0, 8);
@@ -1667,6 +1702,23 @@ int submitfiles(int argc, char **argv)
 	    if (*(tarhead.ftype) == '5')
 		if (fs.filename[strlen(fs.filename) - 1] == '/')
 		    fs.filename[strlen(fs.filename) - 1] = 0;
+
+	    sqlite3_bind_int(inbfrec, 1, bkid);
+	    sqlite3_bind_text(inbfrec, 2, sqlite3_mprintf("%c", fs.ftype), -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 3, sqlite3_mprintf("%4.4o", fs.mode), -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 4, fs.auid, -1, SQLITE_STATIC);
+	    sqlite3_bind_int(inbfrec, 5, fs.nuid);
+	    sqlite3_bind_text(inbfrec, 6, fs.agid, -1, SQLITE_STATIC);
+	    sqlite3_bind_int(inbfrec, 7, fs.ngid);
+	    sqlite3_bind_int64(inbfrec, 8, fs.filesize);
+	    sqlite3_bind_text(inbfrec, 9, fs.sha1, -1, SQLITE_STATIC);
+	    sqlite3_bind_int(inbfrec, 10, fs.modtime);
+	    sqlite3_bind_text(inbfrec, 11, fs.filename, -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 12, fs.linktarget == 0 ? "" : fs.linktarget, -1, SQLITE_STATIC);
+	    sqlite3_bind_blob(inbfrec, 13, fs.xheaderlen == 0 ? "" : fs.xheader, fs.xheaderlen, SQLITE_STATIC);
+	    sqlite3_step(inbfrec) || fprintf(stderr, "sqlite3_step error\n"); ;
+	    sqlite3_reset(inbfrec);
+/*
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into received_file_entities  "
 		"(backupset_id, ftype, permission, user_name, user_id, group_name,  "
@@ -1675,6 +1727,7 @@ int submitfiles(int argc, char **argv)
 		bkid, fs.ftype, fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 		fs.filesize, "0", fs.modtime, fs.filename, fs.linktarget, fs.xheader)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
+*/
 
 	}
 	bytes_read += fs.filesize;
@@ -3687,3 +3740,131 @@ int parsex(char *instr, char p, char ***b, int max)
     memcpy(*b, a, i * sizeof(char *));
     return(i);
 }
+
+int getpaxvar(char *paxdata, int paxlen, char *name, char **rvalue, int *rvaluelen) {
+    char *nvp = paxdata;
+    int nvplen;
+    char *cname;
+    int cnamelen;
+    char *value;
+    int valuelen;
+
+    while (nvp < paxdata + paxlen) {
+	nvplen = strtol(nvp, &cname, 10);
+	cname++;
+	value = strchr(cname, '=');
+	cnamelen = value - cname;
+	value++;
+	valuelen = nvp + nvplen - value;
+	if (strncmp(name, cname, cnamelen) == 0) {
+	    *rvalue = value;
+	    *rvaluelen = valuelen;
+	    return(0);
+	}
+	nvp += nvplen;
+    }
+    return(1);
+}
+
+int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int invaluelen) {
+    char *cnvp = *paxdata;
+    int cnvplen;
+    char *cname;
+    int cnamelen;
+    char *cvalue;
+    int cvaluelen;
+    int addnvplen = 0;
+    int innamelen = strlen(inname);
+    int innvplen;
+    static char *nvpline = NULL;
+    int foundit=0;
+
+    innvplen = innamelen + invaluelen + 3 + (ilog10(innamelen + invaluelen + 3 + (ilog10( innamelen + invaluelen + 3)) + 1)) + 1;
+    nvpline = realloc(nvpline, innvplen + 1);
+    sprintf(nvpline, "%d %s=%s\n", innvplen, inname, invalue);
+
+
+    while (cnvp < *paxdata + *paxlen) {
+        cnvplen = strtol(cnvp, &cname, 10);
+        cname++;
+        cvalue = strchr(cname, '=');
+        cnamelen = cvalue - cname;
+        cvalue++;
+        cvaluelen = cnvp + cnvplen - cvalue;
+        if (strncmp(inname, cname, cnamelen) == 0) {
+            if (innvplen > cnvplen) {
+                *paxlen = *paxlen + (innvplen - cnvplen);
+                *paxdata = realloc(*paxdata, *paxlen);
+                memmove(cnvp + innvplen, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
+                memcpy(cnvp, nvpline, innvplen);
+            }
+            else if (innvplen < cnvplen) {
+                memmove(cnvp + innvplen, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
+                memcpy(cnvp, nvpline, innvplen);
+                *paxlen = *paxlen + (innvplen - cnvplen);
+                *paxdata = realloc(*paxdata, *paxlen);
+            }
+            else {
+                memcpy(cnvp, nvpline, innvplen);
+            }
+            foundit = 1;
+            break;
+        }
+        cnvp += cnvplen;
+    }
+    if (foundit == 0) {
+        *paxdata = realloc(*paxdata, *paxlen + innvplen);
+        memcpy(*paxdata + *paxlen, nvpline, innvplen);
+        *paxlen = *paxlen + innvplen;
+    }
+    return(0);
+}
+int delpaxvar(char **paxdata, int *paxlen, char *inname) {
+    char *cnvp = *paxdata;
+    int cnvplen;
+    char *cname;
+    int cnamelen;
+    char *cvalue;
+    int cvaluelen;
+
+    while (cnvp < *paxdata + *paxlen) {
+        cnvplen = strtol(cnvp, &cname, 10);
+        cname++;
+        cvalue = strchr(cname, '=');
+        cnamelen = cvalue - cname;
+        cvalue++;
+        cvaluelen = cnvp + cnvplen - cvalue;
+        if (strncmp(inname, cname, cnamelen) == 0) {
+            memmove(cnvp, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
+            *paxlen = *paxlen - cnvplen;
+            *paxdata = realloc(*paxdata, *paxlen);
+            break;
+        }
+        cnvp += cnvplen;
+    }
+    return(0);
+}
+unsigned int ilog10(unsigned int n) {
+    static int lt[] = { 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000, 0xffffffff };
+
+    int min = 0;
+    int max = sizeof(lt) / sizeof(*lt) - 1;
+    int mid;
+
+    while (max >= min) {
+	mid = (int) (((min + max) / 2));
+	if (n >= lt[min]  && n < lt[mid]) {
+	    if (min + 1 == mid)
+		return(min);
+	    else
+		max = mid;
+	}
+	else if (n >= lt[mid] && (n < 0xffffffff ? n < lt[max] : n <= lt[max])) {
+	    if (mid + 1 == max)
+		return(mid);
+	    else
+		min = mid;
+	}
+    }
+}
+
