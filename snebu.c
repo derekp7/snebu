@@ -1728,10 +1728,11 @@ int submitfiles(int argc, char **argv)
 		    if (i == 0)
 			fprintf(sparsefileh, "%llu:%llu:%llu", fs.filesize, sparsedata[i].offset, sparsedata[i].size);
 		    else
-			asprintf(&tsparsedata, ":%llu:%llu", sparsedata[i].offset, sparsedata[i].size);
+			fprintf(sparsefileh, ":%llu:%llu", sparsedata[i].offset, sparsedata[i].size);
 		}
 		fclose(sparsefileh);
 
+#ifdef old_sparse_fmt
 		tsparsedata = 0;
 		fs.extdata = 0;
 		for (i = 0; i < n_sparsedata; i++) {
@@ -1748,6 +1749,7 @@ int submitfiles(int argc, char **argv)
 		    strcat(fs.extdata, tsparsedata);
 		    free(tsparsedata);
 		}
+#endif
 	    }
 
 	    sqlite3_bind_int(inbfrec, 1, bkid);
