@@ -1499,6 +1499,8 @@ int submitfiles(int argc, char **argv)
 		usepaxsize = 1;
 		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "size");
 	    }
+	    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "mtime");
+	    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "ctime");
 
             continue;
 	}
@@ -1905,7 +1907,8 @@ int restore(int argc, char **argv)
     const unsigned char *sha1;
     const unsigned char *filename = 0;
     const unsigned char *linktarget = 0;
-    const unsigned char *xheader = 0;
+    const unsigned char *xheader_d = 0;
+    char *xheader = 0;
     int xheaderlen = 0;
     int optc;
     int foundopts = 0;
@@ -1962,9 +1965,14 @@ int restore(int argc, char **argv)
     char *filespec = 0;
     int filespeclen;
     char *sqlerr;
+    int use_pax_header = 0;
+    int verbose = 0;
+    char pax_size[64];
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
 	{ "datestamp", required_argument, NULL, 'd' },
+	{ "pax", no_argument, NULL, 'p' },
+	{ "verbose", no_argument, NULL, 'v' },
 	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
@@ -1989,6 +1997,14 @@ int restore(int argc, char **argv)
 		strncpy(retention, optarg, 127);
 		retention[127] = 0;
 		foundopts |= 4;
+		break;
+	    case 'v':
+		verbose = 1;
+		foundopts |= 4;
+		break;
+	    case 0:
+		if (strcmp("pax", longopts[longoptidx].name) == 0)
+                    use_pax_header = 1;
 		break;
 	    default:
 		usage();
@@ -2144,8 +2160,89 @@ int restore(int argc, char **argv)
 	    }
 	    free(sparsefilepath);
 	}
-	xheader = sqlite3_column_blob(sqlres, 13);
+	xheader_d = sqlite3_column_blob(sqlres, 13);
 	xheaderlen = sqlite3_column_bytes(sqlres, 13);
+	if (xheaderlen > 0) {
+	    xheader = realloc(xheader, xheaderlen); // make a private copy of xheader
+	    memcpy(xheader, xheader_d, xheaderlen);
+	    use_pax_header = 1;
+	}
+
+
+	if (linktarget != 0) {
+	    if (strlen(linktarget) > 100) {
+		if (use_pax_header == 0) {
+		    for (i = 0; i < sizeof(longtarhead); i++)
+			(((unsigned char *) (&longtarhead)))[i] = 0;
+		    strcpy(longtarhead.filename, "././@LongLink");
+		    *(longtarhead.ftype) = 'K';
+		    strcpy(longtarhead.nuid, "0000000");
+		    strcpy(longtarhead.ngid, "0000000");
+		    strcpy(longtarhead.mode, "0000000");
+		    sprintf(longtarhead.size, "%11.11o", strlen(linktarget));
+		    strcpy(longtarhead.modtime, "00000000000");
+		    strcpy(longtarhead.ustar, "ustar  ");
+		    strcpy(longtarhead.auid, "root");
+		    strcpy(longtarhead.agid, "root");
+		    memcpy(longtarhead.chksum, "        ", 8);
+		    for (tmpchksum = 0, p = (unsigned char *) (&longtarhead), i = 512;
+			i != 0; --i, ++p)
+			tmpchksum += 0xFF & *p;
+		    sprintf(longtarhead.chksum, "%6o", tmpchksum);
+		    fwrite(&longtarhead, 1, 512, stdout);
+		    tblocks++;
+		    for (i = 0; i < strlen(linktarget); i += 512) {
+			for (j = 0; j < 512; j++)
+			    curblock[j] = 0;
+			memcpy(curblock, linktarget + i, strlen(linktarget) - i >= 512 ? 512 :
+			    (strlen(linktarget) - i));
+			fwrite(curblock, 1, 512, stdout);
+			tblocks++;
+		    }
+		}
+		else {
+		    setpaxvar(&xheader, &xheaderlen, "linkpath", (char *) linktarget, strlen(linktarget));
+		}
+	    }
+	}
+	if (strlen(filename) > 100) {
+	    if (use_pax_header == 0) {
+		for (i = 0; i < sizeof(longtarhead); i++)
+		    (((unsigned char *) (&longtarhead)))[i] = 0;
+		strcpy(longtarhead.filename, "././@LongLink");
+		*(longtarhead.ftype) = 'L';
+		strcpy(longtarhead.nuid, "0000000");
+		strcpy(longtarhead.ngid, "0000000");
+		strcpy(longtarhead.mode, "0000000");
+		sprintf(longtarhead.size, "%11.11o", strlen(filename));
+		strcpy(longtarhead.modtime, "00000000000");
+		strcpy(longtarhead.ustar, "ustar  ");
+		strcpy(longtarhead.auid, "root");
+		strcpy(longtarhead.agid, "root");
+		memcpy(longtarhead.chksum, "        ", 8);
+		for (tmpchksum = 0, p = (unsigned char *) (&longtarhead), i = 512;
+		    i != 0; --i, ++p)
+		    tmpchksum += 0xFF & *p;
+		sprintf(longtarhead.chksum, "%6.6o", tmpchksum);
+		fwrite(&longtarhead, 1, 512, stdout);
+		tblocks++;
+		for (i = 0; i < strlen(filename); i += 512) {
+		    for (j = 0; j < 512; j++)
+			curblock[j] = 0;
+		    memcpy(curblock, filename + i, strlen(filename) - i >= 512 ? 512 :
+			(strlen(filename) - i));
+		    fwrite(curblock, 1, 512, stdout);
+		    tblocks++;
+		}
+	    }
+	    else {
+		setpaxvar(&xheader, &xheaderlen, "path", (char *) filename, strlen(filename));
+	    }
+	}
+	if (t.ftype != 'S' && use_pax_header == 1 && t.filesize > 0xFFFFFFFFULL) {
+	    sprintf(pax_size, "%lld", t.filesize);
+	    setpaxvar(&xheader, &xheaderlen, "size", pax_size, strlen(pax_size));
+	}
 
 	if (xheader != 0 && xheaderlen > 0) {
 	    for (i = 0; i < sizeof(xtarhead); i++)
@@ -2172,66 +2269,6 @@ int restore(int argc, char **argv)
 		    curblock[j] = 0;
 		memcpy(curblock, xheader+ i, xheaderlen - i >= 512 ? 512 :
 		    (xheaderlen - i));
-		fwrite(curblock, 1, 512, stdout);
-		tblocks++;
-	    }
-	}
-	if (linktarget != 0) {
-    	    if (strlen(linktarget) > 100) {
-    		for (i = 0; i < sizeof(longtarhead); i++)
-    		    (((unsigned char *) (&longtarhead)))[i] = 0;
-    		strcpy(longtarhead.filename, "././@LongLink");
-    		*(longtarhead.ftype) = 'K';
-    		strcpy(longtarhead.nuid, "0000000");
-    		strcpy(longtarhead.ngid, "0000000");
-    		strcpy(longtarhead.mode, "0000000");
-    		sprintf(longtarhead.size, "%11.11o", strlen(linktarget));
-    		strcpy(longtarhead.modtime, "00000000000");
-    		strcpy(longtarhead.ustar, "ustar  ");
-    		strcpy(longtarhead.auid, "root");
-    		strcpy(longtarhead.agid, "root");
-    		memcpy(longtarhead.chksum, "        ", 8);
-    		for (tmpchksum = 0, p = (unsigned char *) (&longtarhead), i = 512;
-    		    i != 0; --i, ++p)
-    		    tmpchksum += 0xFF & *p;
-    		sprintf(longtarhead.chksum, "%6o", tmpchksum);
-    		fwrite(&longtarhead, 1, 512, stdout);
-		tblocks++;
-    		for (i = 0; i < strlen(linktarget); i += 512) {
-    		    for (j = 0; j < 512; j++)
-    			curblock[j] = 0;
-    		    memcpy(curblock, linktarget + i, strlen(linktarget) - i >= 512 ? 512 :
-    			(strlen(linktarget) - i));
-		    fwrite(curblock, 1, 512, stdout);
-		    tblocks++;
-    		}
-    	    }
-	}
-	if (strlen(filename) > 100) {
-	    for (i = 0; i < sizeof(longtarhead); i++)
-		(((unsigned char *) (&longtarhead)))[i] = 0;
-	    strcpy(longtarhead.filename, "././@LongLink");
-	    *(longtarhead.ftype) = 'L';
-	    strcpy(longtarhead.nuid, "0000000");
-	    strcpy(longtarhead.ngid, "0000000");
-	    strcpy(longtarhead.mode, "0000000");
-	    sprintf(longtarhead.size, "%11.11o", strlen(filename));
-	    strcpy(longtarhead.modtime, "00000000000");
-	    strcpy(longtarhead.ustar, "ustar  ");
-	    strcpy(longtarhead.auid, "root");
-	    strcpy(longtarhead.agid, "root");
-	    memcpy(longtarhead.chksum, "        ", 8);
-	    for (tmpchksum = 0, p = (unsigned char *) (&longtarhead), i = 512;
-		i != 0; --i, ++p)
-		tmpchksum += 0xFF & *p;
-	    sprintf(longtarhead.chksum, "%6.6o", tmpchksum);
-	    fwrite(&longtarhead, 1, 512, stdout);
-	    tblocks++;
-	    for (i = 0; i < strlen(filename); i += 512) {
-		for (j = 0; j < 512; j++)
-		    curblock[j] = 0;
-		memcpy(curblock, filename + i, strlen(filename) - i >= 512 ? 512 :
-		    (strlen(filename) - i));
 		fwrite(curblock, 1, 512, stdout);
 		tblocks++;
 	    }
@@ -2304,15 +2341,17 @@ int restore(int argc, char **argv)
 	    }
 	}
 
-	if (t.filesize <= 99999999999LL)
-	    sprintf(tarhead.size, "%11.11llo", t.filesize);
+	if (use_pax_header == 1 && t.filesize > 0xFFFFFFFFULL)
+	    sprintf(tarhead.size, "%11.11llo", 0);
 	else {
-	    tarhead.size[0] = 0x80;
-	    for (i = 0; i < sizeof(t.filesize); i++)
-		if (lendian)
-		    tarhead.size[11 - i] = ((char *) (&t.filesize))[i];
-		else
-		    tarhead.size[11 - sizeof(t.filesize)+ i] = ((char *) (&t.filesize))[i];
+	    if (t.filesize <= 077777777777LL)
+		sprintf(tarhead.size, "%11.11llo", t.filesize);
+		tarhead.size[0] = 0x80;
+		for (i = 0; i < sizeof(t.filesize); i++)
+		    if (lendian)
+			tarhead.size[11 - i] = ((char *) (&t.filesize))[i];
+		    else
+			tarhead.size[11 - sizeof(t.filesize)+ i] = ((char *) (&t.filesize))[i];
 	}
 
 	memcpy(tarhead.chksum, "        ", 8);
