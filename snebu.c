@@ -58,6 +58,7 @@ uint32_t *htonlp(uint32_t v);
 uint16_t *htonsp(uint16_t v);
 size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, uint32_t *chksum);
 int getpaxvar(char *paxdata, int paxlen, char *name, char **rvalue, int *rvaluelen); 
+int cmpspaxvar(char *paxdata, int paxlen, char *name, char *invalue);
 int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int invaluelen);
 int delpaxvar(char **paxdata, int *paxlen, char *inname);
 unsigned int ilog10(unsigned int n);
@@ -469,12 +470,15 @@ newbackup(int argc, char **argv)
 	    "or i.extdata = f.extdata)  "
 	    "left join diskfiles d "
 	    "on f.sha1 = d.sha1 "
-	    "where i.backupset_id = '%d' and (f.file_id is null or "
-	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))", bkid)), 0, 0, &sqlerr);
+//	    "where i.backupset_id = '%d' and (f.file_id is null or "
+//	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))", bkid)), 0, 0, &sqlerr);
+	    "where (f.file_id is null or "
+	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))")), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
 	}
+	sqlite3_free(sqlstmt);
 	if (verbose == 1)
 	    fprintf(stderr, "Loading existing files into backupset detail\n");
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -495,6 +499,7 @@ newbackup(int argc, char **argv)
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
 	}
+	sqlite3_free(sqlstmt);
     }
     if (verbose == 1)
 	fprintf(stderr, "Printing required-file list\n");
@@ -1099,9 +1104,24 @@ int submitfiles(int argc, char **argv)
     char *paxlinkpath = NULL;
     int paxpathlen = 0;
     int paxlinkpathlen = 0;
-    char *paxsize;
-    int paxsizelen;
+    char *paxsize = NULL;
+    int paxsizelen = 0;
     int usepaxsize = 0;
+    int paxsparse = 0;
+    char *paxsparsename = 0;
+    int paxsparsenamelen = 0;
+    char *paxsparsesize = 0;
+    int paxsparsesizelen = 0;
+    char *paxsparsesegt = malloc(64);
+    size_t paxsparsesegtn = 0;
+    int paxsparsenseg = 0;
+    char *paxj = NULL;
+    int paxjn = 0;
+    int paxsparsehdrsz = 0;
+    int blocksize;
+    char *mp1;
+    char *mp2;
+    char *sparsefilep = NULL;
 
     fs.filename = 0;
     fs.linktarget = 0;
@@ -1189,6 +1209,7 @@ int submitfiles(int argc, char **argv)
 	"@ngid, @filesize, @sha1, @modtime, @filename, @linktarget, @xheader)");
 
     sqlite3_prepare_v2(bkcatalog, sqlstmt, -1, &inbfrec, 0);
+    sqlite3_free(sqlstmt);
 
     // Read TAR file from std input
     while (1) {
@@ -1199,7 +1220,6 @@ int submitfiles(int argc, char **argv)
                 return (1);
         }
         if (tarhead.filename[0] == 0) {	// End of TAR archive
-
 	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 	    in_a_transaction = 0;
 	    if (verbose == 1)
@@ -1499,8 +1519,23 @@ int submitfiles(int argc, char **argv)
 		usepaxsize = 1;
 		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "size");
 	    }
-	    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "mtime");
-	    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "ctime");
+	    if (cmpspaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.major", "1") == 0 &&
+		cmpspaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.minor", "0") == 0) {
+		paxsparse=1;
+		getpaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.name", &paxsparsename, &paxsparsenamelen); //TODO handle error status
+		getpaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.realsize", &paxsparsesize, &paxsparsesizelen); //TODO handle error status
+		s_realsize = strtoull(paxsparsesize, 0, 10);
+		fs.filename = malloc(paxsparsenamelen);
+		strncpy(fs.filename, paxsparsename, paxsparsenamelen - 1);
+		fs.filename[paxsparsenamelen - 1] = '\0';
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.major");
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.minor");
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.name");
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.realsize");
+
+	    }
+//	    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "mtime");
+//	    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "ctime");
 
             continue;
 	}
@@ -1516,13 +1551,19 @@ int submitfiles(int argc, char **argv)
 	else {
 	    usepaxsize = 0;
 	}
-	fs.ftype = *tarhead.ftype;
+	if (paxsparse == 1)
+	    fs.ftype = 'S';
+	else
+	    fs.ftype = *tarhead.ftype;
+
         fs.nuid=strtol(tarhead.nuid, 0, 8);
         fs.ngid=strtol(tarhead.ngid, 0, 8);
         fs.modtime=strtol(tarhead.modtime, 0, 8);
         fs.mode=strtol(tarhead.mode + 2, 0, 8);
         fullblocks = (fs.filesize / 512);
-        partialblock = fs.filesize - (fullblocks * 512);
+        partialblock = fs.filesize % 512;
+	blockstoread = fullblocks + (partialblock > 0 ? 1 : 0);
+	blocksize = 512;
 
         if (strlen(tarhead.auid) == 0)
             sprintf(tarhead.auid, "%d", fs.nuid);
@@ -1606,10 +1647,28 @@ int submitfiles(int argc, char **argv)
                     }
                 }
             } //  End sparse file handling
-            if (partialblock > 0)
-                blockpad = 512 - partialblock;
-            else
-                blockpad = 0;
+
+	    if (paxsparse == 1 && *(tarhead.ftype) == '0') {
+		paxsparsehdrsz = 0;
+		paxsparsehdrsz += getline(&paxsparsesegt, &paxsparsesegtn, stdin);
+		paxsparsenseg = atoi(paxsparsesegt);
+		n_sparsedata = 0;
+		while (paxsparsenseg-- > 0) {
+		    if (n_sparsedata >= m_sparsedata - 1)
+			sparsedata = realloc(sparsedata, sizeof(*sparsedata) * (m_sparsedata += 20));
+		    paxsparsehdrsz += getline(&paxsparsesegt, &paxsparsesegtn, stdin);
+		    sparsedata[n_sparsedata].offset = strtoull(paxsparsesegt, 0, 10);
+		    paxsparsehdrsz += getline(&paxsparsesegt, &paxsparsesegtn, stdin);
+		    sparsedata[n_sparsedata].size = strtoull(paxsparsesegt, 0, 10);
+		    n_sparsedata++;
+		}
+		paxsparsehdrsz += fread(junk, 1, 512 - paxsparsehdrsz % 512, stdin);
+		fullblocks = (fs.filesize / 512) - (int) (paxsparsehdrsz / 512);
+		fs.filesize -= paxsparsehdrsz;
+		blockstoread -= (int) paxsparsehdrsz / 512;
+		blocksize = 512 - paxsparsehdrsz % 512;
+	    }
+
 
 	    // Set up temporary file to write out to.
             tmpfilepath = malloc(strlen(tmpfiledir) + 10);
@@ -1619,47 +1678,46 @@ int submitfiles(int argc, char **argv)
                 fprintf(stderr, "Error opening temp file %s\n", tmpfilepath);
                 return(1);
             }
-#ifdef notdef
-	    // Set up a pipe to run file through a compressor.
-            pipe(zin);
-            if ((cprocess = fork()) == 0) {
-                close(zin[1]);
-                dup2(zin[0], 0);
-                dup2(curtmpfile, 1);
-                execlp("lzop", "lzop", (char *) NULL);
-                printf("Error\n");
-                return(1);
-            }
-            close(zin[0]);
-            curfile = fdopen(zin[1], "w");
-#endif
 	    curfile = cfinit(fdopen(curtmpfile, "w"));
-            blockstoread = fullblocks + (partialblock > 0 ? 1 : 0);
             SHA1_Init(&cfsha1ctl);
+
+            if (*(tarhead.ftype) == 'S' || paxsparse == 1) {
+		for (i = 0; i < n_sparsedata; i++) {
+		    if (i == 0) {
+			asprintf(&sparsefilep, "%llu:%llu:%llu", fs.filesize, sparsedata[i].offset, sparsedata[i].size);
+			cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
+			SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
+		    }
+		    else {
+			asprintf(&sparsefilep, ":%llu:%llu", sparsedata[i].offset, sparsedata[i].size);
+			cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
+			SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
+		    }
+		}
+		asprintf(&sparsefilep, "\n");
+                cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
+                SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
+	    }
+
             for (i = 1; i <= blockstoread; i++) {
-                count = fread(curblock, 1, 512, stdin);
-                if (count < 512) {
+                count = fread(curblock, 1, blocksize, stdin);
+                if (count < blocksize) {
                     printf("tar short read\n");
                     return(1);
                 }
 
                 if (i == blockstoread) {
                     if (partialblock > 0) {
-//                        fwrite(curblock, 1, partialblock, curfile);
                         cwrite(curblock, 1, partialblock, curfile);
                         SHA1_Update(&cfsha1ctl, curblock, partialblock);
                         break;
                     }
                 }
-//                fwrite(curblock, 512, 1, curfile);
-                cwrite(curblock, 512, 1, curfile);
-                SHA1_Update(&cfsha1ctl, curblock, 512);
+                cwrite(curblock, blocksize, 1, curfile);
+                SHA1_Update(&cfsha1ctl, curblock, blocksize);
+		blocksize=512;
             }
 
-//            fflush(curfile);
-//            fclose(curfile);
-//            waitpid(cprocess, NULL, 0);
-//            close(curtmpfile);
 	    cclose(curfile);
 	    if (in_a_transaction == 0) {
 		sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
@@ -1721,7 +1779,8 @@ int submitfiles(int argc, char **argv)
 	    }
 
 
-            if (*(tarhead.ftype) == 'S') {
+#ifdef old_sparse_fmt
+            if (*(tarhead.ftype) == 'S' || paxsparse == 1) {
 		sprintf((destfilepaths = realloc(destfilepaths, strlen(destdir) + strlen(cfsha1a) + 6)), "%s/%s/%s.s", destdir, cfsha1d, cfsha1f);
 		sparsefileh = fopen(destfilepaths, "w");
 		for (i = 0; i < n_sparsedata; i++) {
@@ -1732,7 +1791,6 @@ int submitfiles(int argc, char **argv)
 		}
 		fclose(sparsefileh);
 
-#ifdef old_sparse_fmt
 		tsparsedata = 0;
 		fs.extdata = 0;
 		for (i = 0; i < n_sparsedata; i++) {
@@ -1749,17 +1807,17 @@ int submitfiles(int argc, char **argv)
 		    strcat(fs.extdata, tsparsedata);
 		    free(tsparsedata);
 		}
-#endif
 	    }
+#endif
 
 	    sqlite3_bind_int(inbfrec, 1, bkid);
-	    sqlite3_bind_text(inbfrec, 2, sqlite3_mprintf("%c", fs.ftype), -1, SQLITE_STATIC);
-	    sqlite3_bind_text(inbfrec, 3, sqlite3_mprintf("%4.4o", fs.mode), -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 2, (mp1 = sqlite3_mprintf("%c", fs.ftype)), -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 3, (mp2 = sqlite3_mprintf("%4.4o", fs.mode)), -1, SQLITE_STATIC);
 	    sqlite3_bind_text(inbfrec, 4, fs.auid, -1, SQLITE_STATIC);
 	    sqlite3_bind_int(inbfrec, 5, fs.nuid);
 	    sqlite3_bind_text(inbfrec, 6, fs.agid, -1, SQLITE_STATIC);
 	    sqlite3_bind_int(inbfrec, 7, fs.ngid);
-	    sqlite3_bind_int64(inbfrec, 8, fs.filesize);
+	    sqlite3_bind_int64(inbfrec, 8, fs.ftype == 'S' || paxsparse == 1 ? s_realsize : fs.filesize);
 	    sqlite3_bind_text(inbfrec, 9, fs.sha1, -1, SQLITE_STATIC);
 	    sqlite3_bind_int(inbfrec, 10, fs.modtime);
 	    sqlite3_bind_text(inbfrec, 11, fs.filename, -1, SQLITE_STATIC);
@@ -1767,6 +1825,9 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_bind_blob(inbfrec, 13, fs.xheaderlen == 0 ? "" : fs.xheader, fs.xheaderlen, SQLITE_STATIC);
 	    sqlite3_step(inbfrec) || fprintf(stderr, "sqlite3_step error\n"); ;
 	    sqlite3_reset(inbfrec);
+	    sqlite3_free(mp1);
+	    sqlite3_free(mp2);
+	    paxsparse = 0;
 	
 
 /*
@@ -1797,20 +1858,22 @@ int submitfiles(int argc, char **argv)
 		    fs.filename[strlen(fs.filename) - 1] = 0;
 
 	    sqlite3_bind_int(inbfrec, 1, bkid);
-	    sqlite3_bind_text(inbfrec, 2, sqlite3_mprintf("%c", fs.ftype), -1, SQLITE_STATIC);
-	    sqlite3_bind_text(inbfrec, 3, sqlite3_mprintf("%4.4o", fs.mode), -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 2, (mp1 = sqlite3_mprintf("%c", fs.ftype)), -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 3, (mp2 = sqlite3_mprintf("%4.4o", fs.mode)), -1, SQLITE_STATIC);
 	    sqlite3_bind_text(inbfrec, 4, fs.auid, -1, SQLITE_STATIC);
 	    sqlite3_bind_int(inbfrec, 5, fs.nuid);
 	    sqlite3_bind_text(inbfrec, 6, fs.agid, -1, SQLITE_STATIC);
 	    sqlite3_bind_int(inbfrec, 7, fs.ngid);
 	    sqlite3_bind_int64(inbfrec, 8, fs.filesize);
-	    sqlite3_bind_text(inbfrec, 9, fs.sha1, -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 9, "0", -1, SQLITE_STATIC);
 	    sqlite3_bind_int(inbfrec, 10, fs.modtime);
 	    sqlite3_bind_text(inbfrec, 11, fs.filename, -1, SQLITE_STATIC);
 	    sqlite3_bind_text(inbfrec, 12, fs.linktarget == 0 ? "" : fs.linktarget, -1, SQLITE_STATIC);
 	    sqlite3_bind_blob(inbfrec, 13, fs.xheaderlen == 0 ? "" : fs.xheader, fs.xheaderlen, SQLITE_STATIC);
 	    sqlite3_step(inbfrec) || fprintf(stderr, "sqlite3_step error\n"); ;
 	    sqlite3_reset(inbfrec);
+	    sqlite3_free(mp1);
+	    sqlite3_free(mp2);
 /*
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into received_file_entities  "
@@ -1926,6 +1989,7 @@ int restore(int argc, char **argv)
     char curblock[512];
     char *instr = 0;
     size_t instrlen = 0;
+    int paxsparsehdrsz = 0;
 
     struct {
 	char ftype;
@@ -1939,6 +2003,7 @@ int restore(int argc, char **argv)
     } t;
     long long int tblocks;
     unsigned int lendian = 1;	// Little endian?
+    int blocksize;
 
     struct {
         unsigned long long int offset;
@@ -1968,12 +2033,14 @@ int restore(int argc, char **argv)
     int filespeclen;
     char *sqlerr;
     int use_pax_header = 0;
+    int no_use_pax_header = 0;
     int verbose = 0;
     char pax_size[64];
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
 	{ "datestamp", required_argument, NULL, 'd' },
-	{ "pax", no_argument, NULL, 'p' },
+	{ "pax", no_argument, NULL, 0 },
+	{ "nopax", no_argument, NULL, 0 },
 	{ "verbose", no_argument, NULL, 'v' },
 	{ NULL, no_argument, NULL, 0 }
     };
@@ -2007,6 +2074,8 @@ int restore(int argc, char **argv)
 	    case 0:
 		if (strcmp("pax", longopts[longoptidx].name) == 0)
                     use_pax_header = 1;
+		if (strcmp("nopax", longopts[longoptidx].name) == 0)
+                    no_use_pax_header = 1;
 		break;
 	    default:
 		usage();
@@ -2044,7 +2113,7 @@ int restore(int argc, char **argv)
     if (srcdir == 0)
 	srcdir = config.vault;
 
-    sha1filepath = malloc(strlen(srcdir) + 39);
+    sha1filepath = malloc(strlen(srcdir) + 48);
 
     x = sqlite3_prepare_v2(bkcatalog,
         (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
@@ -2120,6 +2189,7 @@ int restore(int argc, char **argv)
 	"permission, device_id, inode, user_name, user_id, group_name,  "
 	"group_id, size, sha1, datestamp, extdata, xheader having count(*) > 1;"), 0, 0, 0);
 
+    sqlite3_free(sqlstmt);
     sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf(
 	"select  "
@@ -2149,10 +2219,32 @@ int restore(int argc, char **argv)
 	t.modtime = sqlite3_column_int(sqlres, 10);
 	filename = sqlite3_column_text(sqlres, 11);
 	linktarget = 0;
+
+	sprintf(sha1filepath, "%s/%c%c/%s.lzo", srcdir, sha1[0], sha1[1], sha1 + 2);
+
+	if (t.ftype == '0' || t.ftype == 'S') {
+	    sha1file = open(sha1filepath, O_RDONLY);
+	    if (sha1file == -1) {
+		perror("restore: open backing file:");
+		fprintf(stderr, "Can not restore %s -- missing backing file %s\n", filename, sha1filepath);
+		filename = 0;
+		linktarget = 0;
+		continue;
+	    }
+	    curfile = cfinit_r(fdopen(sha1file, "r"));
+	    if (t.ftype == 'S') {
+		if (cgetline(&ssparseinfo, &ssparseinfosz, curfile) <= 0) {
+		    fprintf(stderr, "Failed top read sparse file %s\n", sparsefilepath);
+		    return(1);
+		}
+	    }
+	}
+
 	if (t.ftype == '1' || t.ftype == '2') {
 	    linktarget = sqlite3_column_text(sqlres, 12);
 	    t.filesize = 0;
 	}
+/*
 	else if (t.ftype == 'S') {
 	    asprintf(&sparsefilepath, "%s/%.2s/%s.s", destdir, sha1, sha1 + 2);
 	    sparsefileh = fopen(sparsefilepath, "r");
@@ -2162,9 +2254,10 @@ int restore(int argc, char **argv)
 	    }
 	    free(sparsefilepath);
 	}
+*/
 	xheader_d = sqlite3_column_blob(sqlres, 13);
 	xheaderlen = sqlite3_column_bytes(sqlres, 13);
-	if (xheaderlen > 0) {
+	if (xheaderlen > 0 && no_use_pax_header == 0) {
 	    xheader = realloc(xheader, xheaderlen); // make a private copy of xheader
 	    memcpy(xheader, xheader_d, xheaderlen);
 	    use_pax_header = 1;
@@ -2183,7 +2276,7 @@ int restore(int argc, char **argv)
 		    strcpy(longtarhead.mode, "0000000");
 		    sprintf(longtarhead.size, "%11.11o", strlen(linktarget));
 		    strcpy(longtarhead.modtime, "00000000000");
-		    strcpy(longtarhead.ustar, "ustar  ");
+		    strncpy(longtarhead.ustar, "ustar ", 6);
 		    strcpy(longtarhead.auid, "root");
 		    strcpy(longtarhead.agid, "root");
 		    memcpy(longtarhead.chksum, "        ", 8);
@@ -2218,7 +2311,7 @@ int restore(int argc, char **argv)
 		strcpy(longtarhead.mode, "0000000");
 		sprintf(longtarhead.size, "%11.11o", strlen(filename));
 		strcpy(longtarhead.modtime, "00000000000");
-		strcpy(longtarhead.ustar, "ustar  ");
+		strncpy(longtarhead.ustar, "ustar ", 6);
 		strcpy(longtarhead.auid, "root");
 		strcpy(longtarhead.agid, "root");
 		memcpy(longtarhead.chksum, "        ", 8);
@@ -2238,10 +2331,41 @@ int restore(int argc, char **argv)
 		}
 	    }
 	    else {
-		setpaxvar(&xheader, &xheaderlen, "path", (char *) filename, strlen(filename));
+		if (t.ftype != 'S')
+		    setpaxvar(&xheader, &xheaderlen, "path", (char *) filename, strlen(filename));
 	    }
 	}
-	if (t.ftype != 'S' && use_pax_header == 1 && t.filesize > 0xFFFFFFFFULL) {
+	if (t.ftype == 'S') {
+	    nsi = 0;
+	    p = ssparseinfo;
+	    for (nsi = 0, p = ssparseinfo, i = 0; ssparseinfo[i] != '\0'; i++) {
+		if (ssparseinfo[i] == ':') {
+		    ssparseinfo[i] = '\0';
+		    if (nsi >= msi - 1) {
+			msi += 64;
+			sparseinfo = realloc(sparseinfo, msi * sizeof(*sparseinfo));
+		    }
+		    sparseinfo[nsi++] = atoll(p);
+		    p = ssparseinfo + i + 1;
+		}
+	    }
+	    if (i > 0) {
+		sparseinfo[nsi++] = atoll(p);
+	    }
+
+	    sparseinfo[0] ^= t.filesize;
+	    t.filesize ^= sparseinfo[0];
+	    sparseinfo[0] ^= t.filesize;
+	    if (use_pax_header == 1) {
+		sprintf(pax_size, "%lld", sparseinfo[0]);
+		setpaxvar(&xheader, &xheaderlen, "GNU.sparse.major", "1", 1);
+		setpaxvar(&xheader, &xheaderlen, "GNU.sparse.minor", "0", 1);
+		setpaxvar(&xheader, &xheaderlen, "GNU.sparse.name", (char *) filename, strlen(filename));
+		setpaxvar(&xheader, &xheaderlen, "GNU.sparse.realsize", pax_size, strlen(pax_size));
+
+	    }
+	}
+	if (use_pax_header == 1 && t.filesize > 0xFFFFFFFFULL) {
 	    sprintf(pax_size, "%lld", t.filesize);
 	    setpaxvar(&xheader, &xheaderlen, "size", pax_size, strlen(pax_size));
 	}
@@ -2256,7 +2380,7 @@ int restore(int argc, char **argv)
 	    strcpy(xtarhead.mode, "0000000");
 	    sprintf(xtarhead.size, "%11.11o", xheaderlen);
 	    strcpy(xtarhead.modtime, "00000000000");
-	    strcpy(xtarhead.ustar, "ustar  ");
+	    strncpy(xtarhead.ustar, "ustar ", 6);
 	    strcpy(xtarhead.auid, "root");
 	    strcpy(xtarhead.agid, "root");
 	    memcpy(xtarhead.chksum, "        ", 8);
@@ -2280,7 +2404,7 @@ int restore(int argc, char **argv)
 	if (linktarget != 0)
 	    strncpy(tarhead.linktarget, linktarget, 100);
 
-	sprintf(tarhead.ustar, "ustar  ");
+	sprintf(tarhead.ustar, "ustar");
 	*(tarhead.ftype) = t.ftype;
 	sprintf(tarhead.mode, "%7.7o", t.mode);
 	strncpy(tarhead.auid, t.auid, 32);
@@ -2291,69 +2415,67 @@ int restore(int argc, char **argv)
 
 
 	if (t.ftype == 'S') {
-	    nsi = 0;
-	    p = ssparseinfo;
-	    for (nsi = 0, p = ssparseinfo, i = 0; ssparseinfo[i] != '\0'; i++) {
-		if (ssparseinfo[i] == ':') {
-		    ssparseinfo[i] = '\0';
-		    if (nsi >= msi - 1) {
-			msi += 64;
-			sparseinfo = realloc(sparseinfo, msi * sizeof(*sparseinfo));
-		    }
-		    sparseinfo[nsi++] = atoll(p);
-		    p = ssparseinfo + i + 1;
+	    if (use_pax_header == 0) {
+
+		if (sparseinfo[0] <= 077777777777LL)
+		    sprintf(tarhead.u.sph.realsize, "%11.11o", sparseinfo[0]);
+		else {
+		    tarhead.u.sph.realsize[0] = 0x80;
+		    for (i = 0; i < sizeof(sparseinfo[0]); i++)
+			if (lendian)
+			    tarhead.u.sph.realsize[11 - i] = ((char *) (&(sparseinfo[0])))[i];
+			else
+			    tarhead.u.sph.realsize[11 - sizeof(sparseinfo[0]) + i] = ((char *) (&(sparseinfo[0])))[i];
 		}
-	    }
-	    if (i > 0) {
-		sparseinfo[nsi++] = atoll(p);
-	    }
-
-	    sparseinfo[0] ^= t.filesize;
-	    t.filesize ^= sparseinfo[0];
-	    sparseinfo[0] ^= t.filesize;
-
-	    if (sparseinfo[0] <= 99999999999LL)
-		sprintf(tarhead.u.sph.realsize, "%11.11o", sparseinfo[0]);
-	    else {
-		tarhead.u.sph.realsize[0] = 0x80;
-		for (i = 0; i < sizeof(sparseinfo[0]); i++)
-		    if (lendian)
-			tarhead.u.sph.realsize[11 - i] = ((char *) (&(sparseinfo[0])))[i];
-		    else
-			tarhead.u.sph.realsize[11 - sizeof(sparseinfo[0]) + i] = ((char *) (&(sparseinfo[0])))[i];
-	    }
-	    for (i = 1; i < nsi && i < 9; i++) {
-		if (sparseinfo[i] <= 99999999999LL) {
-		    sprintf(tarhead.u.sph.item[i - 1], "%11.11o", sparseinfo[i]);
+		for (i = 1; i < nsi && i < 9; i++) {
+		    if (sparseinfo[i] <= 077777777777LL) {
+			sprintf(tarhead.u.sph.item[i - 1], "%11.11o", sparseinfo[i]);
+		    }
+		    else {
+			tarhead.u.sph.item[i][0] = 0x80;
+			for (j = 0; j < sizeof(sparseinfo[i]); j++)
+			    if (lendian)
+				tarhead.u.sph.item[i - 1][11 - j] = ((char *) (&(sparseinfo[i])))[j];
+			    else
+				tarhead.u.sph.item[i - 1][11 - sizeof(sparseinfo[i]) + j] = ((char *) (&(sparseinfo[0])))[j];
+		    }
+		}
+		if (nsi > 9) {
+		    tarhead.u.sph.isextended = 1;
 		}
 		else {
-		    tarhead.u.sph.item[i][0] = 0x80;
-		    for (j = 0; j < sizeof(sparseinfo[i]); j++)
-			if (lendian)
-			    tarhead.u.sph.item[i - 1][11 - j] = ((char *) (&(sparseinfo[i])))[j];
-			else
-			    tarhead.u.sph.item[i - 1][11 - sizeof(sparseinfo[i]) + j] = ((char *) (&(sparseinfo[0])))[j];
+		    tarhead.u.sph.isextended = 0;
 		}
-	    }
-	    if (nsi > 9) {
-		tarhead.u.sph.isextended = 1;
+		strncpy(tarhead.ustar, "ustar ", 6);
+		strncpy(tarhead.ustarver, " ", 2);
 	    }
 	    else {
-		tarhead.u.sph.isextended = 0;
+		*(tarhead.ftype) = '0';
+		strncpy(tarhead.ustarver, "00", 2);
+		paxsparsehdrsz = 0;
+		paxsparsehdrsz += ilog10(nsi) + 2;
+		for (i = 1; i < nsi; i++) {
+		    paxsparsehdrsz += ilog10(sparseinfo[i]) + 2;
+		}
+		t.filesize += 512 * ((int) paxsparsehdrsz / 512 + (paxsparsehdrsz % 512 == 0 ? 0 : 1));
 	    }
 	}
 
 	if (use_pax_header == 1 && t.filesize > 0xFFFFFFFFULL)
 	    sprintf(tarhead.size, "%11.11llo", 0);
 	else {
-	    if (t.filesize <= 077777777777LL)
+	    if (t.filesize <= 077777777777LL) {
 		sprintf(tarhead.size, "%11.11llo", t.filesize);
+	    }
+	    else {
 		tarhead.size[0] = 0x80;
-		for (i = 0; i < sizeof(t.filesize); i++)
+		for (i = 0; i < sizeof(t.filesize); i++) {
 		    if (lendian)
 			tarhead.size[11 - i] = ((char *) (&t.filesize))[i];
 		    else
 			tarhead.size[11 - sizeof(t.filesize)+ i] = ((char *) (&t.filesize))[i];
+		}
+	    }
 	}
 
 	memcpy(tarhead.chksum, "        ", 8);
@@ -2361,24 +2483,14 @@ int restore(int argc, char **argv)
 	    i != 0; --i, ++p)
 	    tmpchksum += 0xFF & *p;
 	sprintf(tarhead.chksum, "%6.6o", tmpchksum);
-	sprintf(sha1filepath, "%s/%c%c/%s.lzo", srcdir, sha1[0], sha1[1], sha1 + 2);
-	if (t.ftype == '0' || t.ftype == 'S') {
-	    sha1file = open(sha1filepath, O_RDONLY);
-	    if (sha1file == -1) {
-		perror("restore: open backing file:");
-		fprintf(stderr, "Can not restore %s -- missing backing file %s\n", filename, sha1filepath);
-		filename = 0;
-		linktarget = 0;
-		continue;
-	    }
-	}
+
 	fwrite(&tarhead, 1, 512, stdout);
 	tblocks++;
 	if (tarhead.u.sph.isextended == 1) {
 	    for (i = 0; i < sizeof(speh); i++)
 		((unsigned char *) &speh)[i] = 0;
 	    for (i = 9; i < nsi; i++) {
-		if (sparseinfo[i] <= 99999999999LL)
+		if (sparseinfo[i] <= 077777777777LL)
 		    sprintf(speh.item[(i - 9) % 42], "%11.11o", sparseinfo[i]);
 		else {
 		    speh.item[(i - 9) % 42][0] = 0x80;
@@ -2407,49 +2519,40 @@ int restore(int argc, char **argv)
 	    }
 	}
 	if (t.ftype == '0' || t.ftype == 'S') {
-#ifdef notdef
-	    pipe(zin);
-	    if ((cprocess = fork()) == 0) {
-		close(zin[0]);
-		sha1file = open(sha1filepath, O_RDONLY);
-		if (sha1file == -1) {
-		    fprintf(stderr, "Can not open %s\n", sha1filepath);
-		    exit(1);
-		}
-		dup2(zin[1], 1);
-		dup2(sha1file, 0);
-		execlp("lzop", "lzop", "-d", (char *) NULL);
-		fprintf(stderr, "Error\n");
-		exit(1);
-	    }
-	    close(zin[1]);
-	    curfile = fdopen(zin[0], "r");
-#endif
-
-	    curfile = cfinit_r(fdopen(sha1file, "r"));
 	    bytestoread = t.filesize;
+	    if (use_pax_header == 1 && t.ftype == 'S') {
+		paxsparsehdrsz = 0;
+		paxsparsehdrsz += (fprintf(stdout, "%llu\n", (int) ((nsi - 1) / 2)));
+		for (i = 1; i < nsi; i++) {
+		    paxsparsehdrsz += (fprintf(stdout, "%llu\n", sparseinfo[i]));
+		}
+		memset(curblock, '\0', 512);
+		paxsparsehdrsz += fwrite(curblock, 1, 512 - paxsparsehdrsz % 512, stdout);
+		bytestoread -= paxsparsehdrsz;
+
+	    }
+	    tblocks += (int) ((t.filesize - bytestoread) / 512);
+	    blocksize = 512 - ((t.filesize - bytestoread) % 512);
+	    if (blocksize == 0)
+		blocksize = 512;
 	    while (bytestoread > 512ull) {
-//		count = fread(curblock, 1, 512, curfile);
-		count = cread(curblock, 1, 512, curfile);
-		if (count < 512) {
+		count = cread(curblock, 1, blocksize, curfile);
+		if (count < blocksize) {
 		    fprintf(stderr, "file short read\n");
 		    exit(1);
 		}
-		fwrite(curblock, 1, 512, stdout);
+		fwrite(curblock, 1, blocksize, stdout);
 		tblocks++;
-		bytestoread -= 512;
+		bytestoread -= blocksize;
+		blocksize = 512;
 	    }
 	    if (bytestoread > 0) {
 		for (i = 0; i < 512; i++)
 		    curblock[i] = 0;
-//		count = fread(curblock, 1, 512, curfile);
 		count = cread(curblock, 1, 512, curfile);
 		fwrite(curblock, 1, 512, stdout);
 		tblocks++;
 	    }
-//	    kill(cprocess, 9);
-//	    waitpid(cprocess, NULL, 0);
-//	    fclose(curfile);
 	    cclose_r(curfile);
 	    for (i = 0; i < sizeof(tarhead); i++)
 		((unsigned char *) &tarhead)[i] = 0;
@@ -3794,6 +3897,60 @@ int cread(void *buf, size_t sz, size_t count, struct cfile *cfile)
     return(orig_bytesin);
 }
 
+int cgetline(char **buf, size_t *sz, struct cfile *cfile)
+{
+    uint32_t tchksum;
+    uint32_t chksum;
+    int err;
+    uint32_t tucblocksz;
+    uint32_t tcblocksz;
+    uint32_t ucblocksz;
+    uint32_t cblocksz;
+    size_t count = 0;
+    int n = 0;
+
+    if (*buf == NULL) {
+        *sz = 64;
+        *buf = malloc(*sz);
+    }
+
+    do {
+        while (cfile->buf + cfile->bufsize - cfile->bufp > 0 && *(cfile->bufp) != '\n') {
+            if (n + 4 >= *sz) {
+                (*sz) += 64;
+                *buf = realloc(*buf, *sz);
+            }
+            (*buf)[n++] = *(cfile->bufp++);
+        }
+        if (*(cfile->bufp) == '\n') {
+            (*buf)[n++] = *(cfile->bufp++);
+            (*buf)[n] = '\0';
+            return(n);
+        }
+        {
+            fread(&tucblocksz, 1, 4, cfile->handle);
+            ucblocksz = ntohl(tucblocksz);
+            if (ucblocksz == 0) {
+                *(buf[n]) = '\0';
+                return(n);
+            }
+            fread(&tcblocksz, 1, 4, cfile->handle);
+            cblocksz = ntohl(tcblocksz);
+            fread(&tchksum, 1, 4, cfile->handle);
+            chksum = ntohl(tchksum);
+            fread(cfile->cbuf, 1, cblocksz, cfile->handle);
+            if (cblocksz < ucblocksz) {
+                lzo1x_decompress(cfile->cbuf, cblocksz, cfile->buf, &(cfile->bufsize), NULL);
+            }
+            else {
+                memcpy(cfile->buf, cfile->cbuf, cblocksz);
+            }
+            cfile->bufp = cfile->buf;
+            cfile->bufsize = ucblocksz;
+        }
+    } while (1);
+}
+
 // Close lzop file
 cclose(struct cfile *cfile)
 {
@@ -3896,6 +4053,29 @@ int getpaxvar(char *paxdata, int paxlen, char *name, char **rvalue, int *rvaluel
     return(1);
 }
 
+int cmpspaxvar(char *paxdata, int paxlen, char *name, char *invalue) {
+    char *nvp = paxdata;
+    int nvplen;
+    char *cname;
+    int cnamelen;
+    char *value;
+    int valuelen;
+
+    while (nvp < paxdata + paxlen) {
+	nvplen = strtol(nvp, &cname, 10);
+	cname++;
+	value = strchr(cname, '=');
+	cnamelen = value - cname;
+	value++;
+	valuelen = nvp + nvplen - value;
+	if (strncmp(name, cname, cnamelen) == 0) {
+	    return(strncmp(value, invalue, valuelen - 1));
+	}
+	nvp += nvplen;
+    }
+    return(1);
+}
+
 int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int invaluelen) {
     char *cnvp = *paxdata;
     int cnvplen;
@@ -3981,6 +4161,8 @@ unsigned int ilog10(unsigned int n) {
     int max = sizeof(lt) / sizeof(*lt) - 1;
     int mid;
 
+    if (n == 0)
+	return(0);
     while (max >= min) {
 	mid = (int) (((min + max) / 2));
 	if (n >= lt[min]  && n < lt[mid]) {
