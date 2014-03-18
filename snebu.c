@@ -932,6 +932,9 @@ help(char *topic)
 	    " -d, --date datestamp       Date stamp for this backup set.  The format is in\n"
 	    "                            time_t format, sames as the output of the \"date\n"
 	    "                            +%%s\" command.\n"
+	    "     --graft /path/name/=/new/name/ \n"
+	    "                            Re-write path names beginning with \"/path/name/\"\n"
+	    "                            to \"/new/name/\"\n"
 	);
     if (strcmp(topic, "listbackups") == 0)
 	printf(
@@ -1996,7 +1999,9 @@ int restore(int argc, char **argv)
 //    FILE *curfile;
     struct cfile *curfile;
     const unsigned char *sha1;
-    const unsigned char *filename = 0;
+    const unsigned char *sfilename = 0;
+    unsigned char *filename;
+    char graftfilename[8192];
     const unsigned char *linktarget = 0;
     const unsigned char *xheader_d = 0;
     char *xheader = 0;
@@ -2061,12 +2066,16 @@ int restore(int argc, char **argv)
     int use_pax_header = 0;
     int no_use_pax_header = 0;
     int verbose = 0;
+    char *(*graft)[2] = 0;
+    int numgrafts = 0;
+    int maxgrafts = 0;
     char pax_size[64];
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
 	{ "datestamp", required_argument, NULL, 'd' },
 	{ "pax", no_argument, NULL, 0 },
 	{ "nopax", no_argument, NULL, 0 },
+	{ "graft", required_argument, NULL, 0 },
 	{ "verbose", no_argument, NULL, 'v' },
 	{ NULL, no_argument, NULL, 0 }
     };
@@ -2102,6 +2111,29 @@ int restore(int argc, char **argv)
                     use_pax_header = 1;
 		if (strcmp("nopax", longopts[longoptidx].name) == 0)
                     no_use_pax_header = 1;
+		if (strcmp("graft", longopts[longoptidx].name) == 0) {
+		    char *grafteqptr;
+		    if (numgrafts + 1>= maxgrafts) {
+			maxgrafts += 16;
+			graft = realloc(graft, sizeof(*graft) * maxgrafts);
+		    }
+		    if ((grafteqptr = strchr(optarg, '=')) == 0) {
+			help("newbackup");
+			exit(1);
+		    }
+		    graft[numgrafts][0] = optarg;
+		    graft[numgrafts][1] = grafteqptr + 1;
+		    *grafteqptr = 0;
+		    grafteqptr--;
+		    while (grafteqptr > graft[numgrafts][0] &&
+			*grafteqptr == ' ')
+			*(grafteqptr--) = 0;
+		    grafteqptr = graft[numgrafts][1];
+		    while (*grafteqptr != 0 && *grafteqptr == ' ')
+			*(grafteqptr++) = 0;
+		    numgrafts++;
+
+		}
 		break;
 	    default:
 		usage();
@@ -2243,17 +2275,18 @@ int restore(int argc, char **argv)
 	t.filesize = sqlite3_column_int64(sqlres, 8);
 	sha1 = sqlite3_column_text(sqlres, 9);
 	t.modtime = sqlite3_column_int(sqlres, 10);
-	filename = sqlite3_column_text(sqlres, 11);
+	sfilename = sqlite3_column_text(sqlres, 11);
 	linktarget = 0;
 
 	sprintf(sha1filepath, "%s/%c%c/%s.lzo", srcdir, sha1[0], sha1[1], sha1 + 2);
+	filename = (char *) sfilename;
 
 	if (t.ftype == '0' || t.ftype == 'S') {
 	    sha1file = open(sha1filepath, O_RDONLY);
 	    if (sha1file == -1) {
 		perror("restore: open backing file:");
-		fprintf(stderr, "Can not restore %s -- missing backing file %s\n", filename, sha1filepath);
-		filename = 0;
+		fprintf(stderr, "Can not restore %s -- missing backing file %s\n", sfilename, sha1filepath);
+		sfilename = 0;
 		linktarget = 0;
 		continue;
 	    }
@@ -2263,6 +2296,13 @@ int restore(int argc, char **argv)
 		    fprintf(stderr, "Failed top read sparse file %s\n", sparsefilepath);
 		    return(1);
 		}
+	    }
+	}
+	for (i = 0; i < numgrafts; i++) {
+	    if (strncmp(filename, graft[i][0], strlen(graft[i][0])) == 0) {
+		snprintf(graftfilename, 8192, "%s%s", graft[i][1], filename + strlen(graft[i][0]));
+		filename = graftfilename;
+		break;
 	    }
 	}
 
