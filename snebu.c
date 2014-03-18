@@ -322,14 +322,14 @@ newbackup(int argc, char **argv)
 
 	sqlite3_exec(bkcatalog,
         "create index if not exists inbound_file_entitiesi1 on inbound_file_entities (  \n"
-	"    infilename)", 0, 0, &sqlerr);
+	"    filename)", 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n\n\n",sqlerr);
 	    sqlite3_free(sqlerr);
 	}
 
 
-//    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     if (verbose == 1)
 	fprintf(stderr, "Receiving input file list\n");
     while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
@@ -424,7 +424,7 @@ newbackup(int argc, char **argv)
 //	    fprintf(stderr, "%s\n", fs.filename);
 	sqlite3_free(sqlstmt);
     }
-
+    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 #ifdef PRELOAD_DIRS_AND_SYMLINKS
 // This code will create entries for any directories / symlinks in input
 // file list, so they don't have to be submitted by submitfiles() tar
@@ -458,8 +458,9 @@ newbackup(int argc, char **argv)
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
 	    "(backupset_id, device_id, inode, filename, infilename, size, cdatestamp)  "
-	    "select backupset_id, i.device_id, i.inode, i.filename, i.infilename, i.size, i.cdatestamp from inbound_file_entities i  "
-	    "left join file_entities f on  "
+	    "select distinct i.backupset_id, i.device_id, i.inode, i.filename, i.infilename, "
+	    "i.size, i.cdatestamp from inbound_file_entities i  "
+	    "left join (select * from file_entities_bd where name = '%q') f on  "
 	    "i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
 	    "and i.permission = f.permission  "
 	    "and i.device_id = f.device_id and i.inode = f.inode  "
@@ -469,11 +470,10 @@ newbackup(int argc, char **argv)
 	    "and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
 	    "or i.extdata = f.extdata)  "
 	    "left join diskfiles d "
-	    "on f.sha1 = d.sha1 "
-//	    "where i.backupset_id = '%d' and (f.file_id is null or "
-//	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))", bkid)), 0, 0, &sqlerr);
-	    "where (f.file_id is null or "
-	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))")), 0, 0, &sqlerr);
+	    "on f.sha1 = d.sha1  where "
+//	    "i.backupset_id = '%d' and "
+	    "(f.file_id is null or "
+	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))", bkname /*bkid,*/)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -679,6 +679,23 @@ int initdb(sqlite3 *bkcatalog)
 	"foreign key(file_id) references file_entities(file_id) )", 0, 0, 0);
     if (err != 0)
 	return(err);
+
+    err = sqlite3_exec(bkcatalog,
+	"create view if not exists \n"
+	"    file_entities_bd \n"
+	"as select \n"
+	"    f.file_id, ftype, permission, device_id, inode, user_name, \n"
+	"    user_id, group_name, group_id, size, sha1, cdatestamp, \n"
+	"    datestamp, filename, extdata, xheader, b.backupset_id, \n"
+	"    name, retention, serial \n"
+	"from file_entities f join backupset_detail d \n"
+	"on f.file_id = d.file_id join backupsets b \n"
+	"on d.backupset_id = b.backupset_id \n", 0, 0, &sqlerr);
+
+    if (sqlerr != 0) {
+	fprintf(stderr, "create view file_entities_bd %s\n", sqlerr);
+	sqlite3_free(sqlerr);
+    }
 
 // Received file list with device_id and inode merged in
 
@@ -1339,7 +1356,16 @@ int submitfiles(int argc, char **argv)
 		"create index if not exists "
 		"needed_file_entities_current_i1 "
 		"on needed_file_entities_current ( "
-		"infilename, filename)", 0, 0, &sqlerr);
+		"infilename)", 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_exec(bkcatalog,
+		"create index if not exists "
+		"needed_file_entities_current_i2 "
+		"on needed_file_entities_current ( "
+		"filename)", 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
 		sqlite3_free(sqlerr);
@@ -1396,7 +1422,7 @@ int submitfiles(int argc, char **argv)
 	    if (verbose == 1)
 		fprintf(stderr, "Adding regular files, directories, and symlinks\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert into received_file_entities_ldi_t "
+		"insert or ignore into received_file_entities_ldi_t "
 		"    select r.ftype, r.permission, n.device_id, n.inode, "
 		"    r.user_name, r.user_id, r.group_name, r.group_id, r.size, "
 		"    r.sha1, n.cdatestamp, r.datestamp, r.filename, r.extdata, r.xheader "
