@@ -367,6 +367,7 @@ do_backup()
     [ -n "${graftdir}" ] && newbackupopts=( "${newbackupopts[@]}" --graft "${graftdir}" )
     [ "${force_full}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" --full )
     [ "${verbose}" = 1 ] && submitfilesopts=( "${submitfilesopts[@]}" -v )
+    [ "${verbose}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" -v )
 
     # Call autoinclude function if INCLUDE is not set
     [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(autoinclude) )
@@ -378,7 +379,7 @@ do_backup()
         >/tmp/backup_include.${datestamp}
 
     # Now create a tar file and send it to Snebu
-    tar --one-file-system --no-recursion --xattrs -P -T /tmp/backup_include.${datestamp} -cf - |\
+    tar --one-file-system --no-recursion --acls --selinux --xattrs -S -P  -T /tmp/backup_include.${datestamp} -cf - |\
         $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
     [ -n "${pluginpost}" ] && $pluginpost
@@ -392,7 +393,7 @@ do_restore()
         tarargs=( "${tarargs[@]}" -C $tgtdirectory )
     fi
 
-    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${@}" </dev/null |tar "${tarargs[@]}" -xvf -
+    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${@}" </dev/null |tar "${tarargs[@]}" --acls --selinux --xattrs -xvf -
 }
 
 listbackups()
