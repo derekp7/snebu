@@ -1,4 +1,6 @@
 .gitattributes export-ignore
 .gitignore export-ignore
 snebu.spec export-ignore
-makerpm export-ignore
+makesrpm.sh export-ignore
+Makefile-Fedora.patch export-ignore
+
