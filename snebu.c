@@ -328,6 +328,14 @@ newbackup(int argc, char **argv)
 	    sqlite3_free(sqlerr);
 	}
 
+	sqlite3_exec(bkcatalog,
+        "create index if not exists inbound_file_entitiesi2 on inbound_file_entities (  \n"
+	"    infilename)", 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n\n\n",sqlerr);
+	    sqlite3_free(sqlerr);
+	}
+
 
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     if (verbose == 1)
