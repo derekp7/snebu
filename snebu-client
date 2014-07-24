@@ -400,6 +400,14 @@ listbackups()
 {
     [ -n "${backupname}" ] && sargs=( "${sargs[@]}" -n ${backupname} )
     [ -n "${datestamp}" ] && sargs=( "${sargs[@]}" -d ${datestamp} )
-    $SNEBU listbackups "${sargs[@]}" "${@}" </dev/null
+    if [ -z "${backupname}" -a "${verbose}" = 1 ]
+    then
+	for i in $( $SNEBU listbackups )
+	do
+	    snebu listbackups -n $i
+	done
+    else
+	$SNEBU listbackups "${sargs[@]}" "${@}" </dev/null
+    fi
 }
 main "${@}"
