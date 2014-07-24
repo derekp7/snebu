@@ -293,7 +293,7 @@ start_agent() {
     fi
 }
 autoinclude() {
-    mount |egrep "ext[234]|btrfs" |awk '{print $3}'
+    mount |egrep "ext[234]|btrfs|xfs" |awk '{print $3}'
 }
 
 # rpcsh -- Runs a function on a remote host
