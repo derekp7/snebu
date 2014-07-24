@@ -366,6 +366,9 @@ newbackup(int argc, char **argv)
 
 	if (fs.filename[strlen(fs.filename) - 1] == '\n')
 	    fs.filename[strlen(fs.filename) - 1] = 0;
+	// Remove trailing slash from directory names
+	if (strlen(fs.filename) > 1 && fs.filename[strlen(fs.filename) - 1] == '/')
+	    fs.filename[strlen(fs.filename) - 1] = 0;
 
 	if (fs.ftype == 'l') {
 	    if (input_terminator == 10) {
