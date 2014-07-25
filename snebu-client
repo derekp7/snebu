@@ -403,7 +403,7 @@ do_remote_backup()
     [ "${verbose}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" -v )
 
     # Call autoinclude function if INCLUDE is not set
-    [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(rpcsh -h ${clientname} -f autoinclude -m autoinclude) )
+    [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(rpcsh -h ${clientname} -u "${rmtuser}" -f autoinclude -m autoinclude) )
 
     while :
     do
