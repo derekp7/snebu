@@ -9,21 +9,6 @@
     <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
 
     <title>Snebu</title>
-    <script type="text/javascript">
-
-      var _gaq = _gaq || [];
-      _gaq.push(['_setAccount', 'UA-38165670-1']);
-      _gaq.push(['_setDomainName', 'snebu.com']);
-      _gaq.push(['_trackPageview']);
-
-      (function() {
-	var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
-	ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
-	var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
-      })();
-
-    </script>
-
   </head>
 
   <body>
@@ -37,13 +22,8 @@
           <h2 id="project_tagline">Simple Network Backup Utility</h2>
 
             <section id="downloads">
-	      <!--
               <a class="zip_download_link" href="https://github.com/derekp7/snebu/zipball/master">Download this project as a .zip file</a>
               <a class="tar_download_link" href="https://github.com/derekp7/snebu/tarball/master">Download this project as a tar.gz file</a>
-	      -->
-	      <a class="v1_0_download_link" href="https://github.com/derekp7/snebu/archive/1.0.tar.gz" onClick="_gaq.push(['_trackEvent', 'Download', 'snebu-1.0.tar.gz']);">Download version 1.0</a>
-	      <br>
-	      <a class="v1_0_srpm_download_link" href="https://github.com/derekp7/snebu/raw/srpm-1.0-1/snebu-1.0-1.fc17.src.rpm" onClick="_gaq.push(['_trackEvent', 'Download', 'snebu-1.0-1.fc17.src.rpm']);">SRPM for version 1.0</a>
             </section>
         </header>
     </div>
@@ -51,236 +31,583 @@
     <!-- MAIN CONTENT -->
     <div id="main_content_wrap" class="outer">
       <section id="main_content" class="inner">
-        <h1>Overview</h1>
+        <h1>
+<a name="introduction" class="anchor" href="#introduction"><span class="octicon octicon-link"></span></a>Introduction</h1>
 
-<p>Snebu is a Linux and Unix backup utility that provides many features that are normally found in Enterprise grade backup systems, yet is designed to be simple to install and use.  In most cases, you install the single binary and configuation file on a server, and you can use a simple shell script to perform backups on a number of POSIX style client systems.  All that is needed on the client is a version of the GNU "find" command (min version 4.2), the "tar" command, and a way to communicate to the backup server such as "ssh".</p>
+<p>Snebu is an efficient incremental snapshot style client/server disk-based backup system for Unix / Linux systems.  Efficiency is provided by transferring only the needed files to complete a given backup set, along with compression and file-level de-duplication.  This de-duplication is effective for any files with the same contents, whether they come from the same backup instance, or are duplicated across past backups, or even across  multiple systems.  Therefore you can backup the full OS on multiple servers using only minimal additional storage space.</p>
 
-<p>The base strategy on which Snebu operates is "always incremental" full snapshot backups.  At the beginning of a backup session, a complete list of files and metadata (generated via "find") from the system to be backed up is processed, and compared to what is already in the backup catalog database.  Any new file, or existing file with changed metadata (file mod time, size, inode, owner, etc) is placed in a list and sent back to the client.  The client then uses this list as an input to "tar".  The resulting tar file is then piped back into the server, where it is broken apart, meta data recorded in the database, and the individual file contents are compressed and stored on disk.  The result is that you have the equivalent of a full backup (the full state of the client is captured), but only the incremental backup data needs to be sent to the server to be stored.</p>
+<h2>
+<a name="audience" class="anchor" href="#audience"><span class="octicon octicon-link"></span></a>Audience</h2>
 
-<h2>What makes it different</h2>
+<p>Snebu is for those who either have no current backup strategy, and want to get something going quickly (either to a locally attached external drive, or to some storage on another server), or if you are currently using a simpler backup scheme (such as one of the rsync-based backup methods) and need to have some of the features of the more heavy weight backup systems (such as a compression, de-duplication, backup catalog DB, and scheduled data expiration).</p>
 
-<p>Snebu is most similar to backup methods that use a combination of a tools such as Rsync to make incremental copies of data, along with hard links to preserve snapshots of past backups (do a search for <code>snapshot backups using rsync</code> for articles describing this method).  However, the Rsync method has two major drawbacks:</p>
+<h1>
+<a name="features" class="anchor" href="#features"><span class="octicon octicon-link"></span></a>Features</h1>
+
+<p>Benefits:</p>
 
 <ul>
-<li>Rsync backups don't store files in compressed format on the target volume.  To get compression, you have to use a filesystem that supports block level compression.</li>
-<li>The file metadata (such as file owner / group, etc) are stored in the filesystem.  This requires root access on the target system in order to preserve file ownership information.</li>
-</ul><p>Snebu, on the other hand, stores all file metadata in an database backend.  Therefore, when used on a backup server, it can run under a restricted user account instead of root.  Also, to save space, files are compressed on the fly before being stored on the backup server.  To save even more space, files are automatically deduplicated (at the file level) on the backup server.  This means that when backing up a number of similar systems, most system files are only stored once, in addition to being compressed.  Only the metadata that is unique to each server is stored separately.</p>
+<li>
+<p>Easy to set up<br>
+There system consists of two programs:<br><code>snebu-client</code> - This is a simple shell script for interacting with the backend process, along with gathering   the files to include in a given backup set.<br><code>snebu</code> -- This is the backend process which stores backup files in a disk-based vault, maintaining metadata    about the files and backup sets in an SQLite-based backup catalog.</p>
 
-<p>Now compare Snebu to other traditional backup methods that use a "full weekly / monthly, daily incremental" method.  That particular method requires at least the last full backup, along with all the individual incremental backups in order to get a system restored.  And some systems don't keep track of deleted files, so after restoring the individual incrementals, you end up with a bunch of files you didn't need.  Snebu, on the other hand, stores a snapshot of what your files looked like at the time of the backup, and will construct a restore that looks exactly like that.</p>
+<p>There are no complicated daemons to configure, or heavy database systems that need to be installed.  All the core logic is self-contained in the snebu binary.</p>
+</li>
+<li><p>Suitable for backing up a single system to an attached external disk, backing up to a separate network server,  or backing up a number of hosts with backups initiated from the central backup server.</p></li>
+<li><p>No client software installation required.  If backups are initiated from a central backup server, then          communications to the clients are preformed over SSH.  The only requirements are that the backup account on the   server is permitted appropriate access to the client (via ssh keys), and the client have the minimal versions of  GNU find and tar installed (this is only a concern with ancient Linux installations, or Unix systems).</p></li>
+<li><p>Works similar to rsync-based backup tools (by providing snapshot incremental-forever backups), but provides     compression and a self-contained database-backed (SQLite) backup catalog.  One of the many benefits of having a   separate backup catalog is this allows the backend to execute under a regular (non-root) utility account.</p></li>
+<li><p>File-level de-duplication is supported, including de-duplication of files across backup sets, and across        multiple backup clients.</p></li>
+<li><p>Built using standard tools and protocols.  File metadata gathering is provided by the "find" command (GNU find  is required), files are transfered using "tar" format, the backup catalog is in an SQLite database file, and      files are stored in the disk-based vault compressed with the LZO library, and compatible with the "lzop"          compression program.</p></li>
+</ul><h1>
+<a name="quick-start-guide" class="anchor" href="#quick-start-guide"><span class="octicon octicon-link"></span></a>Quick-start guide</h1>
 
-<p>Finally, files are sent to the Snebu server in standard TAR format (it extracts metadata and files from the inbound TAR stream in real time), and it synthesizes a TAR file for restores.  So if you are used to using TAR for backups, then Snebu will be a good match.</p>
+<h2>
+<a name="concepts" class="anchor" href="#concepts"><span class="octicon octicon-link"></span></a>Concepts</h2>
 
-<h2>Examples</h2>
+<p>The Snebu backup system is composed of a backend process, <code>snebu</code>, and a front-end client called <code>snebu-client</code>.  The client gathers a list of files to back up (using the <code>find</code> command), sends this list to the backend, and gets back a list of files that are needed to complete an incremental backup.  These files are then sent to the backend using the Unix <code>tar</code> format.</p>
 
-<h5>Quick start guide:</h5>
+<p>Backups are stored in backup sets.  A backup set is uniquely identified by the backup name (typically the host name getting backed up), and a datestamp in the form of a Unix time_t value (essentially, a count of the number of seconds since Jan 1, 1970).  This value functions as a serial number.</p>
 
-<p>Compile the source using the include Makefile.  Place the binary <code>snebu</code> somewhere convenient (such as <code>/usr/local/bin</code>), and create a configuration file <code>/etc/snebu.conf</code> with the following values:</p>
+<p>Each backup set has a retention schedule attached to it, specified by the <code>-r</code> flag.  The retention schedule is used by the expiration process to, for example, expire all daily backups older than 10 days, or all monthly backups older than 6 months.  Anything can be used for for a schedule name, but typical values are <code>daily</code>, <code>weekly</code>, <code>monthly</code>, <code>yearly</code>, and <code>archive</code>.  If not specified, then the <code>snebu-client</code> script will automatically pick a retention schedule based on the date (Sunday through Friday are daily, Saturday is weekly, and the 1st of the month is monthly).</p>
 
-<pre><code>vault = /var/backups/vault
-meta = /var/backups/meta
+<p>When a backup is requested, the backend will determine which files it already has (by comparing meta data such as file name, size, last modification time, and various other attributes).  A list of files that are already on the backup server is added to the current backup set.  The remaining files are then requested, and are added to the backup set when they are received.</p>
+
+<p>File contents are stored and referenced by using the SHA1 hash of the file contents.  Therefore, file level de-duplication is achieved across all backups stored on the backup server.  In addition, files are stored compressed in an lzop compatible format.  This allows for recovery of files even outside of the backup utility.</p>
+
+<h2>
+<a name="setting-up-a-local-backup" class="anchor" href="#setting-up-a-local-backup"><span class="octicon octicon-link"></span></a>Setting up a local backup</h2>
+
+<p>This procedure assumes that both <code>snebu</code> and <code>snebu-client</code> are installed, and you will be backing up to a drive that is mounted under /media/backups.  These steps will be run as the root user.  In the examples, the host name that is getting backed up is called <code>zeus</code>  The backup retention schedules are automatically determined in these examples (use <code>-r</code> to override)</p>
+
+<p>1) Create a file <code>/etc/snebu.conf</code> with the following:</p>
+
+<pre><code>meta=/media/backups/meta
+vault=/media/backups/vault
 </code></pre>
 
-<p>The <code>vault</code> directory is where the backup data files are placed.  The <code>meta</code> directory is the location of the backup catalog.  In this example, an external USB drive is mounted on <code>/var/backups</code>.  Adjust to suit your requirements.</p>
+<p>The meta directory is where the backup catalog is stored (in an SQLite DB).  The vault directory contains all the backup file contents.</p>
 
-<p>Now create a client backup script called <code>backup.sh</code> with the following:</p>
+<p>2) Create the directories from the previous step:</p>
 
-<pre><code>#!/bin/bash
-
-SNEBU="/usr/local/bin/snebu"
-# Automatically include all mounted ext2, ext3, ext4 filesystems
-INCLUDE=( $(mount |grep ext[234] |awk '{print $3}') )
-
-# If the backup drive is mounted locally, we want to exclude it
-EXCLUDE=( /var/backups )
-
-NAME=$(hostname)
-BK_SERIAL=$(date +%s)
-
-DAY_OF_WEEK=$(date +%u)
-DAY_OF_MONTH=$(date +%d)
-
-# Set file retention schedule -- Monthly on the 1st of the month,
-# Weekly on Saturdays, and Daily otherwise.
-if [ ${DAY_OF_MONTH} = 1 ]; then
-    RETENTION=monthly
-elif [ ${DAY_OF_WEEK} = 6 ]; then
-    RETENTION=weekly
-else
-    RETENTION=daily
-fi
-
-FILE_PATTERN="%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%T@\t%p\0"
-LINK_PATTERN="%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%T@\t%p\0%l\0"
-
-# Build Find exclude commands from exclude list
-for i in ${EXCLUDE[@]}
-do
-    findexclude[$((j * 4 + 1))]="-path"
-    findexclude[$((j * 4 + 2))]="$i"
-    findexclude[$((j * 4 + 3))]="-prune"
-    findexclude[$((j * 4 + 4))]="-o"
-    ((j++))
-done
-
-FINDCMD() {
-    find ${INCLUDE[@]} -xdev "${findexclude[@]}" \( -type f -o -type d \) \
-    -printf "${FILE_PATTERN}" -o -type l -printf "${LINK_PATTERN}"
-}
-
-# Send list of files and metadata to backup
-FINDCMD |$SNEBU newbackup --name ${NAME} --retention ${RETENTION} \
-    --datestamp ${BK_SERIAL} --null --null-output \
-    &gt;/tmp/backup_include.${BK_SERIAL}
-
-# Now create a tar file and send it to the backup process
-tar -P --null -T /tmp/backup_include.${BK_SERIAL} -cf - |\
-    $SNEBU submitfiles --name ${NAME} --datestamp ${BK_SERIAL}
-
-rm -f /tmp/backup_include.${BK_SERIAL}
-
-########## END of script ##########
+<pre><code>mkdir -p /media/backups/meta
+mkdir -p /media/backups/vault
 </code></pre>
 
-<p>If you want to adapt this script to run on a client and send the backups to a remote server, adjust the "SNEBU=" command at the top of the script to use ssh along with a private key:</p>
+<p>3) Create a file <code>/etc/snebu-client.conf</code> with the following:</p>
 
-<p>SNEBU="ssh -C backup@backuphost /usr/local/bin/snebu"</p>
-
-<h2>Newbackup</h2>
-
-<h5>Usage: snebu newbackup</h5>
-
-<p>Takes a tab-delimited input list of files with metadata (filesize, date,
-owner, etc.), checks to see which files are already on the backup server,
-and returns a list of files that the server doesn't already have.  References
-to the files already on the server are recorded in the current backup session.</p>
-
-<p>Required arguments:
- -n | --name=BACKUPNAME)
-Usually the name of the host being backed up.</p>
-
-<p>-d | --datestamp=DATE)
-The date of the backup (in seconds), also used as the serial number for the backup.
--r | --retention=SCHEDULE)
-Expiration class of the backup.  Typically this will be "daily", "weekly", "monthly", "yearly" or "archive".  Any name can be used though.</p>
-
-<p>Optional arguments:</p>
-
-<p>--graft=PATHA=PATHB)
-Replace PATHA at the beginning of files with PATHB on input.  Output file paths are unaffected.  Useful for backing up snapshots from a temporary mount point.
- -T | --files-from=FILE)
-Get inbound file list from the given file
---null)
-Inbound file list is null terminated.  Default.</p>
-
-<p>--not-null)
-Inbound file list is newline terminated, and special characters in filenames are escaped.</p>
-
-<p>--null-output)
-Output of required files list is null terminated</p>
-
-<p>--not-null-output)
-Output of required files list is newline terminated and special characters are escaped.</p>
-
-<p>--full)
-Return all file names submitted, regardless if they are in the backup catalog already</p>
-
-<p>The input file list has the following tab delimited fields:
-File Type, Mode, Device, Inode, Owner, Owner Number, Group Owner, Group Number, Size, MD5, Date, Filename, SymLink Target</p>
-
-<p>MD5 is optional, if it is 0 then only the rest of the metadata will be examined to determine if the file has changed.</p>
-
-<p>For null terminated input lists, the filename (last field) is followed by a null and the Symlink Target (for symbolic link file types) are again followed by a null.  If the input list is newline terminated, then there is no null between the filename and the link target.</p>
-
-<p>A suitable input list can be generated as follows:</p>
-
-<pre><code>find /source/directory \( -type f -o -type d \) -printf \
-    "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%T@\t%p\0"\
-    -o -type l -printf \
-    "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%T@\t%p\0%l\0"
+<pre><code>EXCLUDE=( /tmp /var/tmp /mnt /media/backups )
 </code></pre>
 
-<h2>Submitfiles</h2>
+<p>By default, the files to be backed up included all mounted Linux filesystems of the types ext2, ext3, ext4, btrfs, xfs.  This is the same as specifying the following line in the <code>snebu-client.conf</code> file:</p>
 
-<h5>Usage: snebu submitfiles</h5>
+<pre><code>INCLUDE=( $(mount |egrep "ext[234]|btrfs" |awk '{print $3}') )
+</code></pre>
 
-<p>Processes an input TAR file that was generated with the output of the newbackup subcommand.</p>
+<p>If you want to list specific directories to backup, list them in an INCLUDE line in the <code>/etc/snebu-client.conf</code> file:</p>
 
-<p>Required arguments:
--n | --name=BACKUPNAME)
-Set to the same name that was used for "newbackup".</p>
+<pre><code>INCLUDE=( /dir1 /dir2 /dir3 )
+</code></pre>
 
-<p>-d | --datestamp)
-Set to the same value that was used for "newbackup".</p>
+<p>Or, if you want to add to the default include:</p>
 
-<p>Optional arguments:</p>
+<pre><code>INCLUDE=( "${INCLUDE[@]}" /dir1 /dir2 /dir3 )
+</code></pre>
 
-<h2>Listbackups</h2>
+<p>4) Run a test backup:</p>
 
-<h5>Usage: snebu listbackups</h5>
+<pre><code>snebu-client backup -v
+</code></pre>
 
-<p>List available backup sets.</p>
+<p>Note, you can also override the default INCLUDE list on the <code>snebu-client</code> command line:</p>
 
-<p>Required arguments:
-<em>none</em></p>
+<pre><code>snebu-client backup -v /dir1 /dir2
+</code></pre>
 
-<p>Optional arguments:</p>
+<p>See the <code>snebu-client</code> detailed documentation for the list of available parameters.  Specifically, look at the <code>-r</code> (retention schedule), and <code>-n</code> (backup name) parameters.</p>
 
-<p>no argument)
-Lists all systems and backupsets that are available.</p>
+<p>5) Once the backup is completed, you can use the following to list the backups:</p>
 
-<p>-n | --name=NAME)
-Lists all backupsets for the named host.</p>
+<pre><code>snebu-client listbackups -v
+</code></pre>
 
-<p>-d | --datestamp=DATE)
-Used in conjuction with the -n argument, this identifies a particular backupset, and outputs a list of files that are contained within it.</p>
+<p>Which should output the names of the backups that are available:</p>
 
-<p>SEARCHPATTERN)
-One or more files can be listed to restrict the output to matching files.</p>
+<pre><code>zeus
+    1389677695 / daily / Mon Jan 13 23:34:55 2014
+</code></pre>
 
-<h2>Restore</h2>
+<p>7) To get a list of files that are included:</p>
 
-<h5>Usage: snebu restore</h5>
+<pre><code>snebu-client listbackups --name zeus --datestamp 1389677695 |more
+</code></pre>
 
-<p>Generates a TAR file containing files from a given backupset.</p>
+<p>8) To restore a given file, pick one from the list generated in the step above, and:</p>
 
-<p>Required arguments:</p>
+<pre><code>snebu-client restore --name zeus --datestamp 1389677695 '/path/to/file'
+</code></pre>
 
-<p>-n | --name=BACKUPNAME)
-Set to the same name that was used for "newbackup", also listed in "listbackups".</p>
+<p>Or, to restore a directory,</p>
 
-<p>-d | --datestamp)
-Set to the same value that was used for "newbackup", also listed in "listbackups".</p>
+<pre><code>snebu-client restore --name zeus --datestamp 1389677695 '/path/to/directory/*'
+</code></pre>
 
-<p>SEARCHPATTERN)
-Optionally restrict files in the generated to ones matching the given file list.</p>
+<p>This will by default place the files starting in the directory you are currently sitting in.  So, if you are in /tmp, and restore /home/bob/resume.txt, it will be placed in /tmp/home/bob/resume.txt.  See the detailed documentation section for additional parameters, such as <code>-C</code> which will specify an alternate target directory, or <code>--graft</code> which will allow you to rename parts of the file path.</p>
 
-<h2>Expire</h2>
+<h2>
+<a name="backing-up-to-a-remote-server" class="anchor" href="#backing-up-to-a-remote-server"><span class="octicon octicon-link"></span></a>Backing up to a remote server</h2>
 
-<h5>Usage: snebu expire</h5>
+<p>When backing up to a remote server, it is preferable to use a non-privliged user account, such as <code>backup</code>, instead of <code>root</code>.  In this section, the backup server will be called <code>jupiter</code>, and the client is <code>zeus</code>.  The backup server will have the target backup media mounted under /media/backups, which will be owned by <code>backup</code>.  The program <code>snebu</code> is assumed to be installed on <code>jupiter</code>, and the <code>snebu-client</code> script is on the client <code>zeus</code>.</p>
 
-<p>Removes a given backupset from the backup catalog database.</p>
+<p>1) Create a backup user:</p>
 
-<p>Required arguments:</p>
+<pre><code>useradd backup
+passwd backup
+</code></pre>
 
-<p>-r | --retention=SCHEDULE)
-Retention class of the backupsets to remove. (i.e., "daily", "monthly"...)</p>
+<p>2) Create a file <code>/etc/snebu.conf</code> with the following:</p>
 
-<p>-a | --age=DAYS
-Removes backupsets (that are part of the given retention class) that are more than the given number of days old.</p>
+<pre><code>meta=/media/backups/meta
+vault=/media/backups/vault
+</code></pre>
 
-<p>Optional arguments:</p>
+<p>3) After mounting the backup media, create the directories from the previous step, and make everything owned by backup:</p>
 
-<p>-n | --name=BACKUPNAME)
-Set to the same name that was used for "newbackup", also listed in "listbackups".</p>
+<pre><code>mkdir -p /media/backups/meta
+mkdir -p /media/backups/vault
+chown -R backup /media/backups
+</code></pre>
 
-<p>-m | --minkeep=##)
-Keep at least the given number of backups (in this retention class), regardless if the --age value matches.  Useful for making sure that the most recent backups are kept in cases where a system hasn't been backed up for some time.  The default value is 3.</p>
+<p>4) On the client (<code>zeus</code>), create an ssh key pair if one doesn't exist for the root user, and copy it to the <code>backup</code> user's authorized-keys file on <code>jupiter</code>:</p>
 
-<h2>Purge</h2>
+<pre><code>ssh-keygen -t rsa -N ""
+ssh-copy-id backup@jupiter
+</code></pre>
 
-<h5>Usage: snebu purge</h5>
+<p>5) On the client, create the <code>/etc/snebu-client.conf</code> file with proper INCLUDE and EXCLUDE parameters, as specified in the previous (local backup) section.</p>
 
-<p>Permanantly removes files from disk storage that are no longer referenced by any backups.  Run this command after running expire.</p>
+<p>6) Make sure you can (as root on <code>zeus</code>) ssh into the backup user on <code>jupiter</code></p>
+
+<pre><code>ssh backup@jupiter uname -a
+</code></pre>
+
+<p>7) Run a test backup as before, but with an additional parameter:</p>
+
+<pre><code>snebu-client backup --backup-server jupiter -v
+</code></pre>
+
+<p>The --backup-server parameter will also apply to all the other comands, such as listbackups and restore.  An alternative to specifying this each time is to add the following to <code>/etc/snebu-client.conf</code>:</p>
+
+<pre><code>bksvrname=jupiter
+</code></pre>
+
+<h2>
+<a name="backing-up-remote-clients-from-a-backup-server" class="anchor" href="#backing-up-remote-clients-from-a-backup-server"><span class="octicon octicon-link"></span></a>Backing up remote clients from a backup server</h2>
+
+<p>If you have a number of systems to back up, it may be better to initiate all backups from the backup server.  In this model, the <code>backup</code> user account on the backup server will need SSH permissions to access root on the clients.  This may be preferable, as it avoids having to give each client remote access to the backup server.  However, that means the clients have to trust the backup server with root access.  The good part, though, is there is nothing to install on the clients, other than inserting a key into root's authorized_keys file.</p>
+
+<p>1) Set up the backup server, <code>jupiter</code> as discussed in the previous section (steps 1 through 3)</p>
+
+<p>2) Also, on the server (<code>jupiter</code>), create an SSH key pair for the <code>backup</code> user</p>
+
+<pre><code>ssh-keygen -t rsa -N ""
+</code></pre>
+
+<p>3) Copy the public key file to the clients to be backed up.  Newer versions of OpenSSH include a utility to make this easier:</p>
+
+<pre><code>ssh-copy-id root@zeus
+</code></pre>
+
+<p>4) Initiate a test backup from the <code>backup</code> user on <code>jupiter</code>:</p>
+
+<pre><code>snebu-client backup --remote-client zeus -v
+</code></pre>
+
+<h2>
+<a name="daily-and-periodic-maintenance-tasks" class="anchor" href="#daily-and-periodic-maintenance-tasks"><span class="octicon octicon-link"></span></a>Daily and periodic maintenance tasks</h2>
+
+<h3>
+<a name="expiring-old-backups" class="anchor" href="#expiring-old-backups"><span class="octicon octicon-link"></span></a>Expiring old backups</h3>
+
+<p>Periodically cleaning out old backups is essential for keeping the target storage device from running out of space.  Typical data retention schedules are:</p>
+
+<ul>
+<li>daily -- keep all daily backups for 2 weeks</li>
+<li>weekly -- keep all weekly (Saturday) backups for 6 weeks</li>
+<li>monthly -- keep all monthly backups for 12 months</li>
+</ul><p>To accomplish this, run the following commands on the backup server:</p>
+
+<pre><code>snebu expire -a 14 -r daily
+snebu expire -a 42 -r weekly
+snebu expire -a 365 -r monthly
+</code></pre>
+
+<p>Note, that there is a safety valve built into the expire command, where it will keep (by default) the most recent 3 backup sets for a given system.  This can be adjusted with the <code>-m</code> flag (i.e., <code>-m 7</code> will keep the most recent 7 backups, or <code>-m 0</code> disables this safety check).</p>
+
+<p>Another form of the expire command will remove a given backup set, useful if you have a partial or a redundant backup that needs to be cleaned out:</p>
+
+<pre><code>snebu expire -n name -d datestamp
+</code></pre>
+
+<p>After the expiration jobs are finished (which removes the backups from the backup catalog), you will need to remove the actual file contents from the vault:</p>
+
+<pre><code>snebu purge
+</code></pre>
+
+<p>The purge process can take some time to execute, so typically it would be run on a weekly basis, and the expire jobs run daily after the backups have completed.</p>
+
+<h1>
+<a name="advanced-usage" class="anchor" href="#advanced-usage"><span class="octicon octicon-link"></span></a>Advanced usage</h1>
+
+<h2>
+<a name="creating-a-custom-snebu-client-script" class="anchor" href="#creating-a-custom-snebu-client-script"><span class="octicon octicon-link"></span></a>Creating a custom snebu-client script</h2>
+
+<p>Typically, direct usage of the <code>snebu</code> command is used for maintenance purposes.  Submitting backups and restoring is driven by the snebu-client command.  However, if needed, you can create a custom client for advanced purposes (such as performing live database backups, which typically involve placing the DB in backup mode, and querying the DB for which files to back up).  The process of submitting a backup requires two parts:</p>
+
+<ul>
+<li>
+<p>snebu newbackup<br>
+This subcommand expects an input list of files as a tab-delimited list consisting of:<br>
+  File Type, Mode, Device, Inode, Owner, Owner#, Group, Group#, Size, SHA1, Inode Mod Time, File Mod Date, Filename, Symlink Target</p>
+
+<p>This list can be generated with GNU find command, with the following <code>-printf</code> arguments added:</p>
+
+<pre><code>  \( -type f -o -type d \) \
+      -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0" \
+      -o -type l \
+      -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0%l\0"
+</code></pre>
+
+<p>(Note, that currently the SHA1 field (field number 10) isn't used, so the above puts a 0 as a placeholder.  This is intended to be an additional indicator of if a file needs to be transfered to the backup server's vault, or if it is already there.)</p>
+</li>
+<li><p>snebu submitfiles<br>
+The output of the <code>snebu newbackup</code> command is a list of files that need to be backed up to complete the backup set (anything not on this list is already on the backup server, and gets linked to the current backup set).  This list is then used to generate a <code>tar</code> file, which gets submitted to the submitfiles target as standard input.</p></li>
+</ul><p>See the detailed documentation section for additional command line arguments that are required.  Also, the included snebu-client shell script can be referenced for more details.</p>
+
+<h2>
+<a name="changing-file-locations" class="anchor" href="#changing-file-locations"><span class="octicon octicon-link"></span></a>Changing file locations</h2>
+
+<p>One parameter to <code>snebu-client</code> (or <code>snebu</code>, if writing your own client) is the <code>--graft</code> option.  This allows you to re-write the directory path from one location to another.  This is useful when backing up a filesystem snapshot.  If the snapshot of <code>/srv/database</code> is mounted under <code>/mnt/snapshots/database</code>, you can specify <code>--graft /mnt/snapshots/database/=/srv/database/</code> so that the backup will record the file locations as if they were backed up under their original location.</p>
+
+<p>Another usage for <code>--graft</code> is when restoring a single file to a different location.  For example: <code>--graft /home/bob/budget.doc=/home/bob/restore/budget.doc</code> will allow restoring the file without overwriting the version that is currently in place.</p>
+
+<h2>
+<a name="forcing-a-full-backup" class="anchor" href="#forcing-a-full-backup"><span class="octicon octicon-link"></span></a>Forcing a full backup</h2>
+
+<p>Snebu uses the file meta data (file name, last mod date, size, permissions, etc.) to determine if a file has been modified since the last backup.  If a file gets modified, keeps the same size, and the mod date is manually set to the original, this can cause the file to be skipped during incremental backups.  Therefore, it may be desirable to periodically force a full backup with the <code>-f</code> flag.  This will cause all included files to get transfered, although de-duplication is still accomplished on the back end.  The main drawback of <code>-f</code> is that it increases the backup time and network usage.</p>
+
+<h2>
+<a name="plugins" class="anchor" href="#plugins"><span class="octicon octicon-link"></span></a>Plugins</h2>
+
+<p>A plugin architecture is currently under development, which allows the <code>snebu-client</code> script to perform additional steps before and after a backup.  This can be used to create and mount snapshots of file systems, or to put a database into backup mode.</p>
+
+<h1>
+<a name="command-reference" class="anchor" href="#command-reference"><span class="octicon octicon-link"></span></a>Command reference</h1>
+
+<h2>
+<a name="snebu-client" class="anchor" href="#snebu-client"><span class="octicon octicon-link"></span></a>snebu-client</h2>
+
+<pre><code>Usage: snebu-client [ subcommand ] [ options ]
+ snebu-client is the client front end for snebu.  Use it to easily
+ back up a local or remote host, to either local a local storage
+ device, or to a remote backup server.  Use it with one of the
+ following subcommands.
+
+ Sub commands are as follows:
+    backup  [ -n backupname ] [ -d datestamp ] [ -r schedule ]
+
+    restore [ -n backupname ] [ -d datestamp ]
+
+    listbackups [ -n backupname [ -d datestamp ]] [ file_list... ]
+
+    help [subcommand]
+</code></pre>
+
+<h3>
+<a name="snebu-client-backup" class="anchor" href="#snebu-client-backup"><span class="octicon octicon-link"></span></a>snebu-client backup</h3>
+
+<pre><code>Usage: snebu-client backup [ -n backupname ] [ -d datestamp ] [ -r schedule ]
+    [ file-list ]
+ Initiates a system backup.  By default, it will back up the local
+ host to a local snebu install.  You can also use this command to back
+ up to a remote backup server, back up a remote host to either a local
+ snebu instalation, or back up a remote host to another remote backup
+ server, depending on which options are chosen.
+
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu-client.conf.
+
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
+
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
+
+ -r, --retention schedule   Retention schedule for this backup set.  Typical
+                            values are "daily", "weekly", "monthly", "yearly".
+
+     --remote-client hostname
+                            Host name / IP address of remote server.  Used to
+                            backup a remote server to local host.
+
+     --backup-server hostname
+                            Host name / IP address of backup server.  Used to
+                            backup to a remote server.
+
+ -f, --force-full           Force a full backup
+
+ -C, --changedir path       Changes to the given directory path before
+                            backing up or restoring.
+
+     --graft /path/name/=/new/name/
+                            Re-write path names beginning with "/path/name/"
+                            to "/new/name/"
+
+     --plugin scriptname    Specifies an optional plug in script.  Usually
+                            used to perform database-specific operations
+                            (such as enabling hot backup mode) for systems
+                            with a DB installed.
+
+ [ file-list ]              List of files to backup -- overrides default
+</code></pre>
+
+<h3>
+<a name="snebu-client-restore" class="anchor" href="#snebu-client-restore"><span class="octicon octicon-link"></span></a>snebu-client restore</h3>
+
+<pre><code>Usage: snebu-client restore [ -n backupname ] [ -d datestamp ] [ file-list ]
+ Restores a given backup session identified by "-n" and "-d"
+ parameters.  Use the "listbackups" subcommand to get a list of
+ available backup sessions.
+
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu-client.conf.
+
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
+
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
+
+ -C, --changedir path       Changes to the given directory path before
+                            backing up or restoring.
+
+     --remote-client hostname
+                            Host name / IP address of remote server.  Used to
+                            backup a remote server to local host.
+
+     --backup-server hostname
+                            Host name / IP address of backup server.  Used to
+                            backup to a remote server.
+
+ [ file-list ]              List of files to restore.  Defaults to all.
+</code></pre>
+
+<h3>
+<a name="snebu-client-listbackups" class="anchor" href="#snebu-client-listbackups"><span class="octicon octicon-link"></span></a>snebu-client listbackups</h3>
+
+<pre><code>Usage: snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
+ With no arguments specified, "listbackups" will return a list of all
+ systems that are contained in the backup catalog.  Otherwise, when
+ specifying the -n parameter, a list of backup sets for that host is
+ returned.
+
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu-client.conf.
+
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
+
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
+</code></pre>
+
+<h2>
+<a name="snebu" class="anchor" href="#snebu"><span class="octicon octicon-link"></span></a>snebu</h2>
+
+<pre><code>Usage: snebu [ subcommand ] [ options ]
+  where "subcommand" is one of the following:
+    newbackup -n backupname -d datestamp -r schedule
+
+    submitfiles -n backupname -d datestamp
+
+    restore -n backupname -d datestamp [ file_list... ]
+
+    listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
+
+    expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]
+
+    purge
+
+    help [ subcommand ]
+
+ The "snebu" command is a backup tool which manages storing data from
+ backup sessions on disk-based storage, utilizing a simple database
+ for tracking backup sets and meta data.  Typically it is called via a
+ front end script (such as the included "snebu-client" shell script). 
+ Documentation is provided here if you need to create a custom backup
+ client script.  The subcommands are listed below along with the most
+ common options.  Details on each command are given in each command's
+ help section.
+</code></pre>
+
+<h3>
+<a name="snebu-newbackup" class="anchor" href="#snebu-newbackup"><span class="octicon octicon-link"></span></a>snebu newbackup</h3>
+
+<pre><code>Usage: snebu newbackup -n backupname -d datestamp -r schedule
+ The "newbackup" command creates a new backup set, by consuming a
+ tab-delimited list of file names (along with associated meta data) to
+ include in the backup.  It then compares this list to the backup
+ catalog database to determine which files are new, and which ones are
+ already contained on the backup media.  A list of new / changed files
+ is returned, which can then be passed along to "tar" to generate a
+
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu.conf.
+
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
+
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
+
+ -r, --retention schedule   Retention schedule for this backup set.  Typical
+                            values are "daily", "weekly", "monthly", "yearly".
+
+ -T, --files-from FILE      Read list of filenames (with meta data) to backup
+                            from the named file, instead of standard input.
+
+     --null                 Inbound file backup list (-T, or standard input)
+                            is null terminated
+
+     --not-null             Inbound file backup list (-T, or standard input)
+                            is newline terminated
+
+     --null-output          Generate include-file-list with null terminated
+                            lines.
+
+     --not-null-output      Generate include-file-list with newline
+                            terminated lines.
+
+ -f, --force-full           Force a full backup
+
+     --graft /path/name/=/new/name/ 
+                            Re-write path names beginning with "/path/name/"
+                            to "/new/name/"
+
+ -v,                        Verbose output
+</code></pre>
+
+<h3>
+<a name="snebu-submitfiles" class="anchor" href="#snebu-submitfiles"><span class="octicon octicon-link"></span></a>snebu submitfiles</h3>
+
+<pre><code>Usage: snebu submitfiles -n backupname -d datestamp
+ The "submitfiles" command is called after newbackup, and is used to
+ submit a tar file containing the list of filest that newbackup
+ returned.
+
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu.conf.
+
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
+
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
+
+ -v,                        Verbose output
+</code></pre>
+
+<h3>
+<a name="snebu-restore" class="anchor" href="#snebu-restore"><span class="octicon octicon-link"></span></a>snebu restore</h3>
+
+<pre><code>Usage: snebu restore -n backupname -d datestamp [ file_list... ]
+ Generates a tar file containing files from a given backup set.  Pipe
+ the output of this command into a tar command to actually restore
+ files.
+
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu.conf.
+
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
+
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
+     --graft /path/name/=/new/name/ 
+                            Re-write path names beginning with "/path/name/"
+                            to "/new/name/"
+</code></pre>
+
+<h3>
+<a name="snebu-listbackups" class="anchor" href="#snebu-listbackups"><span class="octicon octicon-link"></span></a>snebu listbackups</h3>
+
+<pre><code>Usage: snebu listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
+ With no arguments specified, "listbackups" will return a list of all
+ systems that are contained in the backup catalog.  Otherwise, when
+ specifying the -n parameter, a list of backup sets for that host is
+ returned.
+
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu.conf.
+
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
+
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
+</code></pre>
+
+<h3>
+<a name="snebu-expire" class="anchor" href="#snebu-expire"><span class="octicon octicon-link"></span></a>snebu expire</h3>
+
+<pre><code>Usage: snebu expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]
+ Removes backup sessions from the snebu backup catalog database.  A
+ specific backup session can be purged by providing the "-n" and "-d"
+ options, or all backups that are part of a given retention schedule
+ (specified with "-r", and optionally from a given host, with the "-n"
+ option) that are older than a given number of days ("-a") are removed.
+
+Options:
+ -c, --config config_file   Name of the configuration file.  Default is
+                            /etc/snebu.conf.
+
+ -n, --name backupname      Name of the backup.  Usually set to the server
+                            name that you are backing up.
+
+ -d, --date datestamp       Date stamp for this backup set.  The format is in
+                            time_t format, sames as the output of the "date
+                            +%s" command.
+
+ -r, --retention schedule   Retention schedule for this backup set.  Typical
+                            values are "daily", "weekly", "monthly", "yearly".
+ -a, --age #days            Expire backups older than #days.
+
+ -m, --min-keep #           When expiring with the "-a" flag, keep at least
+                            this many of the most recent backups for a given
+                            hostname/retention level.
+</code></pre>
+
+<h3>
+<a name="snebu-purge" class="anchor" href="#snebu-purge"><span class="octicon octicon-link"></span></a>snebu purge</h3>
+
+<pre><code>Usage: snebu purge
+ Permanently removes files from disk storage that are no longer
+ referenced by any backups. Run this command after running "snebu
+ expire".
+</code></pre>
       </section>
     </div>
 
