@@ -263,12 +263,13 @@ main()
     then
 	start_agent
     fi
-    if [ -z "${clientname}" ]
+    if [ -n "${clientname}" ]
     then
-	${target} "${filelist[@]}"
-    else
-	rpcsh -A -h ${clientname} -u ${rmtuser} -f "FINDCMD do_backup do_restore rpcsh do_rsnebu rsnebu autoinclude ${pluginfuncs}" -v "INCLUDE EXCLUDE backupname bksvrname retention datestamp force_full tgtdirectory graftdir SNEBU bkuser verbose ${pluginvars}" -m "${target}" "${filelist[@]}"
+	[ "${target}" = "do_backup" ] && target=do_remote_backup
+	[ "${target}" = "do_restore" ] && target=do_remote_restore
     fi
+
+    ${target} "${filelist[@]}"
 }
 
 start_agent() {
@@ -372,6 +373,8 @@ do_backup()
     # Call autoinclude function if INCLUDE is not set
     [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(autoinclude) )
 
+    while :
+    do
     [ -n "${pluginpre}" ] && $pluginpre
 
     FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
@@ -382,8 +385,46 @@ do_backup()
     tar --one-file-system --no-recursion --acls --selinux --xattrs -S -P  -T /tmp/backup_include.${datestamp} -cf - |\
         $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
-    [ -n "${pluginpost}" ] && $pluginpost
     rm -f /tmp/backup_include.${datestamp}
+    [ -n "${pluginpost}" ] && $pluginpost
+    if [ "${bkrepeat}" != 1 ]
+    then
+        break
+    fi
+    done
+}
+do_remote_backup()
+{
+    # Create list of files and metadata to backup, send to Snebu, and
+    # store received file list in tmp file.
+    [ -n "${graftdir}" ] && newbackupopts=( "${newbackupopts[@]}" --graft "${graftdir}" )
+    [ "${force_full}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" --full )
+    [ "${verbose}" = 1 ] && submitfilesopts=( "${submitfilesopts[@]}" -v )
+    [ "${verbose}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" -v )
+
+    # Call autoinclude function if INCLUDE is not set
+    [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(rpcsh -h ${clientname} -f autoinclude -m autoinclude) )
+
+    while :
+    do
+    [ -n "${pluginpre}" ] && $pluginpre
+
+    rpcsh -h ${clientname} -u "${rmtuser}" -f FINDCMD -v "INCLUDE EXCLUDE" -m FINDCMD |\
+	$SNEBU newbackup --name ${backupname} --retention ${retention} \
+        --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" |\
+        rpcsh -h ${clientname} -u "${rmtuser}" -m "cat >/tmp/backup_include.${datestamp}"
+
+    # Now create a tar file and send it to Snebu
+    rpcsh -h ${clientname} -u "${rmtuser}" -m "tar --one-file-system --no-recursion --acls --selinux --xattrs -S -P  -T /tmp/backup_include.${datestamp} -cf -"|\
+        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
+
+    rpcsh -h ${clientname} -u "${rmtuser}" -m "rm -f /tmp/backup_include.${datestamp}"
+    [ -n "${pluginpost}" ] && $pluginpost
+    if [ "${bkrepeat}" != 1 ]
+    then
+        break
+    fi
+    done
 }
 
 do_restore()
@@ -394,6 +435,17 @@ do_restore()
     fi
 
     $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${@}" </dev/null |tar "${tarargs[@]}" --acls --selinux --xattrs -xvf -
+}
+
+do_remote_restore()
+{
+    if [ -n "${tgtdirectory}" ]
+    then
+        tarargs=( "${tarargs[@]}" -C $tgtdirectory )
+    fi
+    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${@}" </dev/null |\
+    rpcsh -h ${clientname} -u "${rmtuser}" -m "tar ${tarargs[*]} --acls --selinux --xattrs -xvf -"
+
 }
 
 listbackups()
