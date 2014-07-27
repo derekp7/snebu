@@ -454,24 +454,41 @@ newbackup(int argc, char **argv)
     }
 #endif
 
+    if (verbose == 1)
+	fprintf(stderr, "Generating required files list\n");
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"create temporary table file_entities_bd_temp as select * "
+	"from file_entities_bd where name = '%q'", bkname)), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
     if (force_full_backup == 1) {
 	if (verbose == 1)
 	    fprintf(stderr, "Forced full backup\n");
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
 	    "(backupset_id, device_id, inode, filename, infilename, size, cdatestamp)  "
-	    "select backupset_id, device_id, inode, filename, infilename, size, cdatestamp from inbound_file_entities "
-	    "where backupset_id = '%d' and ftype = '0'", bkid)), 0, 0, &sqlerr);
+	    "select backupset_id, device_id, inode, filename, infilename, size, cdatestamp from inbound_file_entities")), 0, 0, &sqlerr);
     }
     else {
-	if (verbose == 1)
-	    fprintf(stderr, "Generating required files list\n");
+
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+"create index file_entities_bd_temp_i1 on file_entities_bd_temp (filename)")), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
+	sqlite3_free(sqlstmt);
+
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
 	    "(backupset_id, device_id, inode, filename, infilename, size, cdatestamp)  "
 	    "select distinct i.backupset_id, i.device_id, i.inode, i.filename, i.infilename, "
 	    "i.size, i.cdatestamp from inbound_file_entities i  "
-	    "left join (select * from file_entities_bd where name = '%q') f on  "
+	    "left join file_entities_bd_temp f on  "
 	    "i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
 	    "and i.permission = f.permission  "
 	    "and i.device_id = f.device_id and i.inode = f.inode  "
@@ -482,14 +499,14 @@ newbackup(int argc, char **argv)
 	    "or i.extdata = f.extdata)  "
 	    "left join diskfiles d "
 	    "on f.sha1 = d.sha1  where "
-//	    "i.backupset_id = '%d' and "
 	    "(f.file_id is null or "
-	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))", bkname /*bkid,*/)), 0, 0, &sqlerr);
+	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))")), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
 	}
 	sqlite3_free(sqlstmt);
+
 	if (verbose == 1)
 	    fprintf(stderr, "Loading existing files into backupset detail\n");
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -504,8 +521,7 @@ newbackup(int argc, char **argv)
 	    "and i.group_name = f.group_name and i.group_id = f.group_id  "
 	    "and i.size = f.size and i.cdatestamp = f.cdatestamp and i.datestamp = f.datestamp  "
 	    "and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
-	    "or i.extdata = f.extdata)  "
-	    "where i.backupset_id = '%d'", bkid)), 0, 0, &sqlerr);
+	    "or i.extdata = f.extdata)")), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
