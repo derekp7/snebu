@@ -312,35 +312,52 @@ autoinclude() {
 # passed along to mainfunc.
 
 rpcsh() {
-    if ! args=("$(getopt -l "rmthost:,rmthostport:,rmtlogin:,pushvars:,pushfuncs:,rmtmain:" -o "h:p:u:v:f:m:A" -- "$@")")
+    declare useretvars retvars
+    if ! args=("$(getopt -l "rmthost:,rmthostport:,rmtlogin:,pushvars:,pushfuncs:,rmtmain:retvars:" -o "h:p:u:v:f:m:Ar:" -- "$@")")
     then
-        exit 1
+	exit 1
     fi
 
     sshvars=( -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null )
     eval set -- "${args[@]}"
     while [ -n "$1" ]
     do
-        case $1 in
-            -h|--rmthost) rmthost=$2; shift; shift;;
-            -p|--rmtport) sshvars=( "${sshvars[@]}" -p $2 ); shift; shift;;
-            -u|--rmtlogin) rmtlogin=$2; shift; shift;;
-            -v|--pushvars) pushvars=$2; shift; shift;;
-            -f|--pushfuncs) pushfuncs=$2; shift; shift;;
-            -m|--rmtmain) rmtmain=$2; shift; shift;;
-            -A) sshvars=( "${sshvars[@]}" -A ); shift;;
+	case $1 in
+	    -h|--rmthost) rmthost=$2; shift; shift;;
+	    -p|--rmtport) sshvars=( "${sshvars[@]}" -p $2 ); shift; shift;;
+	    -r|--retvars) useretvars=1; retvars=( $2 ); shift; shift;;
+	    -u|--rmtlogin) rmtlogin=$2; shift; shift;;
+	    -v|--pushvars) pushvars=$2; shift; shift;;
+	    -f|--pushfuncs) pushfuncs=$2; shift; shift;;
+	    -m|--rmtmain) rmtmain=$2; shift; shift;;
+	    -A) sshvars=( "${sshvars[@]}" -A ); shift;;
 	    -i) sshvars=( "${sshvars[@]}" -i $2 ); shift; shift;;
-            --) shift; break;;
-        esac
+	    --) shift; break;;
+	esac
     done
     rmtargs=( "$@" )
 
+    if [ "${useretvars}" = 1 ]
+    then
+
+    eval $(ssh ${sshvars[@]} ${rmtlogin}@${rmthost} "
+	$(declare -p rmtargs 2>/dev/null)
+	$([ -n "$pushvars" ] && declare -p $pushvars 2>/dev/null)
+	$(declare -f $pushfuncs 2>/dev/null)
+	$rmtmain \"\${rmtargs[@]}\" >/dev/null 2>&1
+	for retvar in ${retvars[@]}
+	do
+	    declare -p \$retvar |sed 's/^declare .. //'
+	done
+    ")
+    else
     ssh ${sshvars[@]} ${rmtlogin}@${rmthost} "
-        $(declare -p rmtargs 2>/dev/null)
-        $([ -n "$pushvars" ] && declare -p $pushvars 2>/dev/null)
-        $(declare -f $pushfuncs 2>/dev/null)
-        $rmtmain \"\${rmtargs[@]}\"
+	$(declare -p rmtargs 2>/dev/null)
+	$([ -n "$pushvars" ] && declare -p $pushvars 2>/dev/null)
+	$(declare -f $pushfuncs 2>/dev/null)
+	$rmtmain \"\${rmtargs[@]}\"
     "
+    fi
 }
 
 FINDCMD() {
@@ -361,6 +378,21 @@ FINDCMD() {
     -printf "${FILE_PATTERN}" -o -type l -printf "${LINK_PATTERN}"
 }
 
+make_include_tempfile()
+{
+    ## Attempt to create a secure temp file, fall back to less secure methods
+    ## if mktemp isn't available
+    includetmp=$(mktemp /tmp/snebu.include.XXXXXXXXXX)
+    if [ -z "${includetmp}" ]
+    then
+	includetmp=/tmp/snebu.include.$RANDOM
+    fi
+    if [ -z "${includetmp}" ]
+    then
+	includetmp=/tmp/snebu.include.$$
+    fi
+}
+
 do_backup()
 {
     # Create list of files and metadata to backup, send to Snebu, and
@@ -377,15 +409,16 @@ do_backup()
     do
     [ -n "${pluginpre}" ] && $pluginpre
 
+    make_include_tempfile
     FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
-        --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" \
-        >/tmp/backup_include.${datestamp}
+        --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" |\
+	cat >${includetmp}
 
     # Now create a tar file and send it to Snebu
-    tar --one-file-system --no-recursion --acls --selinux --xattrs -S -P  -T /tmp/backup_include.${datestamp} -cf - |\
+    tar --one-file-system --no-recursion --acls --selinux --xattrs -S -P  -T ${includetmp} -cf - |\
         $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
-    rm -f /tmp/backup_include.${datestamp}
+    rm -f ${includetmp}
     [ -n "${pluginpost}" ] && $pluginpost
     if [ "${bkrepeat}" != 1 ]
     then
@@ -393,6 +426,7 @@ do_backup()
     fi
     done
 }
+
 do_remote_backup()
 {
     # Create list of files and metadata to backup, send to Snebu, and
@@ -405,25 +439,34 @@ do_remote_backup()
     # Call autoinclude function if INCLUDE is not set
     [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(rpcsh -h ${clientname} -u "${rmtuser}" -f autoinclude -m autoinclude) )
 
+    bkrepeat=0
     while :
     do
+    ## Run plugin pre function
     [ -n "${pluginpre}" ] && $pluginpre
 
+    rpcsh -h ${clientname} -u "${rmtuser}" -f 'make_include_tempfile' \
+        -r 'includetmp' -m 'make_include_tempfile'
     rpcsh -h ${clientname} -u "${rmtuser}" -f FINDCMD -v "INCLUDE EXCLUDE" -m FINDCMD |\
 	$SNEBU newbackup --name ${backupname} --retention ${retention} \
         --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" |\
-        rpcsh -h ${clientname} -u "${rmtuser}" -m "cat >/tmp/backup_include.${datestamp}"
+        rpcsh -h ${clientname} -u "${rmtuser}" -m "cat >${includetmp}"
 
     # Now create a tar file and send it to Snebu
-    rpcsh -h ${clientname} -u "${rmtuser}" -m "tar --one-file-system --no-recursion --acls --selinux --xattrs -S -P  -T /tmp/backup_include.${datestamp} -cf -"|\
+    rpcsh -h ${clientname} -u "${rmtuser}" -m "tar --one-file-system --no-recursion --acls --selinux --xattrs -S -P  -T ${includetmp} -cf -" |\
         $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
-    rpcsh -h ${clientname} -u "${rmtuser}" -m "rm -f /tmp/backup_include.${datestamp}"
+    rpcsh -h ${clientname} -u "${rmtuser}" -m "rm -f ${includetmp}"
+    
+    ## Run plugin post function
     [ -n "${pluginpost}" ] && $pluginpost
+
+    ## If plugin post function needs to back up addtional files, it sets bkrepeat on
     if [ "${bkrepeat}" != 1 ]
     then
         break
     fi
+    bkrepeat=0
     done
 }
 
