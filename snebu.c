@@ -2993,6 +2993,7 @@ int import(int argc, char **argv)
         char agid[33];
         int nuid;
         int ngid;
+        int cmodtime;
         int modtime;
         unsigned long long int filesize;
     } t;
@@ -3098,6 +3099,7 @@ int import(int argc, char **argv)
 	    "group_id      integer,  \n"
 	    "size          integer,  \n"
 	    "sha1           char,  \n"
+	    "cdatestamp     integer,  \n"
 	    "datestamp     integer,  \n"
 	    "filename      char,  \n"
 	    "extdata       char default '',  \n"
@@ -3113,6 +3115,7 @@ int import(int argc, char **argv)
 	    "group_id,  \n"
 	    "size,  \n"
 	    "sha1,  \n"
+	    "cdatestamp,  \n"
 	    "datestamp,  \n"
 	    "filename,  \n"
 	    "extdata ))", 0, 0, 0);
@@ -3120,9 +3123,9 @@ int import(int argc, char **argv)
     sqlstmt = sqlite3_mprintf(
 	"insert or ignore into inbound_file_entities "
 	"(backupset_id, ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata)  "
+	"group_name, group_id, size, sha1, cdatestamp, datestamp, filename, extdata)  "
 	"values (@bkid, @ftype, @mode, @devid, @inode, @auid, @nuid, @agid,  "
-	"@ngid, @filesize, @sha1, @modtime, @filename, @linktarget)");
+	"@ngid, @filesize, @sha1, @cmodtime, @modtime, @filename, @linktarget)");
 
     sqlite3_prepare_v2(bkcatalog, sqlstmt, -1, &sqlres, 0);
 
@@ -3138,9 +3141,9 @@ int import(int argc, char **argv)
 	char *endlptr;
 	int fnstart;
 	char *ascmode;
-	sscanf(instr, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%Ld\t%40s\t%d\t%n",
+	sscanf(instr, "%c\t%o\t%32s\t%32s\t%32s\t%d\t%32s\t%d\t%Ld\t%40s\t%d\n%d\t%n",
 	    t.ftype, &t.mode, t.devid, t.inode, t.auid, &t.nuid, t.agid, &t.ngid,
-	    &(t.filesize), sha1, &t.modtime, &fnstart);
+	    &(t.filesize), sha1, &t.cmodtime, &t.modtime, &fnstart);
 	fptr = instr + fnstart;
 	endfptr = strstr(fptr, "\t");
 	if (endfptr == 0) {
@@ -3190,9 +3193,10 @@ int import(int argc, char **argv)
 	sqlite3_bind_int(sqlres, 9, t.ngid);
 	sqlite3_bind_int64(sqlres, 10, t.filesize);
 	sqlite3_bind_text(sqlres, 11, sha1, -1, SQLITE_STATIC);
-	sqlite3_bind_int(sqlres, 12, t.modtime);
-	sqlite3_bind_text(sqlres, 13, filename, -1, SQLITE_STATIC);
-	sqlite3_bind_text(sqlres, 14, linktarget, -1, SQLITE_STATIC);
+	sqlite3_bind_int(sqlres, 12, t.cmodtime);
+	sqlite3_bind_int(sqlres, 13, t.modtime);
+	sqlite3_bind_text(sqlres, 14, filename, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 15, linktarget, -1, SQLITE_STATIC);
 	sqlite3_step(sqlres);
 //	sqlite3_clear_bindings(sqlres);
 	sqlite3_reset(sqlres);
@@ -3201,9 +3205,9 @@ int import(int argc, char **argv)
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities  "
 	"(ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata)  "
+	"group_name, group_id, size, sha1, cdatestamp, datestamp, filename, extdata)  "
 	"select ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata  "
+	"group_name, group_id, size, sha1, cdatestamp, datestamp, filename, extdata  "
 	"from inbound_file_entities")), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n", sqlerr);
@@ -3221,7 +3225,7 @@ int import(int argc, char **argv)
 	"and i.device_id = f.device_id and i.inode = f.inode  "
 	"and i.user_name = f.user_name and i.user_id = f.user_id  "
 	"and i.group_name = f.group_name and i.group_id = f.group_id  "
-	"and i.size = f.size and i.datestamp = f.datestamp  "
+	"and i.size = f.size and i.cdatestamp = f.cdatestamp and i.datestamp = f.datestamp  "
 	"and i.filename = f.filename and i.extdata = f.extdata  "
 	"where i.backupset_id = '%d'", bkid)), 0, 0, &sqlerr);
 
@@ -3363,13 +3367,13 @@ int export(int argc, char **argv)
     sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf(
 	"select ftype, permission, device_id, inode, user_name, user_id, "
-	"  group_name, group_id, size, sha1, datestamp, filename, extdata "
+	"  group_name, group_id, size, sha1, cdatestamp, datestamp, filename, extdata "
 	"  from file_entities f "
 	"  join backupset_detail d on "
 	"  f.file_id = d.file_id "
 	"  where d.backupset_id = '%d' ", bkid)), -1, &sqlres, 0);
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
-	fprintf(catalog, "%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%s\t%s\n",
+	fprintf(catalog, "%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s\t%s\n",
 	sqlite3_column_text(sqlres, 0),
 	sqlite3_column_text(sqlres, 1),
 	sqlite3_column_text(sqlres, 2),
@@ -3378,11 +3382,12 @@ int export(int argc, char **argv)
 	sqlite3_column_int(sqlres, 5),
 	sqlite3_column_text(sqlres, 6),
 	sqlite3_column_int(sqlres, 7),
-	sqlite3_column_int(sqlres, 8),
+	sqlite3_column_int64(sqlres, 8),
 	sqlite3_column_text(sqlres, 9),
 	sqlite3_column_int(sqlres, 10),
-	stresc((char *) sqlite3_column_text(sqlres, 11), &efilename),
-	stresc((char *) sqlite3_column_text(sqlres, 12), &eextdata));
+	sqlite3_column_int(sqlres, 11),
+	stresc((char *) sqlite3_column_text(sqlres, 12), &efilename),
+	stresc((char *) sqlite3_column_text(sqlres, 13), &eextdata));
     }
     sqlite3_free(sqlstmt);
     fclose(catalog);
