@@ -2380,14 +2380,14 @@ int restore(int argc, char **argv)
 			i != 0; --i, ++p)
 			tmpchksum += 0xFF & *p;
 		    sprintf(longtarhead.chksum, "%6o", tmpchksum);
-		    fwrite(&longtarhead, 1, 512, stdout);
+		    fwrite(&longtarhead, 1, 512, stdout); // write out long symlink header
 		    tblocks++;
 		    for (i = 0; i < strlen(linktarget); i += 512) {
 			for (j = 0; j < 512; j++)
 			    curblock[j] = 0;
 			memcpy(curblock, linktarget + i, strlen(linktarget) - i >= 512 ? 512 :
 			    (strlen(linktarget) - i));
-			fwrite(curblock, 1, 512, stdout);
+			fwrite(curblock, 1, 512, stdout); // write out long link 
 			tblocks++;
 		    }
 		}
@@ -2415,14 +2415,14 @@ int restore(int argc, char **argv)
 		    i != 0; --i, ++p)
 		    tmpchksum += 0xFF & *p;
 		sprintf(longtarhead.chksum, "%6.6o", tmpchksum);
-		fwrite(&longtarhead, 1, 512, stdout);
+		fwrite(&longtarhead, 1, 512, stdout);  // write out long file name header
 		tblocks++;
 		for (i = 0; i < strlen(filename); i += 512) {
 		    for (j = 0; j < 512; j++)
 			curblock[j] = 0;
 		    memcpy(curblock, filename + i, strlen(filename) - i >= 512 ? 512 :
 			(strlen(filename) - i));
-		    fwrite(curblock, 1, 512, stdout);
+		    fwrite(curblock, 1, 512, stdout); // write out long file name data
 		    tblocks++;
 		}
 	    }
@@ -2476,7 +2476,8 @@ int restore(int argc, char **argv)
 	    strcpy(xtarhead.mode, "0000000");
 	    sprintf(xtarhead.size, "%11.11o", xheaderlen);
 	    strcpy(xtarhead.modtime, "00000000000");
-	    strncpy(xtarhead.ustar, "ustar ", 6);
+	    sprintf(xtarhead.ustar, "ustar", 6);
+	    strncpy(xtarhead.ustarver, "00", 2);
 	    strcpy(xtarhead.auid, "root");
 	    strcpy(xtarhead.agid, "root");
 	    memcpy(xtarhead.chksum, "        ", 8);
@@ -2484,14 +2485,14 @@ int restore(int argc, char **argv)
 		i != 0; --i, ++p)
 		tmpchksum += 0xFF & *p;
 	    sprintf(xtarhead.chksum, "%6o", tmpchksum);
-	    fwrite(&xtarhead, 1, 512, stdout);
+	    fwrite(&xtarhead, 1, 512, stdout);  // write out pax header
 	    tblocks++;
 	    for (i = 0; i < xheaderlen; i += 512) {
 		for (j = 0; j < 512; j++)
 		    curblock[j] = 0;
 		memcpy(curblock, xheader+ i, xheaderlen - i >= 512 ? 512 :
 		    (xheaderlen - i));
-		fwrite(curblock, 1, 512, stdout);
+		fwrite(curblock, 1, 512, stdout);  // write out pax data
 		tblocks++;
 	    }
 	}
@@ -2500,7 +2501,14 @@ int restore(int argc, char **argv)
 	if (linktarget != 0)
 	    strncpy(tarhead.linktarget, linktarget, 100);
 
-	sprintf(tarhead.ustar, "ustar");
+	if (xheader == 0) {
+	    strncpy(tarhead.ustar, "ustar ", 6);
+	    sprintf(tarhead.ustarver, " ");
+	}
+	else {
+	    sprintf(tarhead.ustar, "ustar");
+	    strncpy(tarhead.ustarver, "00", 6);
+	}
 	*(tarhead.ftype) = t.ftype;
 	sprintf(tarhead.mode, "%7.7o", t.mode);
 	strncpy(tarhead.auid, t.auid, 32);
