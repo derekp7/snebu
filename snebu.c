@@ -411,15 +411,6 @@ newbackup(int argc, char **argv)
 	    }
 	}
 
-//	fprintf(stderr,
-//	    "insert or ignore into inbound_file_entities  "
-//	    "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
-//	    "group_id, size, sha1, datestamp, filename, extdata, infilename)  "
-//	    "values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%s%s', '%s', '%s')\n\n",
-//	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
-//	    fs.filesize, fs.sha1, fs.modtime, pathsub, fs.filename + pathskip, fs.linktarget, fs.filename);
-
-
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into inbound_file_entities "
 	    "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
@@ -457,14 +448,6 @@ newbackup(int argc, char **argv)
     if (verbose == 1)
 	fprintf(stderr, "Generating required files list\n");
 
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"create temporary table file_entities_bd_temp as select * "
-	"from file_entities_bd where name = '%q'", bkname)), 0, 0, &sqlerr);
-    if (sqlerr != 0) {
-	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
-	sqlite3_free(sqlerr);
-    }
-    sqlite3_free(sqlstmt);
     if (force_full_backup == 1) {
 	if (verbose == 1)
 	    fprintf(stderr, "Forced full backup\n");
@@ -476,7 +459,10 @@ newbackup(int argc, char **argv)
     else {
 
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-"create index file_entities_bd_temp_i1 on file_entities_bd_temp (filename)")), 0, 0, &sqlerr);
+	    "create temporary table thishost_file_ids as "
+	    "select distinct file_id from backupsets b "
+	    "join backupset_detail d "
+	    "on b.backupset_id = d.backupset_id and name = '%q'", bkname)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -484,11 +470,37 @@ newbackup(int argc, char **argv)
 	sqlite3_free(sqlstmt);
 
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "create temporary table thishost_file_details as "
+	    "select t.file_id, ftype, permission, device_id, inode, user_name, user_id, "
+	    "group_name, group_id, size, sha1, cdatestamp, datestamp, "
+	    "filename, extdata from thishost_file_ids t join file_entities f "
+	    "on t.file_id = f.file_id")), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
+	sqlite3_free(sqlstmt);
+
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "create index thishost_file_details_i1 on thishost_file_details (sha1)")), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "create index thishost_file_details_i2 on thishost_file_details (filename)")), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
+        sqlite3_free(sqlstmt);
+
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
 	    "(backupset_id, device_id, inode, filename, infilename, size, cdatestamp)  "
 	    "select distinct i.backupset_id, i.device_id, i.inode, i.filename, i.infilename, "
 	    "i.size, i.cdatestamp from inbound_file_entities i  "
-	    "left join file_entities_bd_temp f on  "
+	    "left join thishost_file_details f on  "
 	    "i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
 	    "and i.permission = f.permission  "
 	    "and i.device_id = f.device_id and i.inode = f.inode  "
