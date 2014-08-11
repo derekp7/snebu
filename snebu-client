@@ -22,7 +22,7 @@ process_cmdline()
         exit
     fi
 
-    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help" -o "c:n:r:d:fvC:h" -- "$@")")
+    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help,sudo:" -o "c:n:r:d:fvC:h" -- "$@")")
     then
         usage target
         exit 1
@@ -43,6 +43,7 @@ process_cmdline()
 	    --plugin) plugin=$2; shift; shift;;
 	    -h|--help) shift; usage $target;;
 	    -v|--verbose) verbose=1; shift;;
+	    --sudo) sudousr=$2; shift; shift;;
             --) shift; break;;
         esac
     done
@@ -312,8 +313,9 @@ autoinclude() {
 # passed along to mainfunc.
 
 rpcsh() {
+    origargs=( "$@" )
     declare useretvars retvars
-    if ! args=("$(getopt -l "rmthost:,rmthostport:,rmtlogin:,pushvars:,pushfuncs:,rmtmain:retvars:" -o "h:p:u:v:f:m:Ar:" -- "$@")")
+    if ! args=("$(getopt -l "rmthost:,rmthostport:,rmtlogin:,pushvars:,pushfuncs:,rmtmain:,retvars:,sudousr:" -o "h:p:u:v:f:m:Ar:s:" -- "$@")")
     then
 	exit 1
     fi
@@ -330,12 +332,20 @@ rpcsh() {
 	    -v|--pushvars) pushvars=$2; shift; shift;;
 	    -f|--pushfuncs) pushfuncs=$2; shift; shift;;
 	    -m|--rmtmain) rmtmain=$2; shift; shift;;
+	    -s|--sudousr) sudousr=$2; shift; shift;;
 	    -A) sshvars=( "${sshvars[@]}" -A ); shift;;
 	    -i) sshvars=( "${sshvars[@]}" -i $2 ); shift; shift;;
 	    --) shift; break;;
 	esac
     done
     rmtargs=( "$@" )
+    if [ -n "${sudousr}" ]
+    then
+	rmtmain=rpcsudo
+	rmtargs=( "${origargs[@]}" )
+	pushfuncs="${pushfuncs} rpcsudo"
+	rmtlogin="${sudousr}"
+    fi
 
     if [ "${useretvars}" = 1 ]
     then
@@ -352,6 +362,55 @@ rpcsh() {
     ")
     else
     ssh ${sshvars[@]} ${rmtlogin}@${rmthost} "
+	$(declare -p rmtargs 2>/dev/null)
+	$([ -n "$pushvars" ] && declare -p $pushvars 2>/dev/null)
+	$(declare -f $pushfuncs 2>/dev/null)
+	$rmtmain \"\${rmtargs[@]}\"
+    "
+    fi
+}
+
+rpcsudo() {
+    declare useretvars retvars
+    if ! args=("$(getopt -l "rmthost:,rmthostport:,rmtlogin:,pushvars:,pushfuncs:,rmtmain:retvars:" -o "h:p:u:v:f:m:Ar:s:" -- "$@")")
+    then
+	exit 1
+    fi
+
+    eval set -- "${args[@]}"
+    while [ -n "$1" ]
+    do
+	case $1 in
+	    -h|--rmthost) shift; shift;;
+	    -p|--rmtport) shift; shift;;
+	    -r|--retvars) useretvars=1; retvars=( $2 ); shift; shift;;
+	    -u|--rmtlogin) rmtlogin=$2; shift; shift;;
+	    -v|--pushvars) pushvars=$2; shift; shift;;
+	    -f|--pushfuncs) pushfuncs=$2; shift; shift;;
+	    -m|--rmtmain) rmtmain=$2; shift; shift;;
+	    -s|--sudousr) sudousr=$2; shift; shift;;
+	    -A) shift;;
+	    -i) shift; shift;;
+	    --) shift; break;;
+	esac
+    done
+    rmtargs=( "$@" )
+
+    if [ "${useretvars}" = 1 ]
+    then
+
+    eval $(sudo su -  ${rmtlogin} -c "
+	$(declare -p rmtargs 2>/dev/null)
+	$([ -n "$pushvars" ] && declare -p $pushvars 2>/dev/null)
+	$(declare -f $pushfuncs 2>/dev/null)
+	$rmtmain \"\${rmtargs[@]}\" >/dev/null 2>&1
+	for retvar in ${retvars[@]}
+	do
+	    declare -p \$retvar |sed 's/^declare .. //'
+	done
+    ")
+    else
+    sudo su - ${rmtlogin} -c "
 	$(declare -p rmtargs 2>/dev/null)
 	$([ -n "$pushvars" ] && declare -p $pushvars 2>/dev/null)
 	$(declare -f $pushfuncs 2>/dev/null)
