@@ -22,6 +22,7 @@ process_cmdline()
         exit
     fi
 
+    verbose=0
     if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help,sudo:" -o "c:n:r:d:fvC:h" -- "$@")")
     then
         usage target
@@ -42,7 +43,7 @@ process_cmdline()
 	    --graft) graftdir=$2; shift; shift;;
 	    --plugin) plugin=$2; shift; shift;;
 	    -h|--help) shift; usage $target;;
-	    -v|--verbose) verbose=1; shift;;
+	    -v|--verbose) verbose=$((${verbose} + 1)); shift;;
 	    --sudo) sudousr=$2; shift; shift;;
             --) shift; break;;
         esac
@@ -458,8 +459,8 @@ do_backup()
     # store received file list in tmp file.
     [ -n "${graftdir}" ] && newbackupopts=( "${newbackupopts[@]}" --graft "${graftdir}" )
     [ "${force_full}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" --full )
-    [ "${verbose}" = 1 ] && submitfilesopts=( "${submitfilesopts[@]}" -v )
-    [ "${verbose}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" -v )
+    for i in $(seq 1 "${verbose}"); do submitfilesopts=( "${submitfilesopts[@]}" -v ); done
+    for i in $(seq 1 "${verbose}"); do newbackupopts=( "${newbackupopts[@]}" -v ); done
 
     # Call autoinclude function if INCLUDE is not set
     [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(autoinclude) )
@@ -492,8 +493,8 @@ do_remote_backup()
     # store received file list in tmp file.
     [ -n "${graftdir}" ] && newbackupopts=( "${newbackupopts[@]}" --graft "${graftdir}" )
     [ "${force_full}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" --full )
-    [ "${verbose}" = 1 ] && submitfilesopts=( "${submitfilesopts[@]}" -v )
-    [ "${verbose}" = 1 ] && newbackupopts=( "${newbackupopts[@]}" -v )
+    for i in $(seq 1 "${verbose}"); do submitfilesopts=( "${submitfilesopts[@]}" -v ); done
+    for i in $(seq 1 "${verbose}"); do newbackupopts=( "${newbackupopts[@]}" -v ); done
 
     # Call autoinclude function if INCLUDE is not set
     [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(rpcsh -h ${clientname} -u "${rmtuser}" -f autoinclude -m autoinclude) )
@@ -554,7 +555,7 @@ listbackups()
 {
     [ -n "${backupname}" ] && sargs=( "${sargs[@]}" -n ${backupname} )
     [ -n "${datestamp}" ] && sargs=( "${sargs[@]}" -d ${datestamp} )
-    if [ -z "${backupname}" -a "${verbose}" = 1 ]
+    if [ -z "${backupname}" -a "${verbose}" -ge 1 ]
     then
 	for i in $( $SNEBU listbackups )
 	do

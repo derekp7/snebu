@@ -204,7 +204,7 @@ newbackup(int argc, char **argv)
 		foundopts |= 4;
 		break;
 	    case 'v':
-		verbose = 1;
+		verbose += 1;
 		foundopts |= 8;
 		break;
 	    case 0:
@@ -338,7 +338,7 @@ newbackup(int argc, char **argv)
 
 
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
-    if (verbose == 1)
+    if (verbose >= 1)
 	fprintf(stderr, "Receiving input file list\n");
     while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
 	int pathskip = 0;
@@ -454,7 +454,7 @@ newbackup(int argc, char **argv)
     }
 #endif
 
-    if (verbose == 1)
+    if (verbose >= 2)
 	fprintf(stderr, "Generating required files list\n");
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -466,7 +466,7 @@ newbackup(int argc, char **argv)
     }
     sqlite3_free(sqlstmt);
     if (force_full_backup == 1) {
-	if (verbose == 1)
+	if (verbose >= 1)
 	    fprintf(stderr, "Forced full backup\n");
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
@@ -507,7 +507,7 @@ newbackup(int argc, char **argv)
 	}
 	sqlite3_free(sqlstmt);
 
-	if (verbose == 1)
+	if (verbose >= 2)
 	    fprintf(stderr, "Loading existing files into backupset detail\n");
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into backupset_detail  "
@@ -528,8 +528,8 @@ newbackup(int argc, char **argv)
 	}
 	sqlite3_free(sqlstmt);
     }
-    if (verbose == 1)
-	fprintf(stderr, "Printing required-file list\n");
+    if (verbose >= 1)
+	fprintf(stderr, "Returning list of required files\n");
     sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"select n.infilename from needed_file_entities n "
 	"join inbound_file_entities i "
@@ -1191,7 +1191,7 @@ int submitfiles(int argc, char **argv)
 		foundopts |= 2;
 		break;
 	    case 'v':
-		verbose = 1;
+		verbose += 1;
 		foundopts |= 4;
 		break;
 	    default:
@@ -1248,7 +1248,7 @@ int submitfiles(int argc, char **argv)
     sqlite3_free(sqlstmt);
 
 
-    if (verbose == 1)
+    if (verbose >= 1)
 	fprintf(stderr, "%45s", " ");
 
     sqlstmt = sqlite3_mprintf(
@@ -1272,10 +1272,10 @@ int submitfiles(int argc, char **argv)
         if (tarhead.filename[0] == 0) {	// End of TAR archive
 	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 	    in_a_transaction = 0;
-	    if (verbose == 1)
+	    if (verbose > 1)
 		fprintf(stderr, "\n");
 
-	    if (verbose == 1)
+	    if (verbose >= 2)
 		fprintf(stderr, "Finished receiving files\n");
 
 	    sqlite3_exec(bkcatalog,
@@ -1417,7 +1417,7 @@ int submitfiles(int argc, char **argv)
 	    }
 	    sqlite3_free(sqlstmt);
 
-	    if (verbose == 1)
+	    if (verbose >= 2)
 		fprintf(stderr, "Creating internal list of received files\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	        "insert into received_file_entities_ldi_t1 select ftype, permission, "
@@ -1432,7 +1432,7 @@ int submitfiles(int argc, char **argv)
 	    }
 	    sqlite3_free(sqlstmt);
 
-	    if (verbose == 1)
+	    if (verbose >= 2)
 		fprintf(stderr, "Merging hardlink file metadata\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert into received_file_entities_ldi_t "
@@ -1452,7 +1452,7 @@ int submitfiles(int argc, char **argv)
 	    }
 	    sqlite3_free(sqlstmt);
 		
-	    if (verbose == 1)
+	    if (verbose >= 2)
 		fprintf(stderr, "Adding regular files, directories, and symlinks\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into received_file_entities_ldi_t "
@@ -1471,7 +1471,21 @@ int submitfiles(int argc, char **argv)
 	    }
 	    sqlite3_free(sqlstmt);
 
-	    if (verbose == 1)
+	    if (verbose >= 1) {
+		x = sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		    "select sum(size) from received_file_entities_ldi_t")), -1, &sqlres, 0);
+		if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
+		    bytes_read = sqlite3_column_int64(sqlres, 0);
+		    sprintf(statusline, "%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
+		    if (verbose == 1)
+			fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
+		    fprintf(stderr, "%45s\n", statusline);
+		}
+		sqlite3_finalize(sqlres);
+		sqlite3_free(sqlstmt);
+	    }
+
+	    if (verbose >= 2)
 		fprintf(stderr, "Copying to file_entities\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into file_entities (ftype, permission, device_id, inode,  "
@@ -1485,7 +1499,7 @@ int submitfiles(int argc, char **argv)
 	    }
 	    sqlite3_free(sqlstmt);
 
-	    if (verbose == 1)
+	    if (verbose >= 2)
 		fprintf(stderr, "Creating backupset_detail\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into backupset_detail (backupset_id, file_id) select %d,"
@@ -1946,7 +1960,7 @@ int submitfiles(int argc, char **argv)
 
 	}
 	bytes_read += fs.filesize;
-	if (verbose == 1) {
+	if (verbose >= 1) {
 	    sprintf(statusline, "%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
 	    fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b%45s", statusline);
 //	    fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
