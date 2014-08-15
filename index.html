@@ -1,944 +1,840 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
-    "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.8" />
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="generator" content="Asciidoctor 0.1.4">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SNEBU</title>
-<style type="text/css">
-/* Shared CSS for AsciiDoc xhtml11 and html5 backends */
-
-/* Default font. */
-body {
-  font-family: Georgia,serif;
-}
-
-/* Title font. */
-h1, h2, h3, h4, h5, h6,
-div.title, caption.title,
-thead, p.table.header,
-#toctitle,
-#author, #revnumber, #revdate, #revremark,
-#footer {
-  font-family: Arial,Helvetica,sans-serif;
-}
-
-body {
-  margin: 1em 5% 1em 5%;
-}
-
-a {
-  color: blue;
-  text-decoration: underline;
-}
-a:visited {
-  color: fuchsia;
-}
-
-em {
-  font-style: italic;
-  color: navy;
-}
-
-strong {
-  font-weight: bold;
-  color: #083194;
-}
-
-h1, h2, h3, h4, h5, h6 {
-  color: #527bbd;
-  margin-top: 1.2em;
-  margin-bottom: 0.5em;
-  line-height: 1.3;
-}
-
-h1, h2, h3 {
-  border-bottom: 2px solid silver;
-}
-h2 {
-  padding-top: 0.5em;
-}
-h3 {
-  float: left;
-}
-h3 + * {
-  clear: left;
-}
-h5 {
-  font-size: 1.0em;
-}
-
-div.sectionbody {
-  margin-left: 0;
-}
-
-hr {
-  border: 1px solid silver;
-}
-
-p {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-}
-
-ul, ol, li > p {
-  margin-top: 0;
-}
-ul > li     { color: #aaa; }
-ul > li > * { color: black; }
-
-pre {
-  padding: 0;
-  margin: 0;
-}
-
-#author {
-  color: #527bbd;
-  font-weight: bold;
-  font-size: 1.1em;
-}
-#email {
-}
-#revnumber, #revdate, #revremark {
-}
-
-#footer {
-  font-size: small;
-  border-top: 2px solid silver;
-  padding-top: 0.5em;
-  margin-top: 4.0em;
-}
-#footer-text {
-  float: left;
-  padding-bottom: 0.5em;
-}
-#footer-badges {
-  float: right;
-  padding-bottom: 0.5em;
-}
-
-#preamble {
-  margin-top: 1.5em;
-  margin-bottom: 1.5em;
-}
-div.imageblock, div.exampleblock, div.verseblock,
-div.quoteblock, div.literalblock, div.listingblock, div.sidebarblock,
-div.admonitionblock {
-  margin-top: 1.0em;
-  margin-bottom: 1.5em;
-}
-div.admonitionblock {
-  margin-top: 2.0em;
-  margin-bottom: 2.0em;
-  margin-right: 10%;
-  color: #606060;
-}
-
-div.content { /* Block element content. */
-  padding: 0;
-}
-
-/* Block element titles. */
-div.title, caption.title {
-  color: #527bbd;
-  font-weight: bold;
-  text-align: left;
-  margin-top: 1.0em;
-  margin-bottom: 0.5em;
-}
-div.title + * {
-  margin-top: 0;
-}
-
-td div.title:first-child {
-  margin-top: 0.0em;
-}
-div.content div.title:first-child {
-  margin-top: 0.0em;
-}
-div.content + div.title {
-  margin-top: 0.0em;
-}
-
-div.sidebarblock > div.content {
-  background: #ffffee;
-  border: 1px solid #dddddd;
-  border-left: 4px solid #f0f0f0;
-  padding: 0.5em;
-}
-
-div.listingblock > div.content {
-  border: 1px solid #dddddd;
-  border-left: 5px solid #f0f0f0;
-  background: #f8f8f8;
-  padding: 0.5em;
-}
-
-div.quoteblock, div.verseblock {
-  padding-left: 1.0em;
-  margin-left: 1.0em;
-  margin-right: 10%;
-  border-left: 5px solid #f0f0f0;
-  color: #777777;
-}
-
-div.quoteblock > div.attribution {
-  padding-top: 0.5em;
-  text-align: right;
-}
-
-div.verseblock > pre.content {
-  font-family: inherit;
-  font-size: inherit;
-}
-div.verseblock > div.attribution {
-  padding-top: 0.75em;
-  text-align: left;
-}
-/* DEPRECATED: Pre version 8.2.7 verse style literal block. */
-div.verseblock + div.attribution {
-  text-align: left;
-}
-
-div.admonitionblock .icon {
-  vertical-align: top;
-  font-size: 1.1em;
-  font-weight: bold;
-  text-decoration: underline;
-  color: #527bbd;
-  padding-right: 0.5em;
-}
-div.admonitionblock td.content {
-  padding-left: 0.5em;
-  border-left: 3px solid #dddddd;
-}
-
-div.exampleblock > div.content {
-  border-left: 3px solid #dddddd;
-  padding-left: 0.5em;
-}
-
-div.imageblock div.content { padding-left: 0; }
-span.image img { border-style: none; }
-a.image:visited { color: white; }
-
-dl {
-  margin-top: 0.8em;
-  margin-bottom: 0.8em;
-}
-dt {
-  margin-top: 0.5em;
-  margin-bottom: 0;
-  font-style: normal;
-  color: navy;
-}
-dd > *:first-child {
-  margin-top: 0.1em;
-}
-
-ul, ol {
-    list-style-position: outside;
-}
-ol.arabic {
-  list-style-type: decimal;
-}
-ol.loweralpha {
-  list-style-type: lower-alpha;
-}
-ol.upperalpha {
-  list-style-type: upper-alpha;
-}
-ol.lowerroman {
-  list-style-type: lower-roman;
-}
-ol.upperroman {
-  list-style-type: upper-roman;
-}
-
-div.compact ul, div.compact ol,
-div.compact p, div.compact p,
-div.compact div, div.compact div {
-  margin-top: 0.1em;
-  margin-bottom: 0.1em;
-}
-
-tfoot {
-  font-weight: bold;
-}
-td > div.verse {
-  white-space: pre;
-}
-
-div.hdlist {
-  margin-top: 0.8em;
-  margin-bottom: 0.8em;
-}
-div.hdlist tr {
-  padding-bottom: 15px;
-}
-dt.hdlist1.strong, td.hdlist1.strong {
-  font-weight: bold;
-}
-td.hdlist1 {
-  vertical-align: top;
-  font-style: normal;
-  padding-right: 0.8em;
-  color: navy;
-}
-td.hdlist2 {
-  vertical-align: top;
-}
-div.hdlist.compact tr {
-  margin: 0;
-  padding-bottom: 0;
-}
-
-.comment {
-  background: yellow;
-}
-
-.footnote, .footnoteref {
-  font-size: 0.8em;
-}
-
-span.footnote, span.footnoteref {
-  vertical-align: super;
-}
-
-#footnotes {
-  margin: 20px 0 20px 0;
-  padding: 7px 0 0 0;
-}
-
-#footnotes div.footnote {
-  margin: 0 0 5px 0;
-}
-
-#footnotes hr {
-  border: none;
-  border-top: 1px solid silver;
-  height: 1px;
-  text-align: left;
-  margin-left: 0;
-  width: 20%;
-  min-width: 100px;
-}
-
-div.colist td {
-  padding-right: 0.5em;
-  padding-bottom: 0.3em;
-  vertical-align: top;
-}
-div.colist td img {
-  margin-top: 0.3em;
-}
-
-@media print {
-  #footer-badges { display: none; }
-}
-
-#toc {
-  margin-bottom: 2.5em;
-}
-
-#toctitle {
-  color: #527bbd;
-  font-size: 1.1em;
-  font-weight: bold;
-  margin-top: 1.0em;
-  margin-bottom: 0.1em;
-}
-
-div.toclevel1, div.toclevel2, div.toclevel3, div.toclevel4 {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-div.toclevel2 {
-  margin-left: 2em;
-  font-size: 0.9em;
-}
-div.toclevel3 {
-  margin-left: 4em;
-  font-size: 0.9em;
-}
-div.toclevel4 {
-  margin-left: 6em;
-  font-size: 0.9em;
-}
-
-span.aqua { color: aqua; }
-span.black { color: black; }
-span.blue { color: blue; }
-span.fuchsia { color: fuchsia; }
-span.gray { color: gray; }
-span.green { color: green; }
-span.lime { color: lime; }
-span.maroon { color: maroon; }
-span.navy { color: navy; }
-span.olive { color: olive; }
-span.purple { color: purple; }
-span.red { color: red; }
-span.silver { color: silver; }
-span.teal { color: teal; }
-span.white { color: white; }
-span.yellow { color: yellow; }
-
-span.aqua-background { background: aqua; }
-span.black-background { background: black; }
-span.blue-background { background: blue; }
-span.fuchsia-background { background: fuchsia; }
-span.gray-background { background: gray; }
-span.green-background { background: green; }
-span.lime-background { background: lime; }
-span.maroon-background { background: maroon; }
-span.navy-background { background: navy; }
-span.olive-background { background: olive; }
-span.purple-background { background: purple; }
-span.red-background { background: red; }
-span.silver-background { background: silver; }
-span.teal-background { background: teal; }
-span.white-background { background: white; }
-span.yellow-background { background: yellow; }
-
-span.big { font-size: 2em; }
-span.small { font-size: 0.6em; }
-
-span.underline { text-decoration: underline; }
-span.overline { text-decoration: overline; }
-span.line-through { text-decoration: line-through; }
-
-
-/*
- * xhtml11 specific
- *
- * */
-
-tt {
-  font-family: monospace;
-  font-size: inherit;
-  color: navy;
-}
-
-div.tableblock {
-  margin-top: 1.0em;
-  margin-bottom: 1.5em;
-}
-div.tableblock > table {
-  border: 3px solid #527bbd;
-}
-thead, p.table.header {
-  font-weight: bold;
-  color: #527bbd;
-}
-p.table {
-  margin-top: 0;
-}
-/* Because the table frame attribute is overriden by CSS in most browsers. */
-div.tableblock > table[frame="void"] {
-  border-style: none;
-}
-div.tableblock > table[frame="hsides"] {
-  border-left-style: none;
-  border-right-style: none;
-}
-div.tableblock > table[frame="vsides"] {
-  border-top-style: none;
-  border-bottom-style: none;
-}
-
-
-/*
- * html5 specific
- *
- * */
-
-.monospaced {
-  font-family: monospace;
-  font-size: inherit;
-  color: navy;
-}
-
-table.tableblock {
-  margin-top: 1.0em;
-  margin-bottom: 1.5em;
-}
-thead, p.tableblock.header {
-  font-weight: bold;
-  color: #527bbd;
-}
-p.tableblock {
-  margin-top: 0;
-}
-table.tableblock {
-  border-width: 3px;
-  border-spacing: 0px;
-  border-style: solid;
-  border-color: #527bbd;
-  border-collapse: collapse;
-}
-th.tableblock, td.tableblock {
-  border-width: 1px;
-  padding: 4px;
-  border-style: solid;
-  border-color: #527bbd;
-}
-
-table.tableblock.frame-topbot {
-  border-left-style: hidden;
-  border-right-style: hidden;
-}
-table.tableblock.frame-sides {
-  border-top-style: hidden;
-  border-bottom-style: hidden;
-}
-table.tableblock.frame-none {
-  border-style: hidden;
-}
-
-th.tableblock.halign-left, td.tableblock.halign-left {
-  text-align: left;
-}
-th.tableblock.halign-center, td.tableblock.halign-center {
-  text-align: center;
-}
-th.tableblock.halign-right, td.tableblock.halign-right {
-  text-align: right;
-}
-
-th.tableblock.valign-top, td.tableblock.valign-top {
-  vertical-align: top;
-}
-th.tableblock.valign-middle, td.tableblock.valign-middle {
-  vertical-align: middle;
-}
-th.tableblock.valign-bottom, td.tableblock.valign-bottom {
-  vertical-align: bottom;
-}
-
-
-/*
- * manpage specific
- *
- * */
-
-body.manpage h1 {
-  padding-top: 0.5em;
-  padding-bottom: 0.5em;
-  border-top: 2px solid silver;
-  border-bottom: 2px solid silver;
-}
-body.manpage h2 {
-  border-style: none;
-}
-body.manpage div.sectionbody {
-  margin-left: 3em;
-}
-
-@media print {
-  body.manpage div#toc { display: none; }
-}
-
-
-/*
- * Theme specific overrides of the preceding (asciidoc.css) CSS.
- *
- */
-body {
-  font-family: Garamond, Georgia, serif;
-  font-size: 17px;
-  color: #3E4349;
-  line-height: 1.3em;
-}
-h1, h2, h3, h4, h5, h6,
-div.title, caption.title,
-thead, p.table.header,
-#toctitle,
-#author, #revnumber, #revdate, #revremark,
-#footer {
-  font-family: Garmond, Georgia, serif;
-  font-weight: normal;
-  border-bottom-width: 0;
-  color: #3E4349;
-}
-div.title, caption.title { color: #596673; font-weight: bold; }
-h1 { font-size: 240%; }
-h2 { font-size: 180%; }
-h3 { font-size: 150%; }
-h4 { font-size: 130%; }
-h5 { font-size: 115%; }
-h6 { font-size: 100%; }
-#header h1 { margin-top: 0; }
-#toc {
-  color: #444444;
-  line-height: 1.5;
-  padding-top: 1.5em;
-}
-#toctitle {
-  font-size: 20px;
-}
-#toc a {
-    border-bottom: 1px dotted #999999;
-    color: #444444 !important;
-    text-decoration: none !important;
-}
-#toc a:hover {
-    border-bottom: 1px solid #6D4100;
-    color: #6D4100 !important;
-    text-decoration: none !important;
-}
-div.toclevel1 { margin-top: 0.2em; font-size: 16px; }
-div.toclevel2 { margin-top: 0.15em; font-size: 14px; }
-em, dt, td.hdlist1 { color: black; }
-strong { color: #3E4349; }
-a { color: #004B6B; text-decoration: none; border-bottom: 1px dotted #004B6B; }
-a:visited { color: #615FA0; border-bottom: 1px dotted #615FA0; }
-a:hover { color: #6D4100; border-bottom: 1px solid #6D4100; }
-div.tableblock > table, table.tableblock { border: 3px solid #E8E8E8; }
-th.tableblock, td.tableblock { border: 1px solid #E8E8E8; }
-ul > li > * { color: #3E4349; }
-pre, tt, .monospaced { font-family: Consolas,Menlo,'Deja Vu Sans Mono','Bitstream Vera Sans Mono',monospace; }
-tt, .monospaced { font-size: 0.9em; color: black;
-}
-div.exampleblock > div.content, div.sidebarblock > div.content, div.listingblock > div.content { border-width: 0 0 0 3px; border-color: #E8E8E8; }
-div.verseblock { border-left-width: 0; margin-left: 3em; }
-div.quoteblock { border-left-width: 3px; margin-left: 0; margin-right: 0;}
-div.admonitionblock td.content { border-left: 3px solid #E8E8E8; }
-
-
-@media screen and (min-width: 768px) {
-  body {
-    max-width: 50em; /* approximately 80 characters wide */
-    margin-left: 16em;
-  }
-
-  #toc {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: 13em;
-    padding: 0.5em;
-    padding-bottom: 1.5em;
-    margin: 0;
-    overflow: auto;
-    border-right: 3px solid #f8f8f8;
-    background-color: white;
-  }
-
-  #toc .toclevel1 {
-    margin-top: 0.5em;
-  }
-
-  #toc .toclevel2 {
-    margin-top: 0.25em;
-    display: list-item;
-    color: #aaaaaa;
-  }
-
-  #toctitle {
-    margin-top: 0.5em;
-  }
-}
+<style>
+@import url(https://fonts.googleapis.com/css?family=Varela+Round|Open+Sans:400italic,700italic,400,700);
+/*! normalize.css v2.1.2 | MIT License | git.io/normalize */
+/* ========================================================================== HTML5 display definitions ========================================================================== */
+/** Correct `block` display not defined in IE 8/9. */
+article, aside, details, figcaption, figure, footer, header, hgroup, main, nav, section, summary { display: block; }
+
+/** Correct `inline-block` display not defined in IE 8/9. */
+audio, canvas, video { display: inline-block; }
+
+/** Prevent modern browsers from displaying `audio` without controls. Remove excess height in iOS 5 devices. */
+audio:not([controls]) { display: none; height: 0; }
+
+/** Address `[hidden]` styling not present in IE 8/9. Hide the `template` element in IE, Safari, and Firefox < 22. */
+[hidden], template { display: none; }
+
+script { display: none !important; }
+
+/* ========================================================================== Base ========================================================================== */
+/** 1. Set default font family to sans-serif. 2. Prevent iOS text size adjust after orientation change, without disabling user zoom. */
+html { font-family: sans-serif; /* 1 */ -ms-text-size-adjust: 100%; /* 2 */ -webkit-text-size-adjust: 100%; /* 2 */ }
+
+/** Remove default margin. */
+body { margin: 0; }
+
+/* ========================================================================== Links ========================================================================== */
+/** Remove the gray background color from active links in IE 10. */
+a { background: transparent; }
+
+/** Address `outline` inconsistency between Chrome and other browsers. */
+a:focus { outline: thin dotted; }
+
+/** Improve readability when focused and also mouse hovered in all browsers. */
+a:active, a:hover { outline: 0; }
+
+/* ========================================================================== Typography ========================================================================== */
+/** Address variable `h1` font-size and margin within `section` and `article` contexts in Firefox 4+, Safari 5, and Chrome. */
+h1 { font-size: 2em; margin: 0.67em 0; }
+
+/** Address styling not present in IE 8/9, Safari 5, and Chrome. */
+abbr[title] { border-bottom: 1px dotted; }
+
+/** Address style set to `bolder` in Firefox 4+, Safari 5, and Chrome. */
+b, strong { font-weight: bold; }
+
+/** Address styling not present in Safari 5 and Chrome. */
+dfn { font-style: italic; }
+
+/** Address differences between Firefox and other browsers. */
+hr { -moz-box-sizing: content-box; box-sizing: content-box; height: 0; }
+
+/** Address styling not present in IE 8/9. */
+mark { background: #ff0; color: #000; }
+
+/** Correct font family set oddly in Safari 5 and Chrome. */
+code, kbd, pre, samp { font-family: monospace, serif; font-size: 1em; }
+
+/** Improve readability of pre-formatted text in all browsers. */
+pre { white-space: pre-wrap; }
+
+/** Set consistent quote types. */
+q { quotes: "\201C" "\201D" "\2018" "\2019"; }
+
+/** Address inconsistent and variable font size in all browsers. */
+small { font-size: 80%; }
+
+/** Prevent `sub` and `sup` affecting `line-height` in all browsers. */
+sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline; }
+
+sup { top: -0.5em; }
+
+sub { bottom: -0.25em; }
+
+/* ========================================================================== Embedded content ========================================================================== */
+/** Remove border when inside `a` element in IE 8/9. */
+img { border: 0; }
+
+/** Correct overflow displayed oddly in IE 9. */
+svg:not(:root) { overflow: hidden; }
+
+/* ========================================================================== Figures ========================================================================== */
+/** Address margin not present in IE 8/9 and Safari 5. */
+figure { margin: 0; }
+
+/* ========================================================================== Forms ========================================================================== */
+/** Define consistent border, margin, and padding. */
+fieldset { border: 1px solid #c0c0c0; margin: 0 2px; padding: 0.35em 0.625em 0.75em; }
+
+/** 1. Correct `color` not being inherited in IE 8/9. 2. Remove padding so people aren't caught out if they zero out fieldsets. */
+legend { border: 0; /* 1 */ padding: 0; /* 2 */ }
+
+/** 1. Correct font family not being inherited in all browsers. 2. Correct font size not being inherited in all browsers. 3. Address margins set differently in Firefox 4+, Safari 5, and Chrome. */
+button, input, select, textarea { font-family: inherit; /* 1 */ font-size: 100%; /* 2 */ margin: 0; /* 3 */ }
+
+/** Address Firefox 4+ setting `line-height` on `input` using `!important` in the UA stylesheet. */
+button, input { line-height: normal; }
+
+/** Address inconsistent `text-transform` inheritance for `button` and `select`. All other form control elements do not inherit `text-transform` values. Correct `button` style inheritance in Chrome, Safari 5+, and IE 8+. Correct `select` style inheritance in Firefox 4+ and Opera. */
+button, select { text-transform: none; }
+
+/** 1. Avoid the WebKit bug in Android 4.0.* where (2) destroys native `audio` and `video` controls. 2. Correct inability to style clickable `input` types in iOS. 3. Improve usability and consistency of cursor style between image-type `input` and others. */
+button, html input[type="button"], input[type="reset"], input[type="submit"] { -webkit-appearance: button; /* 2 */ cursor: pointer; /* 3 */ }
+
+/** Re-set default cursor for disabled elements. */
+button[disabled], html input[disabled] { cursor: default; }
+
+/** 1. Address box sizing set to `content-box` in IE 8/9. 2. Remove excess padding in IE 8/9. */
+input[type="checkbox"], input[type="radio"] { box-sizing: border-box; /* 1 */ padding: 0; /* 2 */ }
+
+/** 1. Address `appearance` set to `searchfield` in Safari 5 and Chrome. 2. Address `box-sizing` set to `border-box` in Safari 5 and Chrome (include `-moz` to future-proof). */
+input[type="search"] { -webkit-appearance: textfield; /* 1 */ -moz-box-sizing: content-box; -webkit-box-sizing: content-box; /* 2 */ box-sizing: content-box; }
+
+/** Remove inner padding and search cancel button in Safari 5 and Chrome on OS X. */
+input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; }
+
+/** Remove inner padding and border in Firefox 4+. */
+button::-moz-focus-inner, input::-moz-focus-inner { border: 0; padding: 0; }
+
+/** 1. Remove default vertical scrollbar in IE 8/9. 2. Improve readability and alignment in all browsers. */
+textarea { overflow: auto; /* 1 */ vertical-align: top; /* 2 */ }
+
+/* ========================================================================== Tables ========================================================================== */
+/** Remove most spacing between table cells. */
+table { border-collapse: collapse; border-spacing: 0; }
+
+meta.foundation-mq-small { font-family: "only screen and (min-width: 768px)"; width: 768px; }
+
+meta.foundation-mq-medium { font-family: "only screen and (min-width:1280px)"; width: 1280px; }
+
+meta.foundation-mq-large { font-family: "only screen and (min-width:1440px)"; width: 1440px; }
+
+*, *:before, *:after { -moz-box-sizing: border-box; -webkit-box-sizing: border-box; box-sizing: border-box; }
+
+html, body { font-size: 100%; }
+
+body { background: white; color: #222222; padding: 0; margin: 0; font-family: "Helvetica Neue", "Helvetica", Helvetica, Arial, sans-serif; font-weight: normal; font-style: normal; line-height: 1; position: relative; cursor: auto; }
+
+a:hover { cursor: pointer; }
+
+img, object, embed { max-width: 100%; height: auto; }
+
+object, embed { height: 100%; }
+
+img { -ms-interpolation-mode: bicubic; }
+
+#map_canvas img, #map_canvas embed, #map_canvas object, .map_canvas img, .map_canvas embed, .map_canvas object { max-width: none !important; }
+
+.left { float: left !important; }
+
+.right { float: right !important; }
+
+.text-left { text-align: left !important; }
+
+.text-right { text-align: right !important; }
+
+.text-center { text-align: center !important; }
+
+.text-justify { text-align: justify !important; }
+
+.hide { display: none; }
+
+.antialiased, body { -webkit-font-smoothing: antialiased; }
+
+img { display: inline-block; vertical-align: middle; }
+
+textarea { height: auto; min-height: 50px; }
+
+select { width: 100%; }
+
+p.lead, .paragraph.lead > p, #preamble > .sectionbody > .paragraph:first-of-type p { font-size: 1.21875em; line-height: 1.6; }
+
+.subheader, #content #toctitle, .admonitionblock td.content > .title, .audioblock > .title, .exampleblock > .title, .imageblock > .title, .listingblock > .title, .literalblock > .title, .stemblock > .title, .openblock > .title, .paragraph > .title, .quoteblock > .title, table.tableblock > .title, .verseblock > .title, .videoblock > .title, .dlist > .title, .olist > .title, .ulist > .title, .qlist > .title, .hdlist > .title { line-height: 1.4; color: #385dbd; font-weight: 300; margin-top: 0.2em; margin-bottom: 0.5em; }
+
+/* Typography resets */
+div, dl, dt, dd, ul, ol, li, h1, h2, h3, #toctitle, .sidebarblock > .content > .title, h4, h5, h6, pre, form, p, blockquote, th, td { margin: 0; padding: 0; direction: ltr; }
+
+/* Default Link Styles */
+a { color: #095557; text-decoration: underline; line-height: inherit; }
+a:hover, a:focus { color: #042829; }
+a img { border: none; }
+
+/* Default paragraph styles */
+p { font-family: inherit; font-weight: normal; font-size: 1em; line-height: 1.6; margin-bottom: 1.25em; text-rendering: optimizeLegibility; }
+p aside { font-size: 0.875em; line-height: 1.35; font-style: italic; }
+
+/* Default header styles */
+h1, h2, h3, #toctitle, .sidebarblock > .content > .title, h4, h5, h6 { font-family: "Varela Round", Arial, sans-serif; font-weight: normal; font-style: normal; color: #152347; text-rendering: optimizeLegibility; margin-top: 0.8em; margin-bottom: 0.5em; line-height: 1.2125em; }
+h1 small, h2 small, h3 small, #toctitle small, .sidebarblock > .content > .title small, h4 small, h5 small, h6 small { font-size: 60%; color: #385dbd; line-height: 0; }
+
+h1 { font-size: 2.125em; }
+
+h2 { font-size: 1.6875em; }
+
+h3, #toctitle, .sidebarblock > .content > .title { font-size: 1.375em; }
+
+h4 { font-size: 1.125em; }
+
+h5 { font-size: 1.125em; }
+
+h6 { font-size: 1em; }
+
+hr { border: solid #dcd2c9; border-width: 1px 0 0; clear: both; margin: 1.25em 0 1.1875em; height: 0; }
+
+/* Helpful Typography Defaults */
+em, i { font-style: italic; line-height: inherit; }
+
+strong, b { font-weight: bold; line-height: inherit; }
+
+small { font-size: 60%; line-height: inherit; }
+
+code { font-family: Consolas, "Liberation Mono", Courier, monospace; font-weight: bold; color: #691816; }
+
+/* Lists */
+ul, ol, dl { font-size: 1em; line-height: 1.6; margin-bottom: 1.25em; list-style-position: outside; font-family: inherit; }
+
+ul, ol { margin-left: 1.5em; }
+ul.no-bullet, ol.no-bullet { margin-left: 1.5em; }
+
+/* Unordered Lists */
+ul li ul, ul li ol { margin-left: 1.25em; margin-bottom: 0; font-size: 1em; /* Override nested font-size change */ }
+ul.square li ul, ul.circle li ul, ul.disc li ul { list-style: inherit; }
+ul.square { list-style-type: square; }
+ul.circle { list-style-type: circle; }
+ul.disc { list-style-type: disc; }
+ul.no-bullet { list-style: none; }
+
+/* Ordered Lists */
+ol li ul, ol li ol { margin-left: 1.25em; margin-bottom: 0; }
+
+/* Definition Lists */
+dl dt { margin-bottom: 0.3125em; font-weight: bold; }
+dl dd { margin-bottom: 1.25em; }
+
+/* Abbreviations */
+abbr, acronym { text-transform: uppercase; font-size: 90%; color: #211306; border-bottom: 1px dotted #dddddd; cursor: help; }
+
+abbr { text-transform: none; }
+
+/* Blockquotes */
+blockquote { margin: 0 0 1.25em; padding: 0.5625em 1.25em 0 1.1875em; border-left: 1px solid #dddddd; }
+blockquote cite { display: block; font-size: 0.8125em; color: #655241; }
+blockquote cite:before { content: "\2014 \0020"; }
+blockquote cite a, blockquote cite a:visited { color: #655241; }
+
+blockquote, blockquote p { line-height: 1.6; color: #846b55; }
+
+/* Microformats */
+.vcard { display: inline-block; margin: 0 0 1.25em 0; border: 1px solid #dddddd; padding: 0.625em 0.75em; }
+.vcard li { margin: 0; display: block; }
+.vcard .fn { font-weight: bold; font-size: 0.9375em; }
+
+.vevent .summary { font-weight: bold; }
+.vevent abbr { cursor: auto; text-decoration: none; font-weight: bold; border: none; padding: 0 0.0625em; }
+
+@media only screen and (min-width: 768px) { h1, h2, h3, #toctitle, .sidebarblock > .content > .title, h4, h5, h6 { line-height: 1.4; }
+  h1 { font-size: 2.75em; }
+  h2 { font-size: 2.3125em; }
+  h3, #toctitle, .sidebarblock > .content > .title { font-size: 1.6875em; }
+  h4 { font-size: 1.4375em; } }
+/* Tables */
+table { background: white; margin-bottom: 1.25em; border: solid 1px #e4e7ef; }
+table thead, table tfoot { background: rgba(105, 60, 22, 0.25); font-weight: bold; }
+table thead tr th, table thead tr td, table tfoot tr th, table tfoot tr td { padding: 0.5em 0.625em 0.625em; font-size: inherit; color: #211306; text-align: left; }
+table tr th, table tr td { padding: 0.5625em 0.625em; font-size: inherit; color: #211306; }
+table tr.even, table tr.alt, table tr:nth-of-type(even) { background: #f4f5f8; }
+table thead tr th, table tfoot tr th, table tbody tr td, table tr td, table tfoot tr td { display: table-cell; line-height: 1.6; }
+
+.clearfix:before, .clearfix:after, .float-group:before, .float-group:after { content: " "; display: table; }
+.clearfix:after, .float-group:after { clear: both; }
+
+*:not(pre) > code { font-size: inherit; padding: 0; white-space: nowrap; background-color: inherit; border: 0 solid #dddddd; -webkit-border-radius: 6px; border-radius: 6px; text-shadow: none; line-height: inherit; }
+
+pre, pre > code { line-height: 1.4; color: black; font-family: monospace, serif; font-weight: normal; }
+
+.keyseq { color: #774417; }
+
+kbd:not(.keyseq) { display: inline-block; color: #211306; font-size: 0.75em; line-height: 1.4; background-color: #f7f7f7; border: 1px solid #ccc; -webkit-border-radius: 3px; border-radius: 3px; -webkit-box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 0 2px white inset; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 0 2px white inset; margin: -0.15em 0.15em 0 0.15em; padding: 0.2em 0.6em 0.2em 0.5em; vertical-align: middle; white-space: nowrap; }
+
+.keyseq kbd:first-child { margin-left: 0; }
+
+.keyseq kbd:last-child { margin-right: 0; }
+
+.menuseq, .menu { color: black; }
+
+b.button:before, b.button:after { position: relative; top: -1px; font-weight: normal; }
+
+b.button:before { content: "["; padding: 0 3px 0 2px; }
+
+b.button:after { content: "]"; padding: 0 2px 0 3px; }
+
+p a > code:hover { color: #541312; }
+
+#header, #content, #footnotes, #footer { width: 100%; margin-left: auto; margin-right: auto; margin-top: 0; margin-bottom: 0; max-width: 62.5em; *zoom: 1; position: relative; padding-left: 0.9375em; padding-right: 0.9375em; }
+#header:before, #header:after, #content:before, #content:after, #footnotes:before, #footnotes:after, #footer:before, #footer:after { content: " "; display: table; }
+#header:after, #content:after, #footnotes:after, #footer:after { clear: both; }
+
+#content:before { content: none; }
+
+#header { margin-bottom: 2.5em; }
+/*#header > h1 { color: #693c16; font-weight: normal; border-bottom: 1px solid #dcd2c9; margin-bottom: -28px; padding-bottom: 32px; } */
+#header > h1 { color: #333333; font-weight: normal; border-bottom: 1px solid #dcd2c9; margin-bottom: -28px; padding-bottom: 32px; }
+#header span { color: #846b55; }
+#header #revnumber { text-transform: capitalize; }
+#header br { display: none; }
+#header br + span { padding-left: 3px; }
+#header br + span:before { content: "\2013 \0020"; }
+#header br + span.author { padding-left: 0; }
+#header br + span.author:before { content: ", "; }
+
+#toc { border-bottom: 0 solid #dddddd; padding-top: 1em; padding-bottom: 1.25em; }
+#toc > ul { margin-left: 0.25em; }
+#toc ul.sectlevel0 > li > a { font-style: italic; }
+#toc ul.sectlevel0 ul.sectlevel1 { margin-left: 0; margin-top: 0.5em; margin-bottom: 0.5em; }
+#toc ul { font-family: "Varela Round", Arial, sans-serif; list-style-type: none; }
+#toc a { text-decoration: none; }
+#toc a:active { text-decoration: underline; }
+
+#toctitle { color: #385dbd; }
+
+@media only screen and (min-width: 768px) { body.toc2 { padding-left: 15em; padding-right: 0; }
+  #toc.toc2 { background-color: #f2f2f2; position: fixed; width: 15em; left: 0; top: 0; border-right: 1px solid #dddddd; border-bottom: 0; z-index: 1000; padding: 1.25em 1em; height: 100%; overflow: auto; }
+  #toc.toc2 #toctitle { margin-top: 0; font-size: 1.2em; }
+  #toc.toc2 > ul { font-size: .90em; margin-bottom: 0; }
+  #toc.toc2 ul ul { margin-left: 0; padding-left: 1em; }
+  #toc.toc2 ul.sectlevel0 ul.sectlevel1 { padding-left: 0; margin-top: 0.5em; margin-bottom: 0.5em; }
+  body.toc2.toc-right { padding-left: 0; padding-right: 15em; }
+  body.toc2.toc-right #toc.toc2 { border-right: 0; border-left: 1px solid #dddddd; left: auto; right: 0; } }
+@media only screen and (min-width: 1280px) { body.toc2 { padding-left: 20em; padding-right: 0; }
+  #toc.toc2 { width: 20em; }
+  #toc.toc2 #toctitle { font-size: 1.375em; }
+  #toc.toc2 > ul { font-size: 0.95em; }
+  #toc.toc2 ul ul { padding-left: 1.25em; }
+  body.toc2.toc-right { padding-left: 0; padding-right: 20em; } }
+#content #toc { border-style: solid; border-width: 1px; border-color: #d9d9d9; margin-bottom: 1.25em; padding: 1.25em; background: #f2f2f2; border-width: 0; -webkit-border-radius: 6px; border-radius: 6px; }
+#content #toc > :first-child { margin-top: 0; }
+#content #toc > :last-child { margin-bottom: 0; }
+
+#content #toctitle { font-size: 1.375em; }
+
+#footer { max-width: 100%; background-color: #23160c; padding: 1.25em; }
+
+#footer-text { color: #deecf9; line-height: 1.44; }
+
+.sect1 { padding-bottom: 1.25em; }
+
+.sect1 + .sect1 { border-top: 0 solid #dddddd; }
+
+#content h1 > a.anchor, h2 > a.anchor, h3 > a.anchor, #toctitle > a.anchor, .sidebarblock > .content > .title > a.anchor, h4 > a.anchor, h5 > a.anchor, h6 > a.anchor { position: absolute; width: 1em; margin-left: -1em; display: block; text-decoration: none; visibility: hidden; text-align: center; font-weight: normal; }
+#content h1 > a.anchor:before, h2 > a.anchor:before, h3 > a.anchor:before, #toctitle > a.anchor:before, .sidebarblock > .content > .title > a.anchor:before, h4 > a.anchor:before, h5 > a.anchor:before, h6 > a.anchor:before { content: '\00A7'; font-size: .85em; vertical-align: text-top; display: block; margin-top: 0.05em; }
+#content h1:hover > a.anchor, #content h1 > a.anchor:hover, h2:hover > a.anchor, h2 > a.anchor:hover, h3:hover > a.anchor, #toctitle:hover > a.anchor, .sidebarblock > .content > .title:hover > a.anchor, h3 > a.anchor:hover, #toctitle > a.anchor:hover, .sidebarblock > .content > .title > a.anchor:hover, h4:hover > a.anchor, h4 > a.anchor:hover, h5:hover > a.anchor, h5 > a.anchor:hover, h6:hover > a.anchor, h6 > a.anchor:hover { visibility: visible; }
+#content h1 > a.link, h2 > a.link, h3 > a.link, #toctitle > a.link, .sidebarblock > .content > .title > a.link, h4 > a.link, h5 > a.link, h6 > a.link { color: #152347; text-decoration: none; }
+#content h1 > a.link:hover, h2 > a.link:hover, h3 > a.link:hover, #toctitle > a.link:hover, .sidebarblock > .content > .title > a.link:hover, h4 > a.link:hover, h5 > a.link:hover, h6 > a.link:hover { color: #0f1933; }
+
+.audioblock, .imageblock, .literalblock, .listingblock, .stemblock, .verseblock, .videoblock { margin-bottom: 1.25em; }
+
+.admonitionblock td.content > .title, .audioblock > .title, .exampleblock > .title, .imageblock > .title, .listingblock > .title, .literalblock > .title, .stemblock > .title, .openblock > .title, .paragraph > .title, .quoteblock > .title, table.tableblock > .title, .verseblock > .title, .videoblock > .title, .dlist > .title, .olist > .title, .ulist > .title, .qlist > .title, .hdlist > .title { text-rendering: optimizeLegibility; text-align: left; font-weight: bold; }
+
+table.tableblock > caption.title { white-space: nowrap; overflow: visible; max-width: 0; }
+
+table.tableblock #preamble > .sectionbody > .paragraph:first-of-type p { font-size: inherit; }
+
+.admonitionblock > table { border: 0; background: none; width: 100%; }
+.admonitionblock > table td.icon { text-align: center; width: 80px; }
+.admonitionblock > table td.icon img { max-width: none; }
+.admonitionblock > table td.icon .title { font-weight: normal; text-transform: uppercase; }
+.admonitionblock > table td.content { padding-left: 1.125em; padding-right: 1.25em; border-left: 1px solid #dcd2c9; color: #846b55; }
+.admonitionblock > table td.content > :last-child > :last-child { margin-bottom: 0; }
+
+.exampleblock > .content { border-style: solid; border-width: 1px; border-color: #f3e0ce; margin-bottom: 1.25em; padding: 1.25em; background: #fdfaf7; -webkit-border-radius: 6px; border-radius: 6px; }
+.exampleblock > .content > :first-child { margin-top: 0; }
+.exampleblock > .content > :last-child { margin-bottom: 0; }
+.exampleblock > .content h1, .exampleblock > .content h2, .exampleblock > .content h3, .exampleblock > .content #toctitle, .sidebarblock.exampleblock > .content > .title, .exampleblock > .content h4, .exampleblock > .content h5, .exampleblock > .content h6, .exampleblock > .content p { color: #333333; }
+.exampleblock > .content h1, .exampleblock > .content h2, .exampleblock > .content h3, .exampleblock > .content #toctitle, .sidebarblock.exampleblock > .content > .title, .exampleblock > .content h4, .exampleblock > .content h5, .exampleblock > .content h6 { line-height: 1; margin-bottom: 0.625em; }
+.exampleblock > .content h1.subheader, .exampleblock > .content h2.subheader, .exampleblock > .content h3.subheader, .exampleblock > .content .subheader#toctitle, .sidebarblock.exampleblock > .content > .subheader.title, .exampleblock > .content h4.subheader, .exampleblock > .content h5.subheader, .exampleblock > .content h6.subheader { line-height: 1.4; }
+
+.exampleblock.result > .content { -webkit-box-shadow: 0 1px 8px #d9d9d9; box-shadow: 0 1px 8px #d9d9d9; }
+
+.sidebarblock { border-style: solid; border-width: 1px; border-color: #d9d9d9; margin-bottom: 1.25em; padding: 1.25em; background: #f2f2f2; -webkit-border-radius: 6px; border-radius: 6px; }
+.sidebarblock > :first-child { margin-top: 0; }
+.sidebarblock > :last-child { margin-bottom: 0; }
+.sidebarblock h1, .sidebarblock h2, .sidebarblock h3, .sidebarblock #toctitle, .sidebarblock > .content > .title, .sidebarblock h4, .sidebarblock h5, .sidebarblock h6, .sidebarblock p { color: #333333; }
+.sidebarblock h1, .sidebarblock h2, .sidebarblock h3, .sidebarblock #toctitle, .sidebarblock > .content > .title, .sidebarblock h4, .sidebarblock h5, .sidebarblock h6 { line-height: 1; margin-bottom: 0.625em; }
+.sidebarblock h1.subheader, .sidebarblock h2.subheader, .sidebarblock h3.subheader, .sidebarblock .subheader#toctitle, .sidebarblock > .content > .subheader.title, .sidebarblock h4.subheader, .sidebarblock h5.subheader, .sidebarblock h6.subheader { line-height: 1.4; }
+.sidebarblock > .content > .title { color: #385dbd; margin-top: 0; line-height: 1.6; }
+
+.exampleblock > .content > :last-child > :last-child, .exampleblock > .content .olist > ol > li:last-child > :last-child, .exampleblock > .content .ulist > ul > li:last-child > :last-child, .exampleblock > .content .qlist > ol > li:last-child > :last-child, .sidebarblock > .content > :last-child > :last-child, .sidebarblock > .content .olist > ol > li:last-child > :last-child, .sidebarblock > .content .ulist > ul > li:last-child > :last-child, .sidebarblock > .content .qlist > ol > li:last-child > :last-child { margin-bottom: 0; }
+
+.literalblock pre:not([class]), .listingblock pre:not([class]) { background: url('../images/golo/pre-bg.png?1407350722'); }
+.literalblock pre, .literalblock pre[class], .listingblock pre, .listingblock pre[class] { border-width: 1px; border-style: solid; border-color: rgba(21, 35, 71, 0.1); -webkit-border-radius: 6px; border-radius: 6px; padding: 0.8em; word-wrap: break-word; }
+.literalblock pre.nowrap, .literalblock pre[class].nowrap, .listingblock pre.nowrap, .listingblock pre[class].nowrap { overflow-x: auto; white-space: pre; word-wrap: normal; }
+.literalblock pre > code, .literalblock pre[class] > code, .listingblock pre > code, .listingblock pre[class] > code { display: block; }
+@media only screen { .literalblock pre, .literalblock pre[class], .listingblock pre, .listingblock pre[class] { font-size: 0.72em; } }
+@media only screen and (min-width: 768px) { .literalblock pre, .literalblock pre[class], .listingblock pre, .listingblock pre[class] { font-size: 0.81em; } }
+@media only screen and (min-width: 1280px) { .literalblock pre, .literalblock pre[class], .listingblock pre, .listingblock pre[class] { font-size: 0.9em; } }
+
+.listingblock pre.highlight { padding: 0; }
+.listingblock pre.highlight > code { padding: 0.8em; }
+
+.listingblock > .content { position: relative; }
+
+.listingblock:hover code[class*=" language-"]:before { text-transform: uppercase; font-size: 0.9em; color: #999; position: absolute; top: 0.375em; right: 0.375em; }
+
+.listingblock:hover code.asciidoc:before { content: "asciidoc"; }
+.listingblock:hover code.clojure:before { content: "clojure"; }
+.listingblock:hover code.css:before { content: "css"; }
+.listingblock:hover code.go:before { content: "go"; }
+.listingblock:hover code.groovy:before { content: "groovy"; }
+.listingblock:hover code.html:before { content: "html"; }
+.listingblock:hover code.java:before { content: "java"; }
+.listingblock:hover code.javascript:before { content: "javascript"; }
+.listingblock:hover code.python:before { content: "python"; }
+.listingblock:hover code.ruby:before { content: "ruby"; }
+.listingblock:hover code.sass:before { content: "sass"; }
+.listingblock:hover code.scss:before { content: "scss"; }
+.listingblock:hover code.xml:before { content: "xml"; }
+.listingblock:hover code.yaml:before { content: "yaml"; }
+
+.listingblock.terminal pre .command:before { content: attr(data-prompt); padding-right: 0.5em; color: #999; }
+
+.listingblock.terminal pre .command:not([data-prompt]):before { content: '$'; }
+
+table.pyhltable { border: 0; margin-bottom: 0; }
+
+table.pyhltable td { vertical-align: top; padding-top: 0; padding-bottom: 0; }
+
+table.pyhltable td.code { padding-left: .75em; padding-right: 0; }
+
+.highlight.pygments .lineno, table.pyhltable td:not(.code) { color: #999; padding-left: 0; padding-right: .5em; border-right: 1px solid #dcd2c9; }
+
+.highlight.pygments .lineno { display: inline-block; margin-right: .25em; }
+
+table.pyhltable .linenodiv { background-color: transparent !important; padding-right: 0 !important; }
+
+.quoteblock { margin: 0 0 1.25em 0; padding: 0.5625em 1.25em 0 1.1875em; border-left: 1px solid #dddddd; }
+.quoteblock blockquote { margin: 0 0 1.25em 0; padding: 0 0 0.625em 0; border: 0; }
+.quoteblock blockquote > .paragraph:last-child p { margin-bottom: 0; }
+.quoteblock .attribution { margin-top: -0.625em; padding-bottom: 0.625em; font-size: 0.8125em; color: #655241; line-height: 1.6; }
+.quoteblock .attribution br { display: none; }
+.quoteblock .attribution cite { display: block; }
+
+table.tableblock { max-width: 100%; }
+table.tableblock td .paragraph:last-child p > p:last-child, table.tableblock th > p:last-child, table.tableblock td > p:last-child { margin-bottom: 0; }
+
+table.spread { width: 100%; }
+
+table.tableblock, th.tableblock, td.tableblock { border: 0 solid #e4e7ef; }
+
+table.grid-all th.tableblock, table.grid-all td.tableblock { border-width: 0 1px 1px 0; }
+
+table.grid-all tfoot > tr > th.tableblock, table.grid-all tfoot > tr > td.tableblock { border-width: 1px 1px 0 0; }
+
+table.grid-cols th.tableblock, table.grid-cols td.tableblock { border-width: 0 1px 0 0; }
+
+table.grid-all * > tr > .tableblock:last-child, table.grid-cols * > tr > .tableblock:last-child { border-right-width: 0; }
+
+table.grid-rows th.tableblock, table.grid-rows td.tableblock { border-width: 0 0 1px 0; }
+
+table.grid-all tbody > tr:last-child > th.tableblock, table.grid-all tbody > tr:last-child > td.tableblock, table.grid-all thead:last-child > tr > th.tableblock, table.grid-rows tbody > tr:last-child > th.tableblock, table.grid-rows tbody > tr:last-child > td.tableblock, table.grid-rows thead:last-child > tr > th.tableblock { border-bottom-width: 0; }
+
+table.grid-rows tfoot > tr > th.tableblock, table.grid-rows tfoot > tr > td.tableblock { border-width: 1px 0 0 0; }
+
+table.frame-all { border-width: 1px; }
+
+table.frame-sides { border-width: 0 1px; }
+
+table.frame-topbot { border-width: 1px 0; }
+
+th.halign-left, td.halign-left { text-align: left; }
+
+th.halign-right, td.halign-right { text-align: right; }
+
+th.halign-center, td.halign-center { text-align: center; }
+
+th.valign-top, td.valign-top { vertical-align: top; }
+
+th.valign-bottom, td.valign-bottom { vertical-align: bottom; }
+
+th.valign-middle, td.valign-middle { vertical-align: middle; }
+
+table thead th, table tfoot th { font-weight: bold; }
+
+tbody tr th { display: table-cell; line-height: 1.6; background: rgba(105, 60, 22, 0.25); }
+
+tbody tr th, tbody tr th p, tfoot tr th, tfoot tr th p { color: #211306; font-weight: bold; }
+
+td > div.verse { white-space: pre; }
+
+ol { margin-left: 1.75em; }
+
+ul li ol { margin-left: 1.5em; }
+
+dl dd { margin-left: 1.125em; }
+
+dl dd:last-child, dl dd:last-child > :last-child { margin-bottom: 0; }
+
+ol > li p, ul > li p, ul dd, ol dd, .olist .olist, .ulist .ulist, .ulist .olist, .olist .ulist { margin-bottom: 0.625em; }
+
+ul.unstyled, ol.unnumbered, ul.checklist, ul.none { list-style-type: none; }
+
+ul.unstyled, ol.unnumbered, ul.checklist { margin-left: 0.625em; }
+
+ul.checklist li > p:first-child > .fa-check-square-o:first-child, ul.checklist li > p:first-child > input[type="checkbox"]:first-child { margin-right: 0.25em; }
+
+ul.checklist li > p:first-child > input[type="checkbox"]:first-child { position: relative; top: 1px; }
+
+ul.inline { margin: 0 auto 0.625em auto; margin-left: -1.375em; margin-right: 0; padding: 0; list-style: none; overflow: hidden; }
+ul.inline > li { list-style: none; float: left; margin-left: 1.375em; display: block; }
+ul.inline > li > * { display: block; }
+
+.unstyled dl dt { font-weight: normal; font-style: normal; }
+
+ol.arabic { list-style-type: decimal; }
+
+ol.decimal { list-style-type: decimal-leading-zero; }
+
+ol.loweralpha { list-style-type: lower-alpha; }
+
+ol.upperalpha { list-style-type: upper-alpha; }
+
+ol.lowerroman { list-style-type: lower-roman; }
+
+ol.upperroman { list-style-type: upper-roman; }
+
+ol.lowergreek { list-style-type: lower-greek; }
+
+.hdlist > table, .colist > table { border: 0; background: none; }
+.hdlist > table > tbody > tr, .colist > table > tbody > tr { background: none; }
+
+td.hdlist1 { padding-right: .75em; font-weight: bold; }
+
+td.hdlist1, td.hdlist2 { vertical-align: top; }
+
+.literalblock + .colist, .listingblock + .colist { margin-top: -0.5em; }
+
+.colist > table tr > td:first-of-type { padding: 0 .75em; line-height: 1; }
+.colist > table tr > td:last-of-type { padding: 0.25em 0; }
+
+.qanda > ol > li > p > em:only-child { color: #063f40; }
+
+.thumb, .th { line-height: 0; display: inline-block; border: solid 4px white; -webkit-box-shadow: 0 0 0 1px #dddddd; box-shadow: 0 0 0 1px #dddddd; }
+
+.imageblock.left, .imageblock[style*="float: left"] { margin: 0.25em 0.625em 1.25em 0; }
+.imageblock.right, .imageblock[style*="float: right"] { margin: 0.25em 0 1.25em 0.625em; }
+.imageblock > .title { margin-bottom: 0; }
+.imageblock.thumb, .imageblock.th { border-width: 6px; }
+.imageblock.thumb > .title, .imageblock.th > .title { padding: 0 0.125em; }
+
+.image.left, .image.right { margin-top: 0.25em; margin-bottom: 0.25em; display: inline-block; line-height: 0; }
+.image.left { margin-right: 0.625em; }
+.image.right { margin-left: 0.625em; }
+
+a.image { text-decoration: none; }
+
+span.footnote, span.footnoteref { vertical-align: super; font-size: 0.875em; }
+span.footnote a, span.footnoteref a { text-decoration: none; }
+span.footnote a:active, span.footnoteref a:active { text-decoration: underline; }
+
+#footnotes { padding-top: 0.75em; padding-bottom: 0.75em; margin-bottom: 0.625em; }
+#footnotes hr { width: 20%; min-width: 6.25em; margin: -.25em 0 .75em 0; border-width: 1px 0 0 0; }
+#footnotes .footnote { padding: 0 0.375em; line-height: 1.3; font-size: 0.875em; margin-left: 1.2em; text-indent: -1.2em; margin-bottom: .2em; }
+#footnotes .footnote a:first-of-type { font-weight: bold; text-decoration: none; }
+#footnotes .footnote:last-of-type { margin-bottom: 0; }
+
+#content #footnotes { margin-top: -0.625em; margin-bottom: 0; padding: 0.75em 0; }
+
+.gist .file-data > table { border: none; background: #fff; width: 100%; margin-bottom: 0; }
+.gist .file-data > table td.line-data { width: 99%; }
+
+div.unbreakable { page-break-inside: avoid; }
+
+.big { font-size: larger; }
+
+.small { font-size: smaller; }
+
+.underline { text-decoration: underline; }
+
+.overline { text-decoration: overline; }
+
+.line-through { text-decoration: line-through; }
+
+.aqua { color: #00bfbf; }
+
+.aqua-background { background-color: #00fafa; }
+
+.black { color: black; }
+
+.black-background { background-color: black; }
+
+.blue { color: #0000bf; }
+
+.blue-background { background-color: #0000fa; }
+
+.fuchsia { color: #bf00bf; }
+
+.fuchsia-background { background-color: #fa00fa; }
+
+.gray { color: #606060; }
+
+.gray-background { background-color: #7d7d7d; }
+
+.green { color: #006000; }
+
+.green-background { background-color: #007d00; }
+
+.lime { color: #00bf00; }
+
+.lime-background { background-color: #00fa00; }
+
+.maroon { color: #600000; }
+
+.maroon-background { background-color: #7d0000; }
+
+.navy { color: #000060; }
+
+.navy-background { background-color: #00007d; }
+
+.olive { color: #606000; }
+
+.olive-background { background-color: #7d7d00; }
+
+.purple { color: #600060; }
+
+.purple-background { background-color: #7d007d; }
+
+.red { color: #bf0000; }
+
+.red-background { background-color: #fa0000; }
+
+.silver { color: #909090; }
+
+.silver-background { background-color: #bcbcbc; }
+
+.teal { color: #006060; }
+
+.teal-background { background-color: #007d7d; }
+
+.white { color: #bfbfbf; }
+
+.white-background { background-color: #fafafa; }
+
+.yellow { color: #bfbf00; }
+
+.yellow-background { background-color: #fafa00; }
+
+span.icon > .fa { cursor: default; }
+
+.admonitionblock td.icon [class^="fa icon-"] { font-size: 2.5em; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); cursor: default; }
+.admonitionblock td.icon .icon-note:before { content: "\f05a"; color: #064042; }
+.admonitionblock td.icon .icon-tip:before { content: "\f0eb"; text-shadow: 1px 1px 2px rgba(155, 155, 0, 0.8); color: #111; }
+.admonitionblock td.icon .icon-warning:before { content: "\f071"; color: #bf6900; }
+.admonitionblock td.icon .icon-caution:before { content: "\f06d"; color: #bf3400; }
+.admonitionblock td.icon .icon-important:before { content: "\f06a"; color: #bf0000; }
+
+.conum[data-value] { display: inline-block; color: white !important; background-color: #211306; -webkit-border-radius: 100px; border-radius: 100px; text-align: center; width: 20px; height: 20px; font-size: 12px; line-height: 20px; font-family: "Open Sans", "Sans", sans-serif; font-style: normal; font-weight: bold; text-indent: -1px; }
+.conum[data-value] * { color: white !important; }
+.conum[data-value] + b { display: none; }
+.conum[data-value]:after { content: attr(data-value); }
+pre .conum[data-value] { position: relative; top: -2px; }
+
+b.conum * { color: inherit !important; }
+
+.conum:not([data-value]):empty { display: none; }
+
+body { background: url('../images/golo/body-bg.png?1407350722') #fdfaf7 repeat; }
+
+#toc.toc2 ul ul { list-style-type: circle; padding-left: 1.75em; }
+
+#toctitle { color: #152347; }
+
+#header h1 { font-weight: bold; position: relative; left: -0.0625em; }
+#header h1 span.lo { color: #dc9424; }
+
+#content h2, #content h3, #content #toctitle, #content .sidebarblock > .content > .title, #content h4, #content h5, #content #toctitle { font-weight: normal; position: relative; left: -0.0625em; }
+#content h2 { font-weight: bold; }
+
+.literalblock .content pre.highlight, .listingblock .content pre.highlight { background: url('../images/golo/pre-bg.png?1407350722'); }
+
+.admonitionblock > table td.content { border-color: #dddddd; }
+
+table.tableblock.grid-all { -webkit-border-radius: 0; border-radius: 0; }
+
+#footer { background-color: #23160c; }
 </style>
-<script type="text/javascript">
-/*<![CDATA[*/
-var asciidoc = {  // Namespace.
-
-/////////////////////////////////////////////////////////////////////
-// Table Of Contents generator
-/////////////////////////////////////////////////////////////////////
-
-/* Author: Mihai Bazon, September 2002
- * http://students.infoiasi.ro/~mishoo
- *
- * Table Of Content generator
- * Version: 0.4
- *
- * Feel free to use this script under the terms of the GNU General Public
- * License, as long as you do not remove or alter this notice.
- */
-
- /* modified by Troy D. Hanson, September 2006. License: GPL */
- /* modified by Stuart Rackham, 2006, 2009. License: GPL */
-
-// toclevels = 1..4.
-toc: function (toclevels) {
-
-  function getText(el) {
-    var text = "";
-    for (var i = el.firstChild; i != null; i = i.nextSibling) {
-      if (i.nodeType == 3 /* Node.TEXT_NODE */) // IE doesn't speak constants.
-        text += i.data;
-      else if (i.firstChild != null)
-        text += getText(i);
-    }
-    return text;
-  }
-
-  function TocEntry(el, text, toclevel) {
-    this.element = el;
-    this.text = text;
-    this.toclevel = toclevel;
-  }
-
-  function tocEntries(el, toclevels) {
-    var result = new Array;
-    var re = new RegExp('[hH]([1-'+(toclevels+1)+'])');
-    // Function that scans the DOM tree for header elements (the DOM2
-    // nodeIterator API would be a better technique but not supported by all
-    // browsers).
-    var iterate = function (el) {
-      for (var i = el.firstChild; i != null; i = i.nextSibling) {
-        if (i.nodeType == 1 /* Node.ELEMENT_NODE */) {
-          var mo = re.exec(i.tagName);
-          if (mo && (i.getAttribute("class") || i.getAttribute("className")) != "float") {
-            result[result.length] = new TocEntry(i, getText(i), mo[1]-1);
-          }
-          iterate(i);
-        }
-      }
-    }
-    iterate(el);
-    return result;
-  }
-
-  var toc = document.getElementById("toc");
-  if (!toc) {
-    return;
-  }
-
-  // Delete existing TOC entries in case we're reloading the TOC.
-  var tocEntriesToRemove = [];
-  var i;
-  for (i = 0; i < toc.childNodes.length; i++) {
-    var entry = toc.childNodes[i];
-    if (entry.nodeName.toLowerCase() == 'div'
-     && entry.getAttribute("class")
-     && entry.getAttribute("class").match(/^toclevel/))
-      tocEntriesToRemove.push(entry);
-  }
-  for (i = 0; i < tocEntriesToRemove.length; i++) {
-    toc.removeChild(tocEntriesToRemove[i]);
-  }
-
-  // Rebuild TOC entries.
-  var entries = tocEntries(document.getElementById("content"), toclevels);
-  for (var i = 0; i < entries.length; ++i) {
-    var entry = entries[i];
-    if (entry.element.id == "")
-      entry.element.id = "_toc_" + i;
-    var a = document.createElement("a");
-    a.href = "#" + entry.element.id;
-    a.appendChild(document.createTextNode(entry.text));
-    var div = document.createElement("div");
-    div.appendChild(a);
-    div.className = "toclevel" + entry.toclevel;
-    toc.appendChild(div);
-  }
-  if (entries.length == 0)
-    toc.parentNode.removeChild(toc);
-},
-
-
-/////////////////////////////////////////////////////////////////////
-// Footnotes generator
-/////////////////////////////////////////////////////////////////////
-
-/* Based on footnote generation code from:
- * http://www.brandspankingnew.net/archive/2005/07/format_footnote.html
- */
-
-footnotes: function () {
-  // Delete existing footnote entries in case we're reloading the footnodes.
-  var i;
-  var noteholder = document.getElementById("footnotes");
-  if (!noteholder) {
-    return;
-  }
-  var entriesToRemove = [];
-  for (i = 0; i < noteholder.childNodes.length; i++) {
-    var entry = noteholder.childNodes[i];
-    if (entry.nodeName.toLowerCase() == 'div' && entry.getAttribute("class") == "footnote")
-      entriesToRemove.push(entry);
-  }
-  for (i = 0; i < entriesToRemove.length; i++) {
-    noteholder.removeChild(entriesToRemove[i]);
-  }
-
-  // Rebuild footnote entries.
-  var cont = document.getElementById("content");
-  var spans = cont.getElementsByTagName("span");
-  var refs = {};
-  var n = 0;
-  for (i=0; i<spans.length; i++) {
-    if (spans[i].className == "footnote") {
-      n++;
-      var note = spans[i].getAttribute("data-note");
-      if (!note) {
-        // Use [\s\S] in place of . so multi-line matches work.
-        // Because JavaScript has no s (dotall) regex flag.
-        note = spans[i].innerHTML.match(/\s*\[([\s\S]*)]\s*/)[1];
-        spans[i].innerHTML =
-          "[<a id='_footnoteref_" + n + "' href='#_footnote_" + n +
-          "' title='View footnote' class='footnote'>" + n + "</a>]";
-        spans[i].setAttribute("data-note", note);
-      }
-      noteholder.innerHTML +=
-        "<div class='footnote' id='_footnote_" + n + "'>" +
-        "<a href='#_footnoteref_" + n + "' title='Return to text'>" +
-        n + "</a>. " + note + "</div>";
-      var id =spans[i].getAttribute("id");
-      if (id != null) refs["#"+id] = n;
-    }
-  }
-  if (n == 0)
-    noteholder.parentNode.removeChild(noteholder);
-  else {
-    // Process footnoterefs.
-    for (i=0; i<spans.length; i++) {
-      if (spans[i].className == "footnoteref") {
-        var href = spans[i].getElementsByTagName("a")[0].getAttribute("href");
-        href = href.match(/#.*/)[0];  // Because IE return full URL.
-        n = refs[href];
-        spans[i].innerHTML =
-          "[<a href='#_footnote_" + n +
-          "' title='View footnote' class='footnote'>" + n + "</a>]";
-      }
-    }
-  }
-},
-
-install: function(toclevels) {
-  var timerId;
-
-  function reinstall() {
-    asciidoc.footnotes();
-    if (toclevels) {
-      asciidoc.toc(toclevels);
-    }
-  }
-
-  function reinstallAndRemoveTimer() {
-    clearInterval(timerId);
-    reinstall();
-  }
-
-  timerId = setInterval(reinstall, 500);
-  if (document.addEventListener)
-    document.addEventListener("DOMContentLoaded", reinstallAndRemoveTimer, false);
-  else
-    window.onload = reinstallAndRemoveTimer;
-}
-
-}
-asciidoc.install(2);
-/*]]>*/
-</script>
 </head>
-<body class="article">
+<body class="article toc2 toc-left">
 <div id="header">
 <h1>SNEBU</h1>
-<div id="toc">
-  <div id="toctitle">Table of Contents</div>
-  <noscript><p><b>JavaScript must be enabled in your browser to display the table of contents.</b></p></noscript>
+<div id="toc" class="toc2">
+<div id="toctitle">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#_introduction">Introduction</a></li>
+<li>
+<ul class="sectlevel2">
+<li><a href="#_audience">Audience</a></li>
+</ul>
+</li>
+<li><a href="#_downloads_installation">Downloads / Installation</a></li>
+<li><a href="#_features">Features</a></li>
+<li><a href="#_quick_start_guide">Quick-start guide</a></li>
+<li>
+<ul class="sectlevel2">
+<li><a href="#_concepts">Concepts</a></li>
+<li><a href="#_setting_up_a_local_backup">Setting up a local backup</a></li>
+<li><a href="#_backing_up_to_a_remote_server">Backing up to a remote server</a></li>
+<li><a href="#_backing_up_remote_clients_from_a_backup_server">Backing up remote clients from a backup server</a></li>
+</ul>
+</li>
+<li><a href="#_daily_and_periodic_maintenance_tasks">Daily and periodic maintenance tasks</a></li>
+<li>
+<ul class="sectlevel2">
+<li><a href="#_expiring_old_backups">Expiring old backups</a></li>
+</ul>
+</li>
+<li><a href="#_advanced_usage">Advanced usage</a></li>
+<li>
+<ul class="sectlevel2">
+<li><a href="#_creating_a_custom_snebu_client_script">Creating a custom snebu-client script</a></li>
+<li><a href="#_changing_file_locations">Changing file locations</a></li>
+<li><a href="#_forcing_a_full_backup">Forcing a full backup</a></li>
+<li><a href="#_plugins">Plugins</a></li>
+</ul>
+</li>
+<li><a href="#_command_reference">Command reference</a></li>
+<li>
+<ul class="sectlevel2">
+<li><a href="#_snebu_client_br">snebu-client<br></a></li>
+<li><a href="#_snebu">snebu</a></li>
+</ul>
+</li>
+<li><a href="#_contact_info">Contact info</a></li>
+</ul>
 </div>
 </div>
 <div id="content">
 <div class="sect1">
 <h2 id="_introduction">Introduction</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>Snebu is an efficient incremental snapshot style client/server disk-based backup system for Unix / Linux systems.  Efficiency is provided by transferring only the needed files to complete a given backup set, along with compression and file-level de-duplication.  This de-duplication is effective for any files with the same contents, whether they come from the same backup instance, or are duplicated across past backups, or even across multiple systems.  Therefore you can backup the full OS on multiple servers using only minimal additional storage space.</p></div>
+<div class="paragraph">
+<p>Snebu is an efficient incremental snapshot style client/server disk-based backup system for Unix / Linux systems.  Efficiency is provided by transferring only the needed files to complete a given backup set, along with compression and file-level de-duplication.  This de-duplication is effective for any files with the same contents, whether they come from the same backup instance, or are duplicated across past backups, or even across multiple systems.  Therefore you can backup the full OS on multiple servers using only minimal additional storage space.</p>
+</div>
 <div class="sect2">
 <h3 id="_audience">Audience</h3>
-<div class="paragraph"><p>Snebu is for those who either have no current backup strategy, and want to get something going quickly (either to a locally attached external drive, or to some storage on another server), or if you are currently using a simpler backup scheme (such as one of the rsync-based backup methods) and need to have some of the features of the more heavy weight backup systems (such as a compression, de-duplication, backup catalog DB, and scheduled data expiration).</p></div>
+<div class="paragraph">
+<p>Snebu is for those who either have no current backup strategy, and want to get something going quickly (either to a locally attached external drive, or to some storage on another server), or if you are currently using a simpler backup scheme (such as one of the rsync-based backup methods) and need to have some of the features of the more heavy weight backup systems (such as a compression, de-duplication, backup catalog DB, and scheduled data expiration).</p>
+</div>
 </div>
 </div>
 </div>
 <div class="sect1">
 <h2 id="_downloads_installation">Downloads / Installation</h2>
 <div class="sectionbody">
-<div class="ulist"><div class="title">Source</div><ul>
+<div class="ulist">
+<div class="title">Source</div>
+<ul>
 <li>
-<p>
-Download <a href="https://github.com/derekp7/snebu/archive/v1.02/snebu-v1.02.tar.gz">snebu-1.02.tar.gz</a>
-</p>
+<p>Download <a href="https://github.com/derekp7/snebu/archive/v1.02/snebu-v1.02.tar.gz">snebu-1.02.tar.gz</a></p>
 </li>
 <li>
-<p>
-Extract the tar file, and run make / make install
-</p>
+<p>Extract the tar file, and run make / make install</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>tar -zxvf snebu-1.02.tar.gz
+<pre>tar -zxvf snebu-1.02.tar.gz
 cd snebu-1.02
 make
-make install</code></pre>
-</div></div>
+make install</pre>
+</div>
+</div>
 </li>
-</ul></div>
-<div class="ulist"><div class="title">RPM (Fedora / RHEL)</div><ul>
+</ul>
+</div>
+<div class="ulist">
+<div class="title">RPM (Fedora / RHEL)</div>
+<ul>
 <li>
-<p>
-Download <a href="https://github.com/derekp7/snebu/releases/download/v1.02/snebu-1.02-1.src.rpm">snebu-1.02-1.src.rpm</a>
-</p>
+<p>Download <a href="https://github.com/derekp7/snebu/releases/download/v1.02/snebu-1.02-1.src.rpm">snebu-1.02-1.src.rpm</a></p>
 </li>
 <li>
-<p>
-Make sure you have the prerequisite packages installed
-</p>
+<p>Make sure you have the prerequisite packages installed</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>yum install rpm-build lzo-devel openssl-devel sqlite-devel</code></pre>
-</div></div>
+<pre>yum install rpm-build lzo-devel openssl-devel sqlite-devel</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-Build and install the binary RPM
-</p>
+<p>Build and install the binary RPM</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>rpmbuild --rebuild snebu-1.02-1.src.rpm
-yum install snebu-1.02-1.rpm</code></pre>
-</div></div>
+<pre>rpmbuild --rebuild snebu-1.02-1.src.rpm
+yum install snebu-1.02-1.rpm</pre>
+</div>
+</div>
 </li>
-</ul></div>
+</ul>
+</div>
 </div>
 </div>
 <div class="sect1">
 <h2 id="_features">Features</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>Benefits:</p></div>
-<div class="ulist"><ul>
+<div class="paragraph">
+<p>Benefits:</p>
+</div>
+<div class="ulist">
+<ul>
 <li>
-<p>
-Easy to set up.  There system consists of two programs:<br />
-<code>snebu-client</code> - This is a simple shell script for interacting with the backend process, along with gathering the files to include in a given backup set.<br />
-<code>snebu</code>&#8201;&#8212;&#8201;This is the backend process which stores backup files in a disk-based vault, maintaining metadata about the files and backup sets in an SQLite-based backup catalog.
-</p>
-<div class="paragraph"><p>There are no complicated daemons to configure, or heavy database systems that need to be installed.  All the core logic is self-contained in the snebu binary.
-* Suitable for backing up a single system to an attached external disk, backing up to a separate network server, or backing up a number of hosts with backups initiated from the central backup server.</p></div>
+<p>Easy to set up.  There system consists of two programs:<br>
+<code>snebu-client</code> - This is a simple shell script for interacting with the backend process, along with gathering the files to include in a given backup set.<br>
+<code>snebu</code>&#8201;&#8212;&#8201;This is the backend process which stores backup files in a disk-based vault, maintaining metadata about the files and backup sets in an SQLite-based backup catalog.</p>
+<div class="paragraph">
+<p>There are no complicated daemons to configure, or heavy database systems that need to be installed.  All the core logic is self-contained in the snebu binary.</p>
+</div>
 </li>
 <li>
-<p>
-No client software installation required.  If backups are initiated from a central backup server, then communications to the clients are preformed over SSH.  The only requirements are that the backup account on the server is permitted appropriate access to the client (via ssh keys), and the client have the minimal versions of GNU find and tar installed (this is only a concern with ancient Linux installations, or Unix systems).
-</p>
+<p>Suitable for backing up a single system to an attached external disk, backing up to a separate network server, or backing up a number of hosts with backups initiated from the central backup server.</p>
 </li>
 <li>
-<p>
-Works similar to rsync-based backup tools (by providing snapshot incremental-forever backups), but provides compression and a self-contained database-backed (SQLite) backup catalog.  One of the many benefits of having a separate backup catalog is this allows the backend to execute under a regular (non-root) utility account.
-</p>
+<p>No client software installation required.  If backups are initiated from a central backup server, then communications to the clients are preformed over SSH.  The only requirements are that the backup account on the server is permitted appropriate access to the client (via ssh keys), and the client have the minimal versions of GNU find and tar installed (this is only a concern with ancient Linux installations, or Unix systems).</p>
 </li>
 <li>
-<p>
-File-level de-duplication is supported, including de-duplication of files across backup sets, and across multiple backup clients.
-</p>
+<p>Works similar to rsync-based backup tools (by providing snapshot incremental-forever backups), but provides compression and a self-contained database-backed (SQLite) backup catalog.  One of the many benefits of having a separate backup catalog is this allows the backend to execute under a regular (non-root) utility account.</p>
 </li>
 <li>
-<p>
-Built using standard tools and protocols.  File metadata gathering is provided by the <code>find</code> command (GNU find is required), files are transfered using <code>tar</code> format, the backup catalog is in an SQLite database file, and files are stored in the disk-based vault compressed with the LZO library, and compatible with the <code>lzop</code> compression program.
-</p>
+<p>File-level de-duplication is supported, including de-duplication of files across backup sets, and across multiple backup clients.</p>
 </li>
-</ul></div>
+<li>
+<p>Built using standard tools and protocols.  File metadata gathering is provided by the <code>find</code> command (GNU find is required), files are transfered using <code>tar</code> format, the backup catalog is in an SQLite database file, and files are stored in the disk-based vault compressed with the LZO library, and compatible with the <code>lzop</code> compression program.</p>
+</li>
+</ul>
+</div>
 </div>
 </div>
 <div class="sect1">
@@ -946,225 +842,258 @@ Built using standard tools and protocols.  File metadata gathering is provided b
 <div class="sectionbody">
 <div class="sect2">
 <h3 id="_concepts">Concepts</h3>
-<div class="paragraph"><p>The Snebu backup system is composed of a backend process, <code>snebu</code>, and a front-end client called <code>snebu-client</code>.  The client gathers a list of files to back up (using the <code>find</code> command), sends this list to the backend, and gets back a list of files that are needed to complete an incremental backup.  These files are then sent to the backend using the Unix <code>tar</code> format.</p></div>
-<div class="paragraph"><p>Backups are stored in backup sets.  A backup set is uniquely identified by the backup name (typically the host name getting backed up), and a datestamp in the form of a Unix time_t value (essentially, a count of the number of seconds since Jan 1, 1970).  This value functions as a serial number.</p></div>
-<div class="paragraph"><p>Each backup set has a retention schedule attached to it, specified by the <code>-r</code> flag.  The retention schedule is used by the expiration process to, for example, expire all daily backups older than 10 days, or all monthly backups older than 6 months.  Anything can be used for for a schedule name, but typical values are <code>daily</code>, <code>weekly</code>, <code>monthly</code>, <code>yearly</code>, and <code>archive</code>.  If not specified, then the <code>snebu-client</code> script will automatically pick a retention schedule based on the date (Sunday through Friday are daily, Saturday is weekly, and the 1st of the month is monthly).</p></div>
-<div class="paragraph"><p>When a backup is requested, the backend will determine which files it already has (by comparing meta data such as file name, size, last modification time, and various other attributes).  A list of files that are already on the backup server is added to the current backup set.  The remaining files are then requested, and are added to the backup set when they are received.</p></div>
-<div class="paragraph"><p>File contents are stored and referenced by using the SHA1 hash of the file contents.  Therefore, file level de-duplication is achieved across all backups stored on the backup server.  In addition, files are stored compressed in an lzop compatible format.  This allows for recovery of files even outside of the backup utility.</p></div>
+<div class="paragraph">
+<p>The Snebu backup system is composed of a backend process, <code>snebu</code>, and a front-end client called <code>snebu-client</code>.  The client gathers a list of files to back up (using the <code>find</code> command), sends this list to the backend, and gets back a list of files that are needed to complete an incremental backup.  These files are then sent to the backend using the Unix <code>tar</code> format.</p>
+</div>
+<div class="paragraph">
+<p>Backups are stored in backup sets.  A backup set is uniquely identified by the backup name (typically the host name getting backed up), and a datestamp in the form of a Unix time_t value (essentially, a count of the number of seconds since Jan 1, 1970).  This value functions as a serial number.</p>
+</div>
+<div class="paragraph">
+<p>Each backup set has a retention schedule attached to it, specified by the <code>-r</code> flag.  The retention schedule is used by the expiration process to, for example, expire all daily backups older than 10 days, or all monthly backups older than 6 months.  Anything can be used for for a schedule name, but typical values are <code>daily</code>, <code>weekly</code>, <code>monthly</code>, <code>yearly</code>, and <code>archive</code>.  If not specified, then the <code>snebu-client</code> script will automatically pick a retention schedule based on the date (Sunday through Friday are daily, Saturday is weekly, and the 1st of the month is monthly).</p>
+</div>
+<div class="paragraph">
+<p>When a backup is requested, the backend will determine which files it already has (by comparing meta data such as file name, size, last modification time, and various other attributes).  A list of files that are already on the backup server is added to the current backup set.  The remaining files are then requested, and are added to the backup set when they are received.</p>
+</div>
+<div class="paragraph">
+<p>File contents are stored and referenced by using the SHA1 hash of the file contents.  Therefore, file level de-duplication is achieved across all backups stored on the backup server.  In addition, files are stored compressed in an lzop compatible format.  This allows for recovery of files even outside of the backup utility.</p>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_setting_up_a_local_backup">Setting up a local backup</h3>
-<div class="paragraph"><p>This procedure assumes that both <code>snebu</code> and <code>snebu-client</code> are installed, and you will be backing up to a drive that is mounted under /media/backups.  These steps will be run as the root user.  In the examples, the host name that is getting backed up is called <code>zeus</code>.  The backup retention schedules are automatically determined in these examples (use <code>-r</code> to override)</p></div>
-<div class="olist arabic"><ol class="arabic">
+<div class="paragraph">
+<p>This procedure assumes that both <code>snebu</code> and <code>snebu-client</code> are installed, and you will be backing up to a drive that is mounted under /media/backups.  These steps will be run as the root user.  In the examples, the host name that is getting backed up is called <code>zeus</code>.  The backup retention schedules are automatically determined in these examples (use <code>-r</code> to override)</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
 <li>
-<p>
-Create a file <code>/etc/snebu.conf</code> with the following:
-</p>
+<p>Create a file <code>/etc/snebu.conf</code> with the following:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>meta=/media/backups/meta
-vault=/media/backups/vault</code></pre>
-</div></div>
-<div class="paragraph"><p>The meta directory is where the backup catalog is stored (in an SQLite DB).  The vault directory contains all the backup file contents.</p></div>
+<pre>meta=/media/backups/meta
+vault=/media/backups/vault</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The meta directory is where the backup catalog is stored (in an SQLite DB).  The vault directory contains all the backup file contents.</p>
+</div>
 </li>
 <li>
-<p>
-Create the directories from the previous step:
-</p>
+<p>Create the directories from the previous step:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>mkdir -p /media/backups/meta
-mkdir -p /media/backups/vault</code></pre>
-</div></div>
+<pre>mkdir -p /media/backups/meta
+mkdir -p /media/backups/vault</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-Create a file <code>/etc/snebu-client.conf</code> with the following:
-</p>
+<p>Create a file <code>/etc/snebu-client.conf</code> with the following:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>EXCLUDE=( /tmp /var/tmp /mnt /media/backups )</code></pre>
-</div></div>
-<div class="paragraph"><p>By default, the files to be backed up included all mounted Linux filesystems of the types ext2, ext3, ext4, btrfs, xfs.  This is the same as specifying the following line in the <code>snebu-client.conf</code> file:</p></div>
+<pre>EXCLUDE=( /tmp /var/tmp /mnt /media/backups )</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>By default, the files to be backed up included all mounted Linux filesystems of the types ext2, ext3, ext4, btrfs, xfs.  This is the same as specifying the following line in the <code>snebu-client.conf</code> file:</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre><code>INCLUDE=( $(mount |egrep "ext[234]|btrfs" |awk '{print $3}') )</code></pre>
-</div></div>
-<div class="paragraph"><p>If you want to list specific directories to backup, list them in an INCLUDE line in the <code>/etc/snebu-client.conf</code> file:</p></div>
+<pre>INCLUDE=( $(mount |egrep "ext[234]|btrfs" |awk '{print $3}') )</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you want to list specific directories to backup, list them in an INCLUDE line in the <code>/etc/snebu-client.conf</code> file:</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre><code>INCLUDE=( /dir1 /dir2 /dir3 )</code></pre>
-</div></div>
-<div class="paragraph"><p>Or, if you want to add to the default include:</p></div>
+<pre>INCLUDE=( /dir1 /dir2 /dir3 )</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Or, if you want to add to the default include:</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre><code>INCLUDE=( "${INCLUDE[@]}" /dir1 /dir2 /dir3 )</code></pre>
-</div></div>
+<pre>INCLUDE=( "${INCLUDE[@]}" /dir1 /dir2 /dir3 )</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-Run a test backup:
-</p>
+<p>Run a test backup:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>snebu-client backup -v</code></pre>
-</div></div>
-<div class="paragraph"><p>Note, you can also override the default INCLUDE list on the <code>snebu-client</code> command line:</p></div>
+<pre>snebu-client backup -v</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note, you can also override the default INCLUDE list on the <code>snebu-client</code> command line:</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre><code>snebu-client backup -v /dir1 /dir2</code></pre>
-</div></div>
-<div class="paragraph"><p>See the <code>snebu-client</code> detailed documentation for the list of available parameters.  Specifically, look at the <code>-r</code> (retention schedule), and <code>-n</code> (backup name) parameters.
-. Once the backup is completed, you can use the following to list the backups:</p></div>
-<div class="listingblock">
-<div class="content">
-<pre><code>snebu-client listbackups -v</code></pre>
-</div></div>
-<div class="paragraph"><p>Which should output the names of the backups that are available:</p></div>
-<div class="listingblock">
-<div class="content">
-<pre><code>zeus
-    1389677695 / daily / Mon Jan 13 23:34:55 2014</code></pre>
-</div></div>
+<pre>snebu-client backup -v /dir1 /dir2</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>See the <code>snebu-client</code> detailed documentation for the list of available parameters.  Specifically, look at the <code>-r</code> (retention schedule), and <code>-n</code> (backup name) parameters.</p>
+</div>
 </li>
 <li>
-<p>
-To get a list of files that are included:
-</p>
+<p>Once the backup is completed, you can use the following to list the backups:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>    snebu-client listbackups --name zeus --datestamp 1389677695 |more</code></pre>
-</div></div>
+<pre>snebu-client listbackups -v</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Which should output the names of the backups that are available:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>zeus
+    1389677695 / daily / Mon Jan 13 23:34:55 2014</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-To restore a given file, pick one from the list generated in the step above, and:
-</p>
+<p>To get a list of files that are included:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>snebu-client restore --name zeus --datestamp 1389677695 '/path/to/file'</code></pre>
-</div></div>
-<div class="paragraph"><p>Or, to restore a directory,</p></div>
-<div class="listingblock">
-<div class="content">
-<pre><code>snebu-client restore --name zeus --datestamp 1389677695 '/path/to/directory/*'</code></pre>
-</div></div>
-<div class="paragraph"><p>This will by default place the files starting in the directory you are currently sitting in.  So, if you are in /tmp, and restore /home/bob/resume.txt, it will be placed in /tmp/home/bob/resume.txt.  See the detailed documentation section for additional parameters, such as <code>-C</code> which will specify an alternate target directory, or <code>--graft</code> which will allow you to rename parts of the file path.</p></div>
+<pre>    snebu-client listbackups --name zeus --datestamp 1389677695 |more</pre>
+</div>
+</div>
 </li>
-</ol></div>
+<li>
+<p>To restore a given file, pick one from the list generated in the step above, and:</p>
+<div class="listingblock">
+<div class="content">
+<pre>snebu-client restore --name zeus --datestamp 1389677695 '/path/to/file'</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Or, to restore a directory,</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>snebu-client restore --name zeus --datestamp 1389677695 '/path/to/directory/*'</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This will by default place the files starting in the directory you are currently sitting in.  So, if you are in /tmp, and restore /home/bob/resume.txt, it will be placed in /tmp/home/bob/resume.txt.  See the detailed documentation section for additional parameters, such as <code>-C</code> which will specify an alternate target directory, or <code>--graft</code> which will allow you to rename parts of the file path.</p>
+</div>
+</li>
+</ol>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_backing_up_to_a_remote_server">Backing up to a remote server</h3>
-<div class="paragraph"><p>When backing up to a remote server, it is preferable to use a non-privliged user account, such as <code>backup</code>, instead of <code>root</code>.  In this section, the backup server will be called <code>jupiter</code>, and the client is <code>zeus</code>.  The backup server will have the target backup media mounted under /media/backups, which will be owned by <code>backup</code>.  The program <code>snebu</code> is assumed to be installed on <code>jupiter</code>, and the <code>snebu-client</code> script is on the client <code>zeus</code>.</p></div>
-<div class="olist arabic"><ol class="arabic">
+<div class="paragraph">
+<p>When backing up to a remote server, it is preferable to use a non-privliged user account, such as <code>backup</code>, instead of <code>root</code>.  In this section, the backup server will be called <code>jupiter</code>, and the client is <code>zeus</code>.  The backup server will have the target backup media mounted under /media/backups, which will be owned by <code>backup</code>.  The program <code>snebu</code> is assumed to be installed on <code>jupiter</code>, and the <code>snebu-client</code> script is on the client <code>zeus</code>.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
 <li>
-<p>
-Create a backup user:
-</p>
+<p>Create a backup user:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>useradd backup
-passwd backup</code></pre>
-</div></div>
+<pre>useradd backup
+passwd backup</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-Create a file <code>/etc/snebu.conf</code> with the following:
-</p>
+<p>Create a file <code>/etc/snebu.conf</code> with the following:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>meta=/media/backups/meta
-vault=/media/backups/vault</code></pre>
-</div></div>
+<pre>meta=/media/backups/meta
+vault=/media/backups/vault</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-After mounting the backup media, create the directories from the previous step, and make everything owned by backup:
-</p>
+<p>After mounting the backup media, create the directories from the previous step, and make everything owned by backup:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>mkdir -p /media/backups/meta
+<pre>mkdir -p /media/backups/meta
 mkdir -p /media/backups/vault
-chown -R backup /media/backups</code></pre>
-</div></div>
+chown -R backup /media/backups</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-On the client (<code>zeus</code>), create an ssh key pair if one doesn&#8217;t exist for the root user, and copy it to the <code>backup</code> user&#8217;s authorized-keys file on <code>jupiter</code>:
-</p>
+<p>On the client (<code>zeus</code>), create an ssh key pair if one doesn&#8217;t exist for the root user, and copy it to the <code>backup</code> user&#8217;s authorized-keys file on <code>jupiter</code>:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>ssh-keygen -t rsa -N ""
-ssh-copy-id backup@jupiter</code></pre>
-</div></div>
+<pre>ssh-keygen -t rsa -N ""
+ssh-copy-id backup@jupiter</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-On the client, create the <code>/etc/snebu-client.conf</code> file with proper INCLUDE and EXCLUDE parameters, as specified in the previous (local backup) section.
-</p>
+<p>On the client, create the <code>/etc/snebu-client.conf</code> file with proper INCLUDE and EXCLUDE parameters, as specified in the previous (local backup) section.</p>
 </li>
 <li>
-<p>
-Make sure you can (as root on <code>zeus</code>) ssh into the backup user on <code>jupiter</code>
-</p>
+<p>Make sure you can (as root on <code>zeus</code>) ssh into the backup user on <code>jupiter</code></p>
 <div class="listingblock">
 <div class="content">
-<pre><code>ssh backup@jupiter uname -a</code></pre>
-</div></div>
+<pre>ssh backup@jupiter uname -a</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-Run a test backup as before, but with an additional parameter:
-</p>
+<p>Run a test backup as before, but with an additional parameter:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>snebu-client backup --backup-server jupiter -v</code></pre>
-</div></div>
-<div class="paragraph"><p>The --backup-server parameter will also apply to all the other comands, such as listbackups and restore.  An alternative to specifying this each time is to add the following to <code>/etc/snebu-client.conf</code>:</p></div>
+<pre>snebu-client backup --backup-server jupiter -v</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The --backup-server parameter will also apply to all the other comands, such as listbackups and restore.  An alternative to specifying this each time is to add the following to <code>/etc/snebu-client.conf</code>:</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre><code>bksvrname=jupiter</code></pre>
-</div></div>
+<pre>bksvrname=jupiter</pre>
+</div>
+</div>
 </li>
-</ol></div>
+</ol>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_backing_up_remote_clients_from_a_backup_server">Backing up remote clients from a backup server</h3>
-<div class="paragraph"><p>If you have a number of systems to back up, it may be better to initiate all backups from the backup server.  In this model, the <code>backup</code> user account on the backup server will need SSH permissions to access root on the clients.  This may be preferable, as it avoids having to give each client remote access to the backup server.  However, that means the clients have to trust the backup server with root access.  The good part, though, is there is nothing to install on the clients, other than inserting a key into root&#8217;s authorized_keys file.</p></div>
-<div class="olist arabic"><ol class="arabic">
+<div class="paragraph">
+<p>If you have a number of systems to back up, it may be better to initiate all backups from the backup server.  In this model, the <code>backup</code> user account on the backup server will need SSH permissions to access root on the clients.  This may be preferable, as it avoids having to give each client remote access to the backup server.  However, that means the clients have to trust the backup server with root access.  The good part, though, is there is nothing to install on the clients, other than inserting a key into root&#8217;s authorized_keys file.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
 <li>
-<p>
-Set up the backup server, <code>jupiter</code> as discussed in the previous section (steps 1 through 3)
-</p>
+<p>Set up the backup server, <code>jupiter</code> as discussed in the previous section (steps 1 through 3)</p>
 </li>
 <li>
-<p>
-Also, on the server (<code>jupiter</code>), create an SSH key pair for the <code>backup</code> user
-</p>
+<p>Also, on the server (<code>jupiter</code>), create an SSH key pair for the <code>backup</code> user</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>ssh-keygen -t rsa -N ""</code></pre>
-</div></div>
+<pre>ssh-keygen -t rsa -N ""</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-Copy the public key file to the clients to be backed up.  Newer versions of OpenSSH include a utility to make this easier:
-</p>
+<p>Copy the public key file to the clients to be backed up.  Newer versions of OpenSSH include a utility to make this easier:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>ssh-copy-id root@zeus</code></pre>
-</div></div>
+<pre>ssh-copy-id root@zeus</pre>
+</div>
+</div>
 </li>
 <li>
-<p>
-Initiate a test backup from the <code>backup</code> user on <code>jupiter</code>:
-</p>
+<p>Initiate a test backup from the <code>backup</code> user on <code>jupiter</code>:</p>
 <div class="listingblock">
 <div class="content">
-<pre><code>snebu-client backup --remote-client zeus -v</code></pre>
-</div></div>
+<pre>snebu-client backup --remote-client zeus -v</pre>
+</div>
+</div>
 </li>
-</ol></div>
+</ol>
+</div>
 </div>
 </div>
 </div>
@@ -1173,43 +1102,54 @@ Initiate a test backup from the <code>backup</code> user on <code>jupiter</code>
 <div class="sectionbody">
 <div class="sect2">
 <h3 id="_expiring_old_backups">Expiring old backups</h3>
-<div class="paragraph"><p>Periodically cleaning out old backups is essential for keeping the target storage device from running out of space.  Typical data retention schedules are:</p></div>
-<div class="ulist"><ul>
+<div class="paragraph">
+<p>Periodically cleaning out old backups is essential for keeping the target storage device from running out of space.  Typical data retention schedules are:</p>
+</div>
+<div class="ulist">
+<ul>
 <li>
-<p>
-daily&#8201;&#8212;&#8201;keep all daily backups for 2 weeks
-</p>
+<p>daily&#8201;&#8212;&#8201;keep all daily backups for 2 weeks</p>
 </li>
 <li>
-<p>
-weekly&#8201;&#8212;&#8201;keep all weekly (Saturday) backups for 6 weeks
-</p>
+<p>weekly&#8201;&#8212;&#8201;keep all weekly (Saturday) backups for 6 weeks</p>
 </li>
 <li>
-<p>
-monthly&#8201;&#8212;&#8201;keep all monthly backups for 12 months
-</p>
+<p>monthly&#8201;&#8212;&#8201;keep all monthly backups for 12 months</p>
 </li>
-</ul></div>
-<div class="paragraph"><p>To accomplish this, run the following commands on the backup server:</p></div>
+</ul>
+</div>
+<div class="paragraph">
+<p>To accomplish this, run the following commands on the backup server:</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre><code>snebu expire -a 14 -r daily
+<pre>snebu expire -a 14 -r daily
 snebu expire -a 42 -r weekly
-snebu expire -a 365 -r monthly</code></pre>
-</div></div>
-<div class="paragraph"><p>Note, that there is a safety valve built into the expire command, where it will keep (by default) the most recent 3 backup sets for a given system.  This can be adjusted with the <code>-m</code> flag (i.e., <code>-m 7</code> will keep the most recent 7 backups, or <code>-m 0</code> disables this safety check).</p></div>
-<div class="paragraph"><p>Another form of the expire command will remove a given backup set, useful if you have a partial or a redundant backup that needs to be cleaned out:</p></div>
+snebu expire -a 365 -r monthly</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note, that there is a safety valve built into the expire command, where it will keep (by default) the most recent 3 backup sets for a given system.  This can be adjusted with the <code>-m</code> flag (i.e., <code>-m 7</code> will keep the most recent 7 backups, or <code>-m 0</code> disables this safety check).</p>
+</div>
+<div class="paragraph">
+<p>Another form of the expire command will remove a given backup set, useful if you have a partial or a redundant backup that needs to be cleaned out:</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre><code>snebu expire -n name -d datestamp</code></pre>
-</div></div>
-<div class="paragraph"><p>After the expiration jobs are finished (which removes the backups from the backup catalog), you will need to remove the actual file contents from the vault:</p></div>
+<pre>snebu expire -n name -d datestamp</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After the expiration jobs are finished (which removes the backups from the backup catalog), you will need to remove the actual file contents from the vault:</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre><code>snebu purge</code></pre>
-</div></div>
-<div class="paragraph"><p>The purge process can take some time to execute, so typically it would be run on a weekly basis, and the expire jobs run daily after the backups have completed.</p></div>
+<pre>snebu purge</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The purge process can take some time to execute, so typically it would be run on a weekly basis, and the expire jobs run daily after the backups have completed.</p>
+</div>
 </div>
 </div>
 </div>
@@ -1218,48 +1158,68 @@ snebu expire -a 365 -r monthly</code></pre>
 <div class="sectionbody">
 <div class="sect2">
 <h3 id="_creating_a_custom_snebu_client_script">Creating a custom snebu-client script</h3>
-<div class="paragraph"><p>Typically, direct usage of the <code>snebu</code> command is used for maintenance purposes.  Submitting backups and restoring is driven by the snebu-client command.  However, if needed, you can create a custom client for advanced purposes (such as performing live database backups, which typically involve placing the DB in backup mode, and querying the DB for which files to back up).  The process of submitting a backup requires two parts:</p></div>
-<div class="ulist"><ul>
+<div class="paragraph">
+<p>Typically, direct usage of the <code>snebu</code> command is used for maintenance purposes.  Submitting backups and restoring is driven by the snebu-client command.  However, if needed, you can create a custom client for advanced purposes (such as performing live database backups, which typically involve placing the DB in backup mode, and querying the DB for which files to back up).  The process of submitting a backup requires two parts:</p>
+</div>
+<div class="ulist">
+<ul>
 <li>
-<p>
-<code>snebu newbackup</code>
-</p>
-<div class="paragraph"><p>This subcommand expects an input list of files as a tab-delimited list consisting of:</p></div>
+<p><code>snebu newbackup</code></p>
+<div class="paragraph">
+<p>This subcommand expects an input list of files as a tab-delimited list consisting of:</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre><code>File Type, Mode, Device, Inode, Owner, Owner#, Group, Group#, Size, SHA1, Inode Mod Time, File Mod Date, Filename, Symlink Target</code></pre>
-</div></div>
-<div class="paragraph"><p>This list can be generated with GNU find command, with the following <code>-printf</code> arguments added:</p></div>
+<pre>File Type, Mode, Device, Inode, Owner, Owner#, Group, Group#, Size, SHA1, Inode Mod Time, File Mod Date, Filename, Symlink Target</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This list can be generated with GNU find command, with the following <code>-printf</code> arguments added:</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre><code>\( -type f -o -type d \) \
+<pre>\( -type f -o -type d \) \
     -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0" \
     -o -type l \
-    -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0%l\0"</code></pre>
-</div></div>
-<div class="paragraph"><p>(Note, that currently the SHA1 field (field number 10) isn&#8217;t used, so the above puts a 0 as a placeholder.  This is intended to be an additional indicator of if a file needs to be transfered to the backup server&#8217;s vault, or if it is already there.)</p></div>
+    -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0%l\0"</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>(Note, that currently the SHA1 field (field number 10) isn&#8217;t used, so the above puts a 0 as a placeholder.  This is intended to be an additional indicator of if a file needs to be transfered to the backup server&#8217;s vault, or if it is already there.)</p>
+</div>
 </li>
 <li>
-<p>
-<code>snebu submitfiles</code>
-</p>
-<div class="paragraph"><p>The output of the <code>snebu newbackup</code> command is a list of files that need to be backed up to complete the backup set (anything not on this list is already on the backup server, and gets linked to the current backup set).  This list is then used to generate a <code>tar</code> file, which gets submitted to the submitfiles target as standard input.</p></div>
-<div class="paragraph"><p>See the detailed documentation section for additional command line arguments that are required.  Also, the included snebu-client shell script can be referenced for more details.</p></div>
+<p><code>snebu submitfiles</code></p>
+<div class="paragraph">
+<p>The output of the <code>snebu newbackup</code> command is a list of files that need to be backed up to complete the backup set (anything not on this list is already on the backup server, and gets linked to the current backup set).  This list is then used to generate a <code>tar</code> file, which gets submitted to the submitfiles target as standard input.</p>
+</div>
+<div class="paragraph">
+<p>See the detailed documentation section for additional command line arguments that are required.  Also, the included snebu-client shell script can be referenced for more details.</p>
+</div>
 </li>
-</ul></div>
+</ul>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_changing_file_locations">Changing file locations</h3>
-<div class="paragraph"><p>One parameter to <code>snebu-client</code> (or <code>snebu</code>, if writing your own client) is the <code>--graft</code> option.  This allows you to re-write the directory path from one location to another.  This is useful when backing up a filesystem snapshot.  If the snapshot of <code>/srv/database</code> is mounted under <code>/mnt/snapshots/database</code>, you can specify <code>--graft /mnt/snapshots/database/=/srv/database/</code> so that the backup will record the file locations as if they were backed up under their original location.</p></div>
-<div class="paragraph"><p>Another usage for <code>--graft</code> is when restoring a single file to a different location.  For example: <code>--graft /home/bob/budget.doc=/home/bob/restore/budget.doc</code> will allow restoring the file without overwriting the version that is currently in place.</p></div>
+<div class="paragraph">
+<p>One parameter to <code>snebu-client</code> (or <code>snebu</code>, if writing your own client) is the <code>--graft</code> option.  This allows you to re-write the directory path from one location to another.  This is useful when backing up a filesystem snapshot.  If the snapshot of <code>/srv/database</code> is mounted under <code>/mnt/snapshots/database</code>, you can specify <code>--graft /mnt/snapshots/database/=/srv/database/</code> so that the backup will record the file locations as if they were backed up under their original location.</p>
+</div>
+<div class="paragraph">
+<p>Another usage for <code>--graft</code> is when restoring a single file to a different location.  For example: <code>--graft /home/bob/budget.doc=/home/bob/restore/budget.doc</code> will allow restoring the file without overwriting the version that is currently in place.</p>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_forcing_a_full_backup">Forcing a full backup</h3>
-<div class="paragraph"><p>Snebu uses the file meta data (file name, last mod date, size, permissions, etc.) to determine if a file has been modified since the last backup.  If a file gets modified, keeps the same size, and the mod date is manually set to the original, this can cause the file to be skipped during incremental backups.  Therefore, it may be desirable to periodically force a full backup with the <code>-f</code> flag.  This will cause all included files to get transfered, although de-duplication is still accomplished on the back end.  The main drawback of <code>-f</code> is that it increases the backup time and network usage.</p></div>
+<div class="paragraph">
+<p>Snebu uses the file meta data (file name, last mod date, size, permissions, etc.) to determine if a file has been modified since the last backup.  If a file gets modified, keeps the same size, and the mod date is manually set to the original, this can cause the file to be skipped during incremental backups.  Therefore, it may be desirable to periodically force a full backup with the <code>-f</code> flag.  This will cause all included files to get transfered, although de-duplication is still accomplished on the back end.  The main drawback of <code>-f</code> is that it increases the backup time and network usage.</p>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_plugins">Plugins</h3>
-<div class="paragraph"><p>A plugin architecture is currently under development, which allows the <code>snebu-client</code> script to perform additional steps before and after a backup.  This can be used to create and mount snapshots of file systems, or to put a database into backup mode.</p></div>
+<div class="paragraph">
+<p>A plugin architecture is currently under development, which allows the <code>snebu-client</code> script to perform additional steps before and after a backup.  This can be used to create and mount snapshots of file systems, or to put a database into backup mode.</p>
+</div>
 </div>
 </div>
 </div>
@@ -1267,10 +1227,10 @@ snebu expire -a 365 -r monthly</code></pre>
 <h2 id="_command_reference">Command reference</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_snebu_client_br">snebu-client<br /></h3>
+<h3 id="_snebu_client_br">snebu-client<br></h3>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu-client [ subcommand ] [ options ]
+<pre>Usage: snebu-client [ subcommand ] [ options ]
  snebu-client is the client front end for snebu.  Use it to easily
  back up a local or remote host, to either local a local storage
  device, or to a remote backup server.  Use it with one of the
@@ -1283,13 +1243,14 @@ snebu expire -a 365 -r monthly</code></pre>
 
     listbackups [ -n backupname [ -d datestamp ]] [ file_list... ]
 
-    help [subcommand]</code></pre>
-</div></div>
+    help [subcommand]</pre>
+</div>
+</div>
 <div class="sect3">
 <h4 id="_snebu_client_backup">snebu-client backup</h4>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu-client backup [ -n backupname ] [ -d datestamp ] [ -r schedule ]
+<pre>Usage: snebu-client backup [ -n backupname ] [ -d datestamp ] [ -r schedule ]
     [ file-list ]
  Initiates a system backup.  By default, it will back up the local
  host to a local snebu install.  You can also use this command to back
@@ -1333,14 +1294,15 @@ Options:
                             (such as enabling hot backup mode) for systems
                             with a DB installed.
 
- [ file-list ]              List of files to backup -- overrides default</code></pre>
-</div></div>
+ [ file-list ]              List of files to backup -- overrides default</pre>
+</div>
+</div>
 </div>
 <div class="sect3">
 <h4 id="_snebu_client_restore">snebu-client restore</h4>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu-client restore [ -n backupname ] [ -d datestamp ] [ file-list ]
+<pre>Usage: snebu-client restore [ -n backupname ] [ -d datestamp ] [ file-list ]
  Restores a given backup session identified by "-n" and "-d"
  parameters.  Use the "listbackups" subcommand to get a list of
  available backup sessions.
@@ -1367,14 +1329,15 @@ Options:
                             Host name / IP address of backup server.  Used to
                             backup to a remote server.
 
- [ file-list ]              List of files to restore.  Defaults to all.</code></pre>
-</div></div>
+ [ file-list ]              List of files to restore.  Defaults to all.</pre>
+</div>
+</div>
 </div>
 <div class="sect3">
 <h4 id="_snebu_client_listbackups">snebu-client listbackups</h4>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
+<pre>Usage: snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
  With no arguments specified, "listbackups" will return a list of all
  systems that are contained in the backup catalog.  Otherwise, when
  specifying the -n parameter, a list of backup sets for that host is
@@ -1389,15 +1352,16 @@ Options:
 
  -d, --date datestamp       Date stamp for this backup set.  The format is in
                             time_t format, sames as the output of the "date
-                            +%s" command.</code></pre>
-</div></div>
+                            +%s" command.</pre>
+</div>
+</div>
 </div>
 </div>
 <div class="sect2">
 <h3 id="_snebu">snebu</h3>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu [ subcommand ] [ options ]
+<pre>Usage: snebu [ subcommand ] [ options ]
   where "subcommand" is one of the following:
     newbackup -n backupname -d datestamp -r schedule
 
@@ -1420,13 +1384,14 @@ Options:
  Documentation is provided here if you need to create a custom backup
  client script.  The subcommands are listed below along with the most
  common options.  Details on each command are given in each command's
- help section.</code></pre>
-</div></div>
+ help section.</pre>
+</div>
+</div>
 <div class="sect3">
 <h4 id="_snebu_newbackup">snebu newbackup</h4>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu newbackup -n backupname -d datestamp -r schedule
+<pre>Usage: snebu newbackup -n backupname -d datestamp -r schedule
  The "newbackup" command creates a new backup set, by consuming a
  tab-delimited list of file names (along with associated meta data) to
  include in the backup.  It then compares this list to the backup
@@ -1469,14 +1434,15 @@ Options:
                             Re-write path names beginning with "/path/name/"
                             to "/new/name/"
 
- -v,                        Verbose output</code></pre>
-</div></div>
+ -v,                        Verbose output</pre>
+</div>
+</div>
 </div>
 <div class="sect3">
 <h4 id="_snebu_submitfiles">snebu submitfiles</h4>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu submitfiles -n backupname -d datestamp
+<pre>Usage: snebu submitfiles -n backupname -d datestamp
  The "submitfiles" command is called after newbackup, and is used to
  submit a tar file containing the list of filest that newbackup
  returned.
@@ -1492,14 +1458,15 @@ Options:
                             time_t format, sames as the output of the "date
                             +%s" command.
 
- -v,                        Verbose output</code></pre>
-</div></div>
+ -v,                        Verbose output</pre>
+</div>
+</div>
 </div>
 <div class="sect3">
 <h4 id="_snebu_restore">snebu restore</h4>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu restore -n backupname -d datestamp [ file_list... ]
+<pre>Usage: snebu restore -n backupname -d datestamp [ file_list... ]
  Generates a tar file containing files from a given backup set.  Pipe
  the output of this command into a tar command to actually restore
  files.
@@ -1516,14 +1483,15 @@ Options:
                             +%s" command.
      --graft /path/name/=/new/name/
                             Re-write path names beginning with "/path/name/"
-                            to "/new/name/"</code></pre>
-</div></div>
+                            to "/new/name/"</pre>
+</div>
+</div>
 </div>
 <div class="sect3">
 <h4 id="_snebu_listbackups">snebu listbackups</h4>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
+<pre>Usage: snebu listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
  With no arguments specified, "listbackups" will return a list of all
  systems that are contained in the backup catalog.  Otherwise, when
  specifying the -n parameter, a list of backup sets for that host is
@@ -1538,14 +1506,15 @@ Options:
 
  -d, --date datestamp       Date stamp for this backup set.  The format is in
                             time_t format, sames as the output of the "date
-                            +%s" command.</code></pre>
-</div></div>
+                            +%s" command.</pre>
+</div>
+</div>
 </div>
 <div class="sect3">
 <h4 id="_snebu_expire">snebu expire</h4>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]
+<pre>Usage: snebu expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]
  Removes backup sessions from the snebu backup catalog database.  A
  specific backup session can be purged by providing the "-n" and "-d"
  options, or all backups that are part of a given retention schedule
@@ -1569,18 +1538,20 @@ Options:
 
  -m, --min-keep #           When expiring with the "-a" flag, keep at least
                             this many of the most recent backups for a given
-                            hostname/retention level.</code></pre>
-</div></div>
+                            hostname/retention level.</pre>
+</div>
+</div>
 </div>
 <div class="sect3">
 <h4 id="_snebu_purge">snebu purge</h4>
 <div class="listingblock">
 <div class="content">
-<pre><code>Usage: snebu purge
+<pre>Usage: snebu purge
  Permanently removes files from disk storage that are no longer
  referenced by any backups. Run this command after running "snebu
- expire".</code></pre>
-</div></div>
+ expire".</pre>
+</div>
+</div>
 </div>
 </div>
 </div>
@@ -1588,20 +1559,23 @@ Options:
 <div class="sect1">
 <h2 id="_contact_info">Contact info</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>If you find any bugs or have feature requests, you can submit them using Github&#8217;s <a href="https://github.com/derekp7/snebu/issues">issue tracker</a>.  Note, that this requires a Github account to post to.</p></div>
-<div class="paragraph"><p>There is also a Google Group at <a href="http://groups.google.com/d/forum/snebu">http://groups.google.com/d/forum/snebu</a> which is also linked to a mail list: <a href="mailto:snebu@googlegroups.com">snebu@googlegroups.com</a>, where you can post questions or feature requests.</p></div>
+<div class="paragraph">
+<p>If you find any bugs or have feature requests, you can submit them using Github&#8217;s <a href="https://github.com/derekp7/snebu/issues">issue tracker</a>.  Note, that this requires a Github account to post to.</p>
+</div>
+<div class="paragraph">
+<p>There is also a Google Group at <a href="http://groups.google.com/d/forum/snebu">http://groups.google.com/d/forum/snebu</a> which is also linked to a mail list: <a href="mailto:snebu@googlegroups.com">snebu@googlegroups.com</a>, where you can post questions or feature requests.</p>
 </div>
 </div>
 </div>
-<div id="footnotes"><hr /></div>
+</div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2014-08-14 13:46:15 CDT
+Last updated 2014-08-15 12:29:22 CDT
 </div>
 </div>
-         <script type="text/javascript">
+<script type="text/javascript">
             var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
-            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/              javascript'%3E%3C/script%3E"));
           </script>
           <script type="text/javascript">
             try {
