@@ -2461,6 +2461,7 @@ int restore(int argc, char **argv)
 
 	    }
 	}
+	bytestoread = t.filesize;
 	if (use_pax_header == 1 && t.filesize > 0xFFFFFFFFULL) {
 	    sprintf(pax_size, "%lld", t.filesize);
 	    setpaxvar(&xheader, &xheaderlen, "size", pax_size, strlen(pax_size));
@@ -2615,7 +2616,6 @@ int restore(int argc, char **argv)
 	    }
 	}
 	if (t.ftype == '0' || t.ftype == 'S') {
-	    bytestoread = t.filesize;
 	    if (use_pax_header == 1 && t.ftype == 'S') {
 		paxsparsehdrsz = 0;
 		paxsparsehdrsz += (fprintf(stdout, "%llu\n", (int) ((nsi - 1) / 2)));
@@ -2624,7 +2624,6 @@ int restore(int argc, char **argv)
 		}
 		memset(curblock, '\0', 512);
 		paxsparsehdrsz += fwrite(curblock, 1, 512 - paxsparsehdrsz % 512, stdout);
-		bytestoread -= paxsparsehdrsz;
 
 	    }
 	    tblocks += (int) ((t.filesize - bytestoread) / 512);
