@@ -35,6 +35,7 @@ int parsex(char *instr, char p, char ***b, int max);
 int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     unsigned long long est_size,  unsigned long long bytes_read);
 
+int logaction(sqlite3 *bkcatalog, int backupset_id, int action, char *message);
 int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, char **, char **), void *carg1, char **errmsg);
 int my_sqlite3_step(sqlite3_stmt *stmt);
 int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt **ppStmt, const char **pzTail);
@@ -284,6 +285,7 @@ newbackup(int argc, char **argv)
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
 
+    logaction(bkcatalog, bkid, 0, "New backup");
     sqlite3_exec(bkcatalog,
 	"create temporary table if not exists inbound_file_entities (  \n"
 	"    backupset_id     integer,  \n"
@@ -533,6 +535,7 @@ newbackup(int argc, char **argv)
 	}
 	sqlite3_free(sqlstmt);
     }
+    logaction(bkcatalog, bkid, 1, "Finished processing snapshot manifest");
     if (verbose >= 1)
 	fprintf(stderr, "Returning list of required files\n");
     sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -550,6 +553,7 @@ newbackup(int argc, char **argv)
 
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
+    logaction(bkcatalog, bkid, 2, "Finished generating incremental manifest");
 
 //    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 	
@@ -699,6 +703,15 @@ int initdb(sqlite3 *bkcatalog)
 	"constraint backupsetsc1 unique (  \n"
 	    "name,  \n"
 	    "serial ))", 0, 0, 0);
+    if (err != 0)
+	return(err);
+
+    err = sqlite3_exec(bkcatalog,
+	"create table if not exists log ( \n"
+	"    backupset_id	integer, \n"
+	"    logdate		integer, \n"
+	"    action		integer, \n"
+	"    message		char)", 0, 0, 0);
     if (err != 0)
 	return(err);
 
@@ -1256,8 +1269,9 @@ int submitfiles(int argc, char **argv)
     if (verbose >= 1)
 	fprintf(stderr, "%45s", " ");
 
+    submitfiles_tmptables(bkcatalog, bkid);
     sqlstmt = sqlite3_mprintf(
-	"insert or ignore into received_file_entities  "
+	"insert or ignore into received_file_entities_t  "
 	"(backupset_id, ftype, permission, user_name, user_id,  "
 	"group_name, group_id, size, sha1, datestamp, filename, extdata, xheader)  "
 	"values (@bkid, @ftype, @mode, @auid, @nuid, @agid,  "
@@ -1266,7 +1280,7 @@ int submitfiles(int argc, char **argv)
     sqlite3_prepare_v2(bkcatalog, sqlstmt, -1, &inbfrec, 0);
     sqlite3_free(sqlstmt);
 
-    submitfiles_tmptables(bkcatalog, bkid);
+    logaction(bkcatalog, bkid, 3, "Begin receiving files");
 
     // Read TAR file from std input
     while (1) {
@@ -1280,8 +1294,10 @@ int submitfiles(int argc, char **argv)
         if (tarhead.filename[0] == 0) {	// End of TAR archive
 
 //	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+	    logaction(bkcatalog, bkid, 4, "End receiving files");
 	    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read);
 
+	    logaction(bkcatalog, bkid, 5, "End post processing received files");
 
             sqlite3_close(bkcatalog);
 
@@ -1596,7 +1612,7 @@ int submitfiles(int argc, char **argv)
 	    }
 #endif
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into diskfiles (sha1)  "
+		"insert or ignore into diskfiles_t (sha1)  "
 		"values ('%s')", cfsha1a)), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s\n", sqlerr);
@@ -1609,13 +1625,9 @@ int submitfiles(int argc, char **argv)
 	    else {
 		if (mkdir(destfilepathm, 0770) == 0) { // else make the directory first
 		    rename(tmpfilepath, destfilepath);
-		    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-			"insert or ignore into diskfiles (sha1)  "
-			"values ('%s')", cfsha1a)), 0, 0, &sqlerr);
-		    if (sqlerr != 0) {
-			fprintf(stderr, "%s\n", sqlerr);
-			sqlite3_free(sqlerr);
-		    }
+		}
+		else if (stat(destfilepathm, &tmpfstat) == 0) {
+		    rename(tmpfilepath, destfilepath);   // move temp file to directory
 		}
 		else {
 		    fprintf(stderr, "Error creating directory %s\n", destfilepath);
@@ -2370,7 +2382,7 @@ int restore(int argc, char **argv)
 	    while (bytestoread > 512ull) {
 		count = cread(curblock, 1, blocksize, curfile);
 		if (count < blocksize) {
-		    fprintf(stderr, "file short read\n");
+		    fprintf(stderr, "file short read %s %s %llu %llu %d\n", sfilename, sha1filepath, t.filesize, bytestoread, count);
 		    exit(1);
 		}
 		fwrite(curblock, 1, blocksize, stdout);
@@ -3434,125 +3446,6 @@ int purge(int argc, char **argv)
     }
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 }
-#undef sqlite3_exec
-#undef sqlite3_step
-#undef sqlite3_prepare_v2
-int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, char **, char **), void *carg1, char **errmsg)
-{
-    int r = 0;
-    int count = 0;
-    if (concurrency_sleep_requested == 1) {
-	concurrency_sleep_requested = 0;
-	fprintf(stderr, "sqlite3_exec pausing by request\n");
-	if (in_a_transaction == 1) {
-	    in_a_transaction = 0;
-	    my_sqlite3_exec(db, "END", 0, 0, 0);
-	    sleep(2);
-	    concurrency_sleep_requested = 0;
-	    my_sqlite3_exec(db, "BEGIN", 0, 0, 0);
-	    in_a_transaction = 1;
-	}
-	else
-	    sleep(2);
-    }
-    do {
-	if ((++count) % 20 == 0)
-	    concurrency_request();
-        r = sqlite3_exec(db, sql, callback, carg1, errmsg);
-	if (r == 5) {
-	    usleep(100000);
-	}
-    } while (r == 5);
-    if (r != 0)
-	fprintf(stderr, "sqlite3_exec_return: %d\n", r);
-    return(r);
-}
-int my_sqlite3_step(sqlite3_stmt *stmt)
-{
-    int r = 0;
-    int count = 0;
-    if (concurrency_sleep_requested == 1) {
-	fprintf(stderr, "sqlite3_step pausing by request\n");
-	sleep(2);
-	concurrency_sleep_requested = 0;
-    }
-    do {
-	if ((++count) % 20 == 0)
-	    concurrency_request();
-        r = sqlite3_step(stmt);
-	if (r == 5) {
-	    usleep(100000);
-	}
-    } while (r == 5);
-    return(r);
-}
-int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt **ppStmt, const char **pzTail)
-{
-    int r = 0;
-    int count = 0;
-    if (concurrency_sleep_requested == 1) {
-	fprintf(stderr, "sqlite3_prepare_v2 pausing by request\n");
-	if (in_a_transaction == 1) {
-	    my_sqlite3_exec(db, "END", 0, 0, 0);
-	    sleep(2);
-	    my_sqlite3_exec(db, "BEGIN", 0, 0, 0);
-	}
-	else
-	    sleep(2);
-	concurrency_sleep_requested = 0;
-    }
-    do {
-	if ((++count) % 20 == 0)
-	    concurrency_request();
-	r = sqlite3_prepare_v2(db, zSql, nByte, ppStmt, pzTail);
-	if (r == 5) {
-	    usleep(100000);
-	}
-    } while (r == 5);
-    return(r);
-}
-
-//Handler function for signal USR1
-void concurrency_request_signal()
-{
-    concurrency_sleep_requested = 1;
-    fprintf(stderr, "Setting concurrency_sleep flag\n");
-    signal(SIGUSR1, concurrency_request_signal);
-}
-
-// Send a signal USR1 to all other processes named "snebu",
-// requesting them to pause for a couple seconds and commit
-// current trasaction, therefore allowing us to sneak in a
-// database transaction.
-void concurrency_request()
-{
-    FILE *pgrep_output;
-    int numproclist = 20;
-    pid_t *proclist = malloc(numproclist * sizeof(*proclist));
-    char *instr = 0;
-    size_t instrlen = 0;
-    int numpid = 0;
-    pid_t mypid;
-    char *p;
-    int i;
-
-    fprintf(stderr, "Requesting concurrency\n");
-    mypid = getpid();
-    pgrep_output = popen("pgrep -x snebu", "r");
-    while (getline(&instr, &instrlen, pgrep_output) > 0) {
-	if (numpid >= numproclist) {
-	    numproclist += 20;
-	    proclist = realloc(proclist, numproclist * sizeof(*proclist));
-	}
-	if (atoi(instr) != mypid) {
-	    proclist[numpid] = atoi(instr);
-	    numpid++;
-	}
-    }
-    for (i = 0; i < numpid; i++)
-	kill(proclist[i], SIGUSR1);
-
-}
 
 
 // Compression version of fopen/fclose/fread/fwrite (lzo / lzop version)
@@ -4039,6 +3932,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		fprintf(stderr, "Finished receiving files\n");
 
 	    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+#if 0
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into received_file_entities select * from received_file_entities_t"
 	    )), 0, 0, &sqlerr);
@@ -4046,6 +3940,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
 		sqlite3_free(sqlerr);
 	    }
+#endif
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into diskfiles select * from diskfiles_t"
 	    )), 0, 0, &sqlerr);
@@ -4067,7 +3962,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		sqlite3_free(sqlerr);
 	    }
 	    sqlite3_free(sqlstmt);
-
+#if 0
 	    if (verbose >= 2)
 		fprintf(stderr, "Creating internal list of received files\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -4082,6 +3977,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		sqlite3_free(sqlerr);
 	    }
 	    sqlite3_free(sqlstmt);
+#endif
 
 	    if (verbose >= 2)
 		fprintf(stderr, "Merging hardlink file metadata\n");
@@ -4090,8 +3986,8 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		"    select rr.ftype, rr.permission, n.device_id, n.inode, "
 		"    rr.user_name, rr.user_id, rr.group_name, rr.group_id, rr.size, "
 		"    rr.sha1, n.cdatestamp, rr.datestamp, rl.filename, rr.extdata, rr.xheader"
-		"  from received_file_entities_ldi_t1 rr "
-		"    join received_file_entities_ldi_t1 rl "
+		"  from received_file_entities_t rr "
+		"    join received_file_entities_t rl "
 		"    on rl.extdata = rr.filename "
 		"    join needed_file_entities_current n "
 		"    on rr.filename = n.infilename "
@@ -4110,7 +4006,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		"    select r.ftype, r.permission, n.device_id, n.inode, "
 		"    r.user_name, r.user_id, r.group_name, r.group_id, r.size, "
 		"    r.sha1, n.cdatestamp, r.datestamp, r.filename, r.extdata, r.xheader "
-		" from received_file_entities_ldi_t1 r "
+		" from received_file_entities_t r "
 		"    join needed_file_entities_current n "
 		"    on r.filename = n.infilename "
 		"    where r.ftype != 1"
@@ -4308,10 +4204,146 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 		sqlite3_free(sqlerr);
 	    }
 	    sqlite3_exec(bkcatalog,
+	    "create index if not exists received_file_entities_t_i1 on received_file_entities_t (  \n"
+	    "    filename)", 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n\n\n",sqlerr);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_exec(bkcatalog,
 		"create temporary table if not exists diskfiles_t "
 		"as select * from diskfiles where 0", 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
 		sqlite3_free(sqlerr);
 	    }
+}
+int logaction(sqlite3 *bkcatalog, int backupset_id, int action, char *message)
+{
+    char *sqlstmt = 0;
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"insert into log (backupset_id, logdate, action, message) "
+	"values ('%d', '%d', '%d', '%q')", backupset_id, time(0), action, message)), 0, 0, 0);
+    sqlite3_free(sqlstmt);
+    return(0);
+}
+
+#undef sqlite3_exec
+#undef sqlite3_step
+#undef sqlite3_prepare_v2
+int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, char **, char **), void *carg1, char **errmsg)
+{
+    int r = 0;
+    int count = 0;
+    if (concurrency_sleep_requested == 1) {
+	concurrency_sleep_requested = 0;
+	fprintf(stderr, "sqlite3_exec pausing by request\n");
+	if (in_a_transaction == 1) {
+	    in_a_transaction = 0;
+	    my_sqlite3_exec(db, "END", 0, 0, 0);
+	    sleep(2);
+	    concurrency_sleep_requested = 0;
+	    my_sqlite3_exec(db, "BEGIN", 0, 0, 0);
+	    in_a_transaction = 1;
+	}
+	else
+	    sleep(2);
+    }
+    do {
+//	if ((++count) % 20 == 0)
+//	    concurrency_request();
+        r = sqlite3_exec(db, sql, callback, carg1, errmsg);
+	if (r == 5) {
+	    usleep(100000);
+	}
+    } while (r == 5);
+    if (r != 0)
+	fprintf(stderr, "sqlite3_exec_return: %d\n", r);
+    return(r);
+}
+int my_sqlite3_step(sqlite3_stmt *stmt)
+{
+    int r = 0;
+    int count = 0;
+    if (concurrency_sleep_requested == 1) {
+	fprintf(stderr, "sqlite3_step pausing by request\n");
+	sleep(2);
+	concurrency_sleep_requested = 0;
+    }
+    do {
+//	if ((++count) % 20 == 0)
+//	    concurrency_request();
+        r = sqlite3_step(stmt);
+	if (r == 5) {
+	    usleep(100000);
+	}
+    } while (r == 5);
+    return(r);
+}
+int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt **ppStmt, const char **pzTail)
+{
+    int r = 0;
+    int count = 0;
+    if (concurrency_sleep_requested == 1) {
+	fprintf(stderr, "sqlite3_prepare_v2 pausing by request\n");
+	if (in_a_transaction == 1) {
+	    my_sqlite3_exec(db, "END", 0, 0, 0);
+	    sleep(2);
+	    my_sqlite3_exec(db, "BEGIN", 0, 0, 0);
+	}
+	else
+	    sleep(2);
+	concurrency_sleep_requested = 0;
+    }
+    do {
+//	if ((++count) % 20 == 0)
+//	    concurrency_request();
+	r = sqlite3_prepare_v2(db, zSql, nByte, ppStmt, pzTail);
+	if (r == 5) {
+	    usleep(100000);
+	}
+    } while (r == 5);
+    return(r);
+}
+
+//Handler function for signal USR1
+void concurrency_request_signal()
+{
+    concurrency_sleep_requested = 1;
+    fprintf(stderr, "Setting concurrency_sleep flag\n");
+    signal(SIGUSR1, concurrency_request_signal);
+}
+
+// Send a signal USR1 to all other processes named "snebu",
+// requesting them to pause for a couple seconds and commit
+// current trasaction, therefore allowing us to sneak in a
+// database transaction.
+void concurrency_request()
+{
+    FILE *pgrep_output;
+    int numproclist = 20;
+    pid_t *proclist = malloc(numproclist * sizeof(*proclist));
+    char *instr = 0;
+    size_t instrlen = 0;
+    int numpid = 0;
+    pid_t mypid;
+    char *p;
+    int i;
+
+    fprintf(stderr, "Requesting concurrency\n");
+    mypid = getpid();
+    pgrep_output = popen("pgrep -x snebu", "r");
+    while (getline(&instr, &instrlen, pgrep_output) > 0) {
+	if (numpid >= numproclist) {
+	    numproclist += 20;
+	    proclist = realloc(proclist, numproclist * sizeof(*proclist));
+	}
+	if (atoi(instr) != mypid) {
+	    proclist[numpid] = atoi(instr);
+	    numpid++;
+	}
+    }
+    for (i = 0; i < numpid; i++)
+	kill(proclist[i], SIGUSR1);
+
 }
