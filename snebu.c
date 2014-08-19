@@ -3927,6 +3927,7 @@ int cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile)
 	else {
 	    memcpy(cfile->bufp, buf, cfile->bufsize - (cfile->bufp - cfile->buf));
 	    bytesin -= (cfile->bufsize - (cfile->bufp - cfile->buf));
+	    buf += (cfile->buf + cfile->bufsize - cfile->bufp);
 	    // compress cfile->buf, write out
 
 	    // write uncompressed block size
@@ -3971,6 +3972,7 @@ int cread(void *buf, size_t sz, size_t count, struct cfile *cfile)
 	else {
 	    memcpy(buf, cfile->bufp, cfile->buf + cfile->bufsize - cfile->bufp);
 	    bytesin -= (cfile->buf + cfile->bufsize - cfile->bufp);
+	    buf += (cfile->buf + cfile->bufsize - cfile->bufp);
 	    fread(&tucblocksz, 1, 4, cfile->handle);
 	    ucblocksz = ntohl(tucblocksz);
 	    if (ucblocksz == 0)
