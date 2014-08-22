@@ -1294,7 +1294,7 @@ int submitfiles(int argc, char **argv)
 
 
     if (verbose >= 1)
-	fprintf(stderr, "%45s", " ");
+	fprintf(stderr, "Receiving files\n");
 
     submitfiles_tmptables(bkcatalog, bkid);
     sqlstmt = sqlite3_mprintf(
@@ -1716,8 +1716,7 @@ int submitfiles(int argc, char **argv)
 	bytes_read += fs.filesize;
 	if (verbose >= 1) {
 	    sprintf(statusline, "%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
-	    fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b%45s", statusline);
-//	    fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
+	    fprintf(stderr, "\r%45s", statusline);
 	}
 
 	if (fs.filename != 0)
@@ -4051,7 +4050,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		    bytes_read = sqlite3_column_int64(sqlres, 0);
 		    sprintf(statusline, "%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
 		    if (verbose == 1)
-			fprintf(stderr, "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
+			fprintf(stderr, "\r");
 		    fprintf(stderr, "%45s\n", statusline);
 		}
 		sqlite3_finalize(sqlres);
