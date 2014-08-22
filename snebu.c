@@ -253,7 +253,10 @@ newbackup(int argc, char **argv)
         exit(1);
     }
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
-    x = sqlite3_open(bkcatalogp, &bkcatalog);
+    if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
+	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
+	exit(1);
+    }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
     x = initdb(bkcatalog);
 
@@ -2700,6 +2703,8 @@ int getconfig()
     snprintf(configpath, 256, "%s/.snebu.conf", getenv("HOME"));
     if (stat(configpath, &tmpfstat) != 0)
 	snprintf(configpath, 256, "/etc/snebu.conf");
+    if (stat(configpath, &tmpfstat) != 0)
+	snprintf(configpath, 256, "/etc/snebu/snebu.conf");
     if (stat(configpath, &tmpfstat) == 0) {
 	configfile = fopen(configpath, "r");
 	while (getline(&configline, &configlinesz, configfile) > 0) {

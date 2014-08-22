@@ -57,7 +57,9 @@ process_cmdline()
 
 defaults()
 {
-    configfile=${configfile:-/etc/snebu-client.conf}
+    configfile=${configfile:-~/.snebu-client.conf}
+    [ ! -f ${configfile} ] && configfile=/etc/snebu-client.conf
+    [ ! -f ${configfile} ] && configfile=/etc/snebu/snebu-client.conf
     SNEBU=snebu
     # Need to bring back command line vars, go get config file name override
     eval "${savevars}"
