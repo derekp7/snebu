@@ -553,7 +553,7 @@ newbackup(int argc, char **argv)
 
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
-    logaction(bkcatalog, bkid, 2, "Finished generating incremental manifest");
+    logaction(bkcatalog, bkid, 3, "Finished generating incremental manifest");
 
 //    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 	
@@ -564,8 +564,35 @@ int initdb(sqlite3 *bkcatalog)
 {
     int err = 0;
     char *sqlerr = 0;
+    int dbversion = -1;
+    sqlite3_stmt *sqlres;
 
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
+
+// Set DB version if uninitialized
+
+    if (sqlite3_prepare_v2(bkcatalog,
+        ("select count(*) from sqlite_master"), -1, &sqlres, 0) == SQLITE_OK) {
+	if (sqlite3_step(sqlres) == SQLITE_ROW) {
+	    if (sqlite3_column_int(sqlres, 0) == 0) {
+		sqlite3_exec(bkcatalog, "PRAGMA user_version = 0", 0, 0, 0);
+	    }
+	}
+    }
+    sqlite3_finalize(sqlres);
+
+// Get the current DB version
+    if (sqlite3_prepare_v2(bkcatalog,
+        ("PRAGMA user_version "), -1, &sqlres, 0) == SQLITE_OK) {
+	if (sqlite3_step(sqlres) == SQLITE_ROW) {
+	    dbversion = sqlite3_column_int(sqlres, 0);
+	}
+    }
+    if (dbversion == -1) {
+        fprintf(stderr, "Error getting to database\n");
+        return(1);
+    }
+    sqlite3_finalize(sqlres);
 
 //  Will need this when tape library support is added.
 
@@ -1280,7 +1307,7 @@ int submitfiles(int argc, char **argv)
     sqlite3_prepare_v2(bkcatalog, sqlstmt, -1, &inbfrec, 0);
     sqlite3_free(sqlstmt);
 
-    logaction(bkcatalog, bkid, 3, "Begin receiving files");
+    logaction(bkcatalog, bkid, 4, "Begin receiving files");
 
     // Read TAR file from std input
     while (1) {
@@ -1294,10 +1321,10 @@ int submitfiles(int argc, char **argv)
         if (tarhead.filename[0] == 0) {	// End of TAR archive
 
 //	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
-	    logaction(bkcatalog, bkid, 4, "End receiving files");
+	    logaction(bkcatalog, bkid, 5, "End receiving files");
 	    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read);
 
-	    logaction(bkcatalog, bkid, 5, "End post processing received files");
+	    logaction(bkcatalog, bkid, 7, "End post processing received files");
 
             sqlite3_close(bkcatalog);
 
