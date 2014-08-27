@@ -1251,7 +1251,10 @@ int submitfiles(int argc, char **argv)
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
     FD_SET(0, &input_s);
     select(1, &input_s, 0, 0, 0);
-    x = sqlite3_open(bkcatalogp, &bkcatalog);
+    if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
+	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
+	exit(1);
+    }
     if (x != 0) {
 	fprintf(stderr, "Error %d opening backup catalog\n", x);
 	exit(1);
@@ -1961,7 +1964,10 @@ int restore(int argc, char **argv)
 
 
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
-    x = sqlite3_open(bkcatalogp, &bkcatalog);
+    if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
+	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
+	exit(1);
+    }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
 //    x = initdb(bkcatalog);
 
@@ -2557,7 +2563,10 @@ int listbackups(int argc, char **argv)
 	strcat(filespec, ")");
     }
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
-    sqlite3_open(bkcatalogp, &bkcatalog);
+    if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
+	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
+	exit(1);
+    }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
 
     if (foundopts == 0) {
@@ -2823,7 +2832,10 @@ int import(int argc, char **argv)
 	strcat(filespec, ")");
     }
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
-    sqlite3_open(bkcatalogp, &bkcatalog);
+    if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
+	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
+	exit(1);
+    }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
     sqlite3_exec(bkcatalog, "PRAGMA temp_store = 2", 0, 0, 0);
 // TODO These two should be set via command line options
@@ -3105,7 +3117,10 @@ int export(int argc, char **argv)
 	strcat(filespec, ")");
     }
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
-    sqlite3_open(bkcatalogp, &bkcatalog);
+    if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
+	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
+	exit(1);
+    }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 //    initdb(bkcatalog);
@@ -3226,7 +3241,10 @@ int expire(int argc, char **argv)
         return(1);
     }
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
-    sqlite3_open(bkcatalogp, &bkcatalog);
+    if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
+	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
+	exit(1);
+    }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
     sqlite3_exec(bkcatalog, "PRAGMA synchronous = OFF", 0, 0, 0);
     sqlite3_exec(bkcatalog, "PRAGMA journal_mode = MEMORY", 0, 0, 0);
@@ -3392,7 +3410,10 @@ int purge(int argc, char **argv)
     char *destfilepathd;
 
     asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
-    sqlite3_open(bkcatalogp, &bkcatalog);
+    if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
+	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
+	exit(1);
+    }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
