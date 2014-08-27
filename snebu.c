@@ -3418,7 +3418,27 @@ int purge(int argc, char **argv)
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
     purgedate = time(0);
+
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+    // If any backups are in progress, use the start time as the newest allowed purge date
+    sqlite3_prepare_v2(bkcatalog,
+        (sqlstmt = sqlite3_mprintf(
+
+	    "SELECT c.logdate "
+	    "FROM log AS c "
+	    "  INNER JOIN ( "
+	    "    SELECT a.rowid, COUNT(*) AS ranknum "
+	    "    FROM log AS a "
+	    "      INNER JOIN log AS b ON (a.backupset_id = b.backupset_id) AND (a.logdate <= b.logdate) "
+	    "       AND (a.action <= b.action) AND a.rowid <= b.rowid "
+	    "    GROUP BY a.rowid "
+	    "    HAVING ranknum <= 1 "
+	    "  ) AS d ON (c.rowid = d.rowid) "
+	    "where c.action < 6 and c.action >= 4 ORDER BY c.logdate limit 1")), -1, &sqlres, 0);
+    if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
+        purgedate = sqlite3_column_int(sqlres, 0);
+    }
+
     fprintf(stderr, "Creating purge list 1\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"create temporary table if not exists purgelist1 ( \n"
