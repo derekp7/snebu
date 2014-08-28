@@ -37,55 +37,76 @@ dbfiles() {
     loglist=( $(sql "select member from v\$logfile;" $1) )
     spfile=( $(sql "select value from v\$parameter where name = 'spfile';" $1) )
 }
-
-ora_backup() {
-    for sid in $(grep ':Y$' /etc/oratab |cut -d: -f1)
-    do 
+getsidlist() {
+    sidlist=( $(grep ':Y$' /etc/oratab |cut -d: -f1) )
+}
+ora_pluginpre() {
+    if [ "${cursid}" -lt "${maxsid}" ]
+    then
 	OLD_INCLUDE=( "${INCLUDE[@]}" )
 	OLD_EXCLUDE=( "${EXCLUDE[@]}" )
 	OLD_EXCLUDEPAT=( "${EXCLUDEPAT[@]}" )
 	EXCLUDE=( )
 	EXCLUDEPAT=( )
-	dbfiles $sid
-	INCLUDE=( "${dbfilelist[@]}" "${dbtempfilelist[@]}" "${loglist[@]}" "${controlfilelist[@]}" )
-	if [ "${retention}" != "daily" ]
+	sid=${sidlist[${cursid}]}
+	if [ -n "${clientname}" ]
 	then
-	    echo "Putting $sid in hot backup mode"
-	    ora_hbb $sid
-	    if [ "${#INCLUDE[@]}" -gt 0 ]
-	    then
-		FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
-		    --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" \
-		    >/tmp/backup_include.${datestamp}
-
-		# Now create a tar file and send it to Snebu
-		tar --one-file-system --no-recursion -P -T /tmp/backup_include.${datestamp} -cf - |\
-		    $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfileopts[@]}"
-		rm -f /tmp/backup_include.${datestamp}
-	    fi
-	    echo "Taking $sid out of hot backup mode"
-	    ora_hbe $sid
+	    rpcsh -h ${clientname} -u "${rmtuser}" -f 'dbfiles sql' -r 'dbfilelist dbtempfilelist archlogdest controlfilelist loglist spfile' -v 'sid' -m "dbfiles ${sid}"
 	else
-	    ora_arc $sid
+	    dbfiles ${sid}
 	fi
-	INCLUDE=("${archlogdest[@]}" "${spfile[@]}" )
-	if [ "${#INCLUDE[@]}" -gt 0 ]
+	if [ "${stage}" = 0 ]
 	then
-	    FINDCMD |$SNEBU newbackup --name ${backupname} --retention ${retention} \
-		--datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" \
-		>/tmp/backup_include.${datestamp}
-
-	    # Now create a tar file and send it to Snebu
-	    tar --one-file-system --no-recursion -P -T /tmp/backup_include.${datestamp} -cf - |\
-		$SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfileopts[@]}"
-	    rm -f /tmp/backup_include.${datestamp}
+	    INCLUDE=( "${dbfilelist[@]}" "${dbtempfilelist[@]}" "${loglist[@]}" "${controlfilelist[@]}" )
+	    if [ -n "${clientname}" ]
+	    then
+		rpcsh -h ${clientname} -u "${rmtuser}" -f 'ora_hbb sql' -v 'sid' -m "ora_hbb ${sid}"
+	    else
+		ora_hbb ${sid}
+	    fi
+	elif [ "${stage}" = 1 ]
+	then
+	    INCLUDE=("${archlogdest[@]}" "${spfile[@]}" )
 	fi
+    else
+	bkrepeat=0
+    fi
+}
+ora_pluginpost() {
+    if [ "${cursid}" -lt  "${maxsid}" ]
+    then
 	INCLUDE=( "${OLD_INCLUDE[@]}" )
 	EXCLUDE=( "${OLD_EXCLUDE[@]}" "${dbfilelist[@]}" "${dbtempfilelist[@]}" "${loglist[@]}" "${controlfilelist[@]}" "${archlogdest[@]}" "${spfile[@]}"  )
 	EXCLUDEPAT=( "${OLD_EXCLUDEPAT[@]}" )
-    done
+	if [ "${stage}" = 0 ]
+	then
+	    if [ -n "${clientname}" ]
+	    then
+		rpcsh -h ${clientname} -u "${rmtuser}" -f 'ora_hbe sql' -v 'sid' -m "ora_hbe ${sid}"
+	    else
+		ora_hbe ${sid}
+	    fi
+	    stage=1
+	elif [ "${stage}" = 1 ]
+	then
+	    cursid=$((${cursid} + 1))
+	    stage=0
+	fi
+	
+	bkrepeat=1
+    fi
+	
 }
 
-pluginfuncs="sql ora_hbb ora_hbe ora_arc dbfiles ora_backup"
-pluginvars="pluginpre pluginpost"
-pluginpre=ora_backup
+
+if [ -n "${clientname}" ]
+then
+    rpcsh -h ${clientname} -u "${rmtuser}" -f 'getsidlist' -r 'sidlist' -m 'getsidlist'
+else
+    getsidlist
+fi
+cursid=0
+stage=0
+maxsid=${#sidlist[@]}
+pluginpre=ora_pluginpre
+pluginpost=ora_pluginpost
