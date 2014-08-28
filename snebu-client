@@ -85,7 +85,7 @@ defaults()
     # Set default retention schecdule based on date/weekday
     if [ ${target} = "do_backup" ]
     then
-        datestamp=$(date +%s)
+        [ -z "${datestamp}" ] && datestamp=$(date +%s)
         DAY_OF_WEEK=$(date -d @${datestamp} +%u)
         DAY_OF_MONTH=$(date -d @${datestamp} +%d)
         if [ -z "${retention}" ]
@@ -360,7 +360,7 @@ rpcsh() {
 	$rmtmain \"\${rmtargs[@]}\" >/dev/null 2>&1
 	for retvar in ${retvars[@]}
 	do
-	    declare -p \$retvar |sed 's/^declare .. //'
+	    declare -p \$retvar |sed 's/^declare -a \([^=]*=\)'\''\(.*\)'\''/\1\2/;s/^declare .. //'
 	done
     ")
     else
@@ -409,7 +409,7 @@ rpcsudo() {
 	$rmtmain \"\${rmtargs[@]}\" >/dev/null 2>&1
 	for retvar in ${retvars[@]}
 	do
-	    declare -p \$retvar |sed 's/^declare .. //'
+	    declare -p \$retvar |sed 's/^declare -a \([^=]*=\)'\''\(.*\)'\''/\1\2/;s/^declare .. //'
 	done
     ")
     else
