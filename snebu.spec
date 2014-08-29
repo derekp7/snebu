@@ -8,6 +8,7 @@ License:	GPLv3
 URL:		http://www.snebu.com
 Source0:	snebu-%{version}.tar.gz
 Patch1:		Makefile-Fedora.patch
+Requires:	lzop
 
 
 %description
