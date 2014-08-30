@@ -40,6 +40,17 @@ int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, c
 int my_sqlite3_step(sqlite3_stmt *stmt);
 int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt **ppStmt, const char **pzTail);
 
+int getconfig(char *configpatharg);
+int newbackup(int argc, char **argv);
+int submitfiles(int argc, char **argv);
+int restore(int argc, char **argv);
+int listbackups(int argc, char **argv);
+int export(int argc, char **argv);
+int import(int argc, char **argv);
+int expire(int argc, char **argv);
+int purge(int argc, char **argv);
+int gethelp(int argc, char **argv);
+
 void concurrency_request_signal();
 void concurrency_request();
 
@@ -76,50 +87,60 @@ struct cfile {
     unsigned char *working_memory;
 };
 
-
+struct subfuncs{
+    char *funcname;
+    int (*target)(int, char **);
+};
 
 int main(int argc, char **argv)
 {
     sqlite3 *bkcatalog;
     int err;
     char *subfunc;
-    
-
+    struct subfuncs subfuncs[] = {
+	{ "newbackup", &newbackup },
+	{ "submitfiles", &submitfiles },
+	{ "restore", &restore },
+	{ "listbackups", &listbackups },
+	{ "import", &import },
+	{ "export", &export },
+	{ "expire", &expire },
+	{ "purge", &purge },
+	{ "help", &gethelp }
+    };
+    struct option longopts[] = {
+	{ "config", required_argument, NULL, 'c' }
+    };
+    int longoptidx;
+    int optc;
+    char *configfile = NULL;
+    int i;
+    int n;
     signal(SIGUSR1, concurrency_request_signal);
-    if (argc > 1)
-	subfunc = argv[1];
-    else {
-	usage();
-	exit(1);
-    }
-    getconfig();
 
-    if (strcmp(subfunc, "newbackup") == 0)
-	newbackup(argc - 1, argv + 1);
-    else if (strcmp(subfunc, "submitfiles") == 0)
-	submitfiles(argc - 1, argv + 1);
-    else if (strcmp(subfunc, "restore") == 0)
-	restore(argc - 1, argv + 1);
-    else if (strcmp(subfunc, "listbackups") == 0)
-	listbackups(argc - 1, argv + 1);
-    else if (strcmp(subfunc, "import") == 0)
-	import(argc - 1, argv + 1);
-    else if (strcmp(subfunc, "export") == 0)
-	export(argc - 1, argv + 1);
-    else if (strcmp(subfunc, "expire") == 0)
-	expire(argc - 1, argv + 1);
-    else if (strcmp(subfunc, "purge") == 0)
-	purge(argc - 1, argv + 1);
-    else if (strcmp(subfunc, "help") == 0)
-	if (argc > 2)
-	    help(*(argv + 2));
-	else
-	    usage();
-    else {
-	usage();
-	exit(1);
+    while ((optc = getopt_long(argc, argv, "+c:", longopts, &longoptidx)) >= 0) {
+	switch (optc) {
+	    case 'c':
+		configfile = optarg;
+		break;
+	    default:
+		usage();
+		exit(1);
+	}
     }
 
+    getconfig(configfile);
+    if (optind < argc) {
+	for (i = 0; i < sizeof(subfuncs) / sizeof(*subfuncs); i++) {
+	    if (strcmp(argv[optind], subfuncs[i].funcname) == 0) {
+		n = optind;
+		optind = 1;
+		subfuncs[i].target(argc - n, argv + n);
+		exit(0);
+	    }
+	}
+    }
+    usage();
     return 0;
 }
 newbackup(int argc, char **argv)
@@ -891,7 +912,7 @@ int initdb(sqlite3 *bkcatalog)
 usage()
 {
     printf(
-	    "Usage: snebu [ subcommand ] [ options ]\n"
+	    "Usage: snebu [-c | --config filepath ] [ subcommand ] [ options ]\n"
 	    "  where \"subcommand\" is one of the following:\n"
 	    "    newbackup -n backupname -d datestamp -r schedule\n"
 	    "\n"
@@ -918,6 +939,13 @@ usage()
     );
 }
 
+gethelp(int argc, char **argv) {
+    if (argc > 1)
+	help(argv[1]);
+    else
+	usage();
+}
+
 help(char *topic)
 {
     if (strcmp(topic, "newbackup") == 0)
@@ -931,9 +959,6 @@ help(char *topic)
 	    " is returned, which can then be passed along to \"tar\" to generate a\n"
 	    "\n"
 	    "Options:\n"
-	    " -c, --config config_file   Name of the configuration file.  Default is\n"
-	    "                            /etc/snebu.conf.\n"
-	    "\n"
 	    " -n, --name backupname      Name of the backup.  Usually set to the server\n"
 	    "                            name that you are backing up.\n"
 	    "\n"
@@ -975,9 +1000,6 @@ help(char *topic)
 	    " returned.\n"
 	    "\n"
 	    "Options:\n"
-	    " -c, --config config_file   Name of the configuration file.  Default is\n"
-	    "                            /etc/snebu.conf.\n"
-	    "\n"
 	    " -n, --name backupname      Name of the backup.  Usually set to the server\n"
 	    "                            name that you are backing up.\n"
 	    "\n"
@@ -995,9 +1017,6 @@ help(char *topic)
 	    " files.\n"
 	    "\n"
 	    "Options:\n"
-	    " -c, --config config_file   Name of the configuration file.  Default is\n"
-	    "                            /etc/snebu.conf.\n"
-	    "\n"
 	    " -n, --name backupname      Name of the backup.  Usually set to the server\n"
 	    "                            name that you are backing up.\n"
 	    "\n"
@@ -1017,9 +1036,6 @@ help(char *topic)
 	    " returned.\n"
 	    "\n"
 	    "Options:\n"
-	    " -c, --config config_file   Name of the configuration file.  Default is\n"
-	    "                            /etc/snebu.conf.\n"
-	    "\n"
 	    " -n, --name backupname      Name of the backup.  Usually set to the server\n"
 	    "                            name that you are backing up.\n"
 	    "\n"
@@ -1037,9 +1053,6 @@ help(char *topic)
 	    " option) that are older than a given number of days (\"-a\") are removed.\n"
 	    "\n"
 	    "Options:\n"
-	    " -c, --config config_file   Name of the configuration file.  Default is\n"
-	    "                            /etc/snebu.conf.\n"
-	    "\n"
 	    " -n, --name backupname      Name of the backup.  Usually set to the server\n"
 	    "                            name that you are backing up.\n"
 	    "\n"
@@ -2441,7 +2454,7 @@ int restore(int argc, char **argv)
     for (i = 0; i < 20 - (tblocks % 20) ; i++)
 	fwrite(curblock, 1, 512, stdout);
 }
-int getconfig()
+int getconfig(char *configpatharg)
 {
     char *configline = 0;
     size_t configlinesz;
@@ -2456,7 +2469,10 @@ int getconfig()
 
     config.vault = 0;
     config.meta = 0;
-    snprintf(configpath, 256, "%s/.snebu.conf", getenv("HOME"));
+    if (configpatharg == NULL)
+	snprintf(configpath, 256, "%s/.snebu.conf", getenv("HOME"));
+    else
+	snprintf(configpath, 256, configpatharg);
     if (stat(configpath, &tmpfstat) != 0)
 	snprintf(configpath, 256, "/etc/snebu.conf");
     if (stat(configpath, &tmpfstat) != 0)
