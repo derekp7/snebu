@@ -534,12 +534,13 @@ do_remote_backup()
 
 do_restore()
 {
+    [ -n "${graftdir}" ] && restoreopts=( "${restoreopts[@]}" --graft "${graftdir}" )
     if [ -n "${tgtdirectory}" ]
     then
         tarargs=( "${tarargs[@]}" -C $tgtdirectory )
     fi
 
-    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${@}" </dev/null |tar "${tarargs[@]}" --acls --selinux --xattrs -xvf -
+    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${restoreopts[@]}" "${@}" </dev/null |tar "${tarargs[@]}" --acls --selinux --xattrs -xvf -
 }
 
 do_remote_restore()
