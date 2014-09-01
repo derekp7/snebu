@@ -370,7 +370,7 @@ newbackup(int argc, char **argv)
 	fprintf(stderr, "Receiving input file list\n");
     while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
 	int pathskip = 0;
-	char *pathsub = "";
+	char pathsub[4096];
         flen1 = 0;
 	numfld = parsex(filespecs, '\t', &filespecsl, 13);
 	fs.ftype = *(filespecsl[0]);
@@ -430,11 +430,19 @@ newbackup(int argc, char **argv)
 	    fs.ftype = '5';
 	    fs.filesize = 0;
 	}
+	pathskip=0;
+	*pathsub='\0';
 	for (i = 0; i < numgrafts; i++) {
 	    int pathskipt = strlen(graft[i][0]);
+	    if (fs.ftype == '5' && *(graft[i][0] + pathskipt - 1) == '/') {
+	        pathskipt--;
+	    }
+
 	    if (strncmp(fs.filename, graft[i][0], pathskipt) == 0) {
 		pathskip = pathskipt;
-		pathsub = graft[i][1];
+		strncpy(pathsub, graft[i][1], 4096);
+		if (fs.ftype == '5' && *(pathsub + strlen(pathsub) - 1) == '/')
+		    *(pathsub + strlen(pathsub) - 1) = '\0';
 		break;
 	    }
 	}
@@ -455,7 +463,6 @@ newbackup(int argc, char **argv)
 	    "values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%d', '%q%q', '%q', '%q')",
 	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 	    fs.filesize, fs.sha1, fs.cmodtime, fs.modtime, pathsub, fs.filename + pathskip, fs.linktarget, fs.filename)), 0, 0, &sqlerr);
-	fprintf(stderr, "Debug: %s %s\n", pathsub, fs.filename + pathskip);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -4069,12 +4076,12 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		"insert into received_file_entities_ldi_t "
 		"    select rr.ftype, rr.permission, n.device_id, n.inode, "
 		"    rr.user_name, rr.user_id, rr.group_name, rr.group_id, rr.size, "
-		"    rr.sha1, n.cdatestamp, rr.datestamp, rl.filename, rr.extdata, rr.xheader"
+		"    rr.sha1, n.cdatestamp, rr.datestamp, n.filename, rr.extdata, rr.xheader"
 		"  from received_file_entities_t rr "
 		"    join received_file_entities_t rl "
 		"    on rl.extdata = rr.filename "
 		"    join needed_file_entities_current n "
-		"    on rr.filename = n.infilename "
+		"    on rl.filename = n.infilename "
 		"    where rl.ftype = 1"
 	    )), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
@@ -4089,7 +4096,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		"insert or ignore into received_file_entities_ldi_t "
 		"    select r.ftype, r.permission, n.device_id, n.inode, "
 		"    r.user_name, r.user_id, r.group_name, r.group_id, r.size, "
-		"    r.sha1, n.cdatestamp, r.datestamp, r.filename, r.extdata, r.xheader "
+		"    r.sha1, n.cdatestamp, r.datestamp, n.filename, r.extdata, r.xheader "
 		" from received_file_entities_t r "
 		"    join needed_file_entities_current n "
 		"    on r.filename = n.infilename "
