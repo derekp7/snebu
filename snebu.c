@@ -2583,7 +2583,7 @@ int listbackups(int argc, char **argv)
 	filespec[0] = 0;
 	for (i = optind; i < argc; i++) {
 	    if (i == optind)
-		strcat(filespec, " (filename glob ");
+		strcat(filespec, " and (filename glob ");
 	    else
 		strcat(filespec, " or filename glob ");
 	    strcat(filespec, sqlite3_mprintf("'%q'", argv[i]));
@@ -2618,8 +2618,8 @@ int listbackups(int argc, char **argv)
 		(sqlstmt = sqlite3_mprintf(
 		"select distinct b.name, b.serial, f.filename from backupsets b  "
 		"join backupset_detail d on b.backupset_id = d.backupset_id  "
-		"join file_entities f on d.file_id = f.file_id where  "
-		"%s", filespec )), -1, &sqlres, 0);
+		"join file_entities f on d.file_id = f.file_id where 1"
+		"%s", filespec)), -1, &sqlres, 0);
 	    rowcount = 0;
 	    oldbkname[0] = 0;
 	    oldbktime = 0;
@@ -2685,13 +2685,18 @@ int listbackups(int argc, char **argv)
 	sqlite3_prepare_v2(bkcatalog,
 	    (sqlstmt = sqlite3_mprintf("select distinct serial, filename "
 		"from file_entities_bd where name = '%q' and serial >= %d "
-		"and serial <= %d", bkname, bdatestamp, edatestamp)),
+		"and serial <= %d%s", bkname, bdatestamp, edatestamp, filespec != 0 ? filespec : "")),
 		-1, &sqlres, 0);
 
-	while (sqlite3_step(sqlres) == SQLITE_ROW) {
-	    printf("%10d %s\n", sqlite3_column_int(sqlres, 0),
-	    sqlite3_column_text(sqlres, 1));
-	}
+	if (bdatestamp == edatestamp)
+	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
+		printf("%s\n", sqlite3_column_text(sqlres, 1));
+	    }
+	else
+	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
+		printf("%10d %s\n", sqlite3_column_int(sqlres, 0),
+		sqlite3_column_text(sqlres, 1));
+	    }
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
