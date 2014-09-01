@@ -4023,15 +4023,6 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		fprintf(stderr, "Finished receiving files\n");
 
 	    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
-#if 0
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into received_file_entities select * from received_file_entities_t"
-	    )), 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
-#endif
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into diskfiles select * from diskfiles_t"
 	    )), 0, 0, &sqlerr);
@@ -4053,22 +4044,6 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		sqlite3_free(sqlerr);
 	    }
 	    sqlite3_free(sqlstmt);
-#if 0
-	    if (verbose >= 2)
-		fprintf(stderr, "Creating internal list of received files\n");
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	        "insert into received_file_entities_ldi_t1 select ftype, permission, "
-		"    user_name, user_id, group_name, group_id, size, sha1, datestamp, "
-		"    filename, extdata, xheader "
-		"from received_file_entities "
-		"    where backupset_id = %d", bkid
-	    )), 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
-	    sqlite3_free(sqlstmt);
-#endif
 
 	    if (verbose >= 2)
 		fprintf(stderr, "Merging hardlink file metadata\n");
