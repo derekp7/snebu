@@ -455,6 +455,7 @@ newbackup(int argc, char **argv)
 	    "values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%d', '%q%q', '%q', '%q')",
 	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 	    fs.filesize, fs.sha1, fs.cmodtime, fs.modtime, pathsub, fs.filename + pathskip, fs.linktarget, fs.filename)), 0, 0, &sqlerr);
+	fprintf(stderr, "Debug: %s %s\n", pathsub, fs.filename + pathskip);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -773,23 +774,6 @@ int initdb(sqlite3 *bkcatalog)
     if (err != 0)
 	return(err);
 
-    err = sqlite3_exec(bkcatalog,
-	"create view if not exists \n"
-	"    file_entities_bd \n"
-	"as select \n"
-	"    f.file_id, ftype, permission, device_id, inode, user_name, \n"
-	"    user_id, group_name, group_id, size, sha1, cdatestamp, \n"
-	"    datestamp, filename, extdata, xheader, b.backupset_id, \n"
-	"    name, retention, serial \n"
-	"from file_entities f join backupset_detail d \n"
-	"on f.file_id = d.file_id join backupsets b \n"
-	"on d.backupset_id = b.backupset_id \n", 0, 0, &sqlerr);
-
-    if (sqlerr != 0) {
-	fprintf(stderr, "create view file_entities_bd %s\n", sqlerr);
-	sqlite3_free(sqlerr);
-    }
-
 // Received file list with device_id and inode merged in
 
 #ifdef commented_out
@@ -870,6 +854,24 @@ int initdb(sqlite3 *bkcatalog)
 	"where  \n"
 	"    ftype != '1'", 0, 0, 0);
 #endif
+
+    err = sqlite3_exec(bkcatalog,
+	"create view if not exists \n"
+	"    file_entities_bd \n"
+	"as select \n"
+	"    f.file_id, ftype, permission, device_id, inode, user_name, \n"
+	"    user_id, group_name, group_id, size, sha1, cdatestamp, \n"
+	"    datestamp, filename, extdata, xheader, b.backupset_id, \n"
+	"    name, retention, serial \n"
+	"from file_entities f join backupset_detail d \n"
+	"on f.file_id = d.file_id join backupsets b \n"
+	"on d.backupset_id = b.backupset_id \n", 0, 0, &sqlerr);
+
+    if (sqlerr != 0) {
+	fprintf(stderr, "create view file_entities_bd %s\n", sqlerr);
+	sqlite3_free(sqlerr);
+    }
+
     err = sqlite3_exec(bkcatalog,
 	"    create index if not exists needed_file_entitiesi1 on needed_file_entities (  \n"
 	"    backupset_id, filename, infilename)", 0, 0, 0);
@@ -2533,6 +2535,9 @@ int listbackups(int argc, char **argv)
     char *dbbkname;
     char oldbkname[128];
     time_t oldbktime;
+    time_t bdatestamp;
+    time_t edatestamp;
+    char *range;
     int err;
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
@@ -2654,36 +2659,32 @@ int listbackups(int argc, char **argv)
 	sqlite3_free(sqlstmt);
     }
     else if (foundopts == 3) {
-	sqlite3_prepare_v2(bkcatalog,
-	    (sqlstmt = sqlite3_mprintf("select distinct backupset_id  "
-		"from backupsets  where name = '%q' and serial = '%q'",
-		bkname, datestamp)), -1, &sqlres, 0);
-	if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
-	    bkid = sqlite3_column_int(sqlres, 0);
+	range = strchr(datestamp, '-');
+	if (range != NULL) {
+	    *range = '\0';
+	    if (*datestamp != '\0')
+		bdatestamp = atoi(datestamp);
+	    else
+		bdatestamp = 0;
+	    if (*(range + 1) != '\0')
+		edatestamp = atoi(range + 1);
+	    else
+		edatestamp = LONG_MAX;
 	}
 	else {
-	    printf("Backup not found for %s\n", sqlstmt);
-	    exit(1);
+	    bdatestamp = atoi(datestamp);
+	    edatestamp = atoi(datestamp);
 	}
 	sqlite3_prepare_v2(bkcatalog,
-	    (sqlstmt = sqlite3_mprintf(
-	    "select filename from file_entities f  "
-	    "join backupset_detail d on f.file_id = d.file_id  "
-	    "where backupset_id = '%d' order by filename, datestamp", bkid)),
-	    -1, &sqlres, 0);
-	rowcount = 0;
-	bktime = (time_t) strtoll(datestamp, 0, 10);
-	bktimes = ctime(&bktime);
-	bktimes[strlen(bktimes) - 1] = 0;
-	printf("%s %s\n", bkname, bktimes);
+	    (sqlstmt = sqlite3_mprintf("select distinct serial, filename "
+		"from file_entities_bd where name = '%q' and serial >= %d "
+		"and serial <= %d", bkname, bdatestamp, edatestamp)),
+		-1, &sqlres, 0);
+
 	while (sqlite3_step(sqlres) == SQLITE_ROW) {
-	    rowcount++;
-	    bktime = sqlite3_column_int(sqlres, 1),
-	    bktimes = ctime(&bktime);
-	    bktimes[strlen(bktimes) - 1] = 0;
-	    printf("%s\n", sqlite3_column_text(sqlres, 0));
+	    printf("%10d %s\n", sqlite3_column_int(sqlres, 0),
+	    sqlite3_column_text(sqlres, 1));
 	}
-	rowcount == 0 && printf("No files found for %s\n", sqlstmt);
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
