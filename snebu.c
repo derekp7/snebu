@@ -862,6 +862,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    ftype != '1'", 0, 0, 0);
 #endif
 
+// file_entities with backupsets and backupset_detail view
     err = sqlite3_exec(bkcatalog,
 	"create view if not exists \n"
 	"    file_entities_bd \n"
@@ -1317,6 +1318,18 @@ int submitfiles(int argc, char **argv)
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
 
+    sqlite3_prepare_v2(bkcatalog,
+	(sqlstmt = sqlite3_mprintf("select sum(size)  "
+	    "from file_entities_bd where backupset_id = %d",
+	    bkid)), -1, &sqlres, 0);
+    if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
+        bytes_read = sqlite3_column_int64(sqlres, 0);
+    }
+    else {
+	fprintf(stderr, "%d: No data from %s\n", x, sqlstmt);
+    }
+    sqlite3_finalize(sqlres);
+    sqlite3_free(sqlstmt);
 
     if (verbose >= 1)
 	fprintf(stderr, "Receiving files\n");
@@ -1902,6 +1915,9 @@ int restore(int argc, char **argv)
 	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
+    time_t bdatestamp;
+    time_t edatestamp;
+    char *range;
 
     lendian = (unsigned int) (((unsigned char *)(&lendian))[0]); // little endian test
     msi = 256;
@@ -1997,7 +2013,7 @@ int restore(int argc, char **argv)
 	srcdir = config.vault;
 
     sha1filepath = malloc(strlen(srcdir) + 48);
-
+#if 0
     x = sqlite3_prepare_v2(bkcatalog,
         (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
             "where name = '%q' and serial = '%q'",
@@ -2013,7 +2029,7 @@ int restore(int argc, char **argv)
     }
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
-
+#endif
 
     // Zero out tar header
     for (i = 0; i < sizeof(tarhead); i++) {
@@ -2021,7 +2037,23 @@ int restore(int argc, char **argv)
     }
 
 //  
-    sqlite3_exec(bkcatalog, sqlstmt = "  "
+   	range = strchr(datestamp, '-');
+	if (range != NULL) {
+	    *range = '\0';
+	    if (*datestamp != '\0')
+		bdatestamp = atoi(datestamp);
+	    else
+		bdatestamp = 0;
+	    if (*(range + 1) != '\0')
+		edatestamp = atoi(range + 1);
+	    else
+		edatestamp = INT32_MAX;
+	}
+	else {
+	    bdatestamp = atoi(datestamp);
+	    edatestamp = atoi(datestamp);
+	}
+	sqlite3_exec(bkcatalog, sqlstmt = "  "
 	"create temporary table if not exists restore_file_entities (  \n"
     	    "file_id       integer primary key,  \n"
        	    "ftype         char,  \n"
@@ -2038,6 +2070,7 @@ int restore(int argc, char **argv)
 	    "filename      char,  \n"
 	    "extdata       char default '',  \n"
 	    "xheader       blob default '',  \n"
+	    "serial        char, \n"
 	"constraint restore_file_entitiesc1 unique (  \n"
 	    "ftype,  \n"
 	    "permission,  \n"
@@ -2054,6 +2087,21 @@ int restore(int argc, char **argv)
 	    "extdata,  \n"
 	    "xheader ))", 0, 0, 0);
 	
+
+    sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
+	"insert or ignore into restore_file_entities  "
+	"(ftype, permission, device_id, inode, user_name, user_id,  "
+	"group_name, group_id, size, sha1, datestamp, filename, extdata, xheader, serial)  "
+	"select ftype, permission, device_id, inode, user_name, user_id,  "
+	"group_name, group_id, size, sha1, datestamp, filename, extdata, xheader, "
+	"MAX(serial) from file_entities_bd where name = '%q' and serial >= %d "
+	"and serial <= %d%s group by filename order by filename, serial",
+	bkname, bdatestamp, edatestamp, filespec != 0 ?  filespec : ""), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n\n\n",sqlerr);
+	    sqlite3_free(sqlerr);
+	}
+#if 0
     sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
 	"insert or ignore into restore_file_entities  "
 	"(ftype, permission, device_id, inode, user_name, user_id,  "
@@ -2063,7 +2111,7 @@ int restore(int argc, char **argv)
 	"from file_entities f join backupset_detail d  "
 	"on f.file_id = d.file_id where backupset_id = '%d'%s order by filename, datestamp",
 	bkid, filespec != 0 ?  filespec : ""), 0, 0, 0);
-
+#endif
     sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
 	"create temporary view hardlink_file_entities  "
 	"as select min(file_id) as file_id, ftype, permission, device_id,  "
@@ -2676,7 +2724,7 @@ int listbackups(int argc, char **argv)
 	    if (*(range + 1) != '\0')
 		edatestamp = atoi(range + 1);
 	    else
-		edatestamp = LONG_MAX;
+		edatestamp = INT32_MAX;
 	}
 	else {
 	    bdatestamp = atoi(datestamp);
@@ -4030,6 +4078,14 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into diskfiles select * from diskfiles_t"
+	    )), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"insert or ignore into received_file_entities select * from received_file_entities_t"
 	    )), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
