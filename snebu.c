@@ -3549,6 +3549,13 @@ int purge(int argc, char **argv)
 
     fprintf(stderr, "Creating final purge list\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"insert into purgelist (datestamp, sha1) "
+	"select %d, d.sha1 from diskfiles d "
+	"left join file_entities f "
+	"on d.sha1 = f.sha1 "
+	"where f.sha1 is null ", purgedate)), 0, 0, &sqlerr);
+#if 0
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert into purgelist (datestamp, sha1)  "
 	"select %d, p1.sha1 from ( "
 	"select distinct p.sha1 from purgelist1 p "
@@ -3559,6 +3566,7 @@ int purge(int argc, char **argv)
 	"left join received_file_entities r "
 	"on p1.sha1 = r.sha1 "
 	"where  r.sha1 is null and p1.sha1 != '0'", purgedate)), 0, 0, &sqlerr);
+#endif
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
