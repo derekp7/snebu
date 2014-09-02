@@ -1216,6 +1216,7 @@ int submitfiles(int argc, char **argv)
     int longoptidx;
     unsigned long long est_size = 0;
     unsigned long long bytes_read = 0;
+    unsigned long long bytes_readp = 0;
     int verbose = 0;
     char statusline[80];
     char *paxpath = NULL;
@@ -1320,10 +1321,10 @@ int submitfiles(int argc, char **argv)
 
     sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select sum(size)  "
-	    "from file_entities_bd where backupset_id = %d",
+	    "from received_file_entities where backupset_id = %d",
 	    bkid)), -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
-        bytes_read = sqlite3_column_int64(sqlres, 0);
+        bytes_readp = sqlite3_column_int64(sqlres, 0);
     }
     else {
 	fprintf(stderr, "%d: No data from %s\n", x, sqlstmt);
@@ -1353,14 +1354,14 @@ int submitfiles(int argc, char **argv)
         count = fread(&tarhead, 1, 512, stdin);
         if (count < 512) {
                 fprintf(stderr, "tar short read\n");
-		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read);
+		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read + bytes_readp);
                 return (1);
         }
         if (tarhead.filename[0] == 0) {	// End of TAR archive
 
 //	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 	    logaction(bkcatalog, bkid, 5, "End receiving files");
-	    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read);
+	    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read + bytes_readp);
 
 	    logaction(bkcatalog, bkid, 7, "End post processing received files");
 
@@ -1377,13 +1378,13 @@ int submitfiles(int argc, char **argv)
             count = fread(fs.filename, 1, bytestoread, stdin);
             if (count < bytestoread) {
                 printf("tar short read\n");
-		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read);
+		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read + bytes_readp);
                 return(1);
             }
             count = fread(junk, 1, blockpad, stdin);
             if (count < blockpad) {
                 printf("tar short read\n");
-		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read);
+		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read + bytes_readp);
                 return(1);
             }
             fs.filename[bytestoread] = 0;
@@ -1547,7 +1548,7 @@ int submitfiles(int argc, char **argv)
                     count = fread(&speh, 1, 512, stdin);
                     if (count < 512) {
                         printf("tar short read\n");
-			flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read);
+			flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read + bytes_readp);
                         return(1);
                     }
                     s_isextended = speh.isextended;
@@ -1600,7 +1601,7 @@ int submitfiles(int argc, char **argv)
             curtmpfile = mkstemp(tmpfilepath);
             if (curtmpfile == -1) {
                 fprintf(stderr, "Error opening temp file %s\n", tmpfilepath);
-		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read);
+		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read + bytes_readp);
                 return(1);
             }
 	    curfile = cfinit(fdopen(curtmpfile, "w"));
@@ -1628,7 +1629,7 @@ int submitfiles(int argc, char **argv)
                 count = fread(curblock, 1, blocksize, stdin);
                 if (count < blocksize) {
                     printf("tar short read\n");
-		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read);
+		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read + bytes_readp);
                     return(1);
                 }
 
@@ -1696,7 +1697,7 @@ int submitfiles(int argc, char **argv)
 		}
 		else {
 		    fprintf(stderr, "Error creating directory %s\n", destfilepath);
-		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read);
+		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read + bytes_readp);
 		    return(1);
 		}
 	    }
@@ -1753,7 +1754,7 @@ int submitfiles(int argc, char **argv)
 	}
 	bytes_read += fs.filesize;
 	if (verbose >= 1) {
-	    sprintf(statusline, "%llu/%llu bytes, %.0f %%", bytes_read, est_size, est_size != 0 ? ((double) bytes_read / (double) est_size * 100) : 0) ;
+	    sprintf(statusline, "%llu/%llu bytes, %.0f %%", (bytes_read + bytes_readp), est_size, est_size != 0 ? ((double) (bytes_read + bytes_readp) / (double) est_size * 100) : 0) ;
 	    fprintf(stderr, "\r%45s", statusline);
 	}
 
