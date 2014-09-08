@@ -902,6 +902,12 @@ int initdb(sqlite3 *bkcatalog)
 	"    create index if not exists file_entitiesi1 on file_entities (  \n"
 	"    filename, file_id)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
+	"    create index if not exists file_entitiesi2 on file_entities (  \n"
+	"    sha1)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
+	"    create index if not exists file_entitiesi3 on file_entities (  \n"
+	"    file_id)", 0, 0, 0);
+    err = sqlite3_exec(bkcatalog,
 	"    create index if not exists received_file_entitiesi1 on received_file_entities (  \n"
 	"    filename)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
@@ -4349,6 +4355,13 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 	    sqlite3_exec(bkcatalog,
 	    "create index if not exists received_file_entities_t_i1 on received_file_entities_t (  \n"
 	    "    filename)", 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n\n\n",sqlerr);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_exec(bkcatalog,
+	    "create index if not exists received_file_entities_t_i2 on received_file_entities_t (  \n"
+	    "    extdata)", 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s\n\n\n",sqlerr);
 		sqlite3_free(sqlerr);
