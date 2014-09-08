@@ -4084,6 +4084,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	    if (verbose >= 2)
 		fprintf(stderr, "Finished receiving files\n");
 
+	    logaction(bkcatalog, bkid, 5, "Copying entries to diskfiles");
 	    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into diskfiles select * from diskfiles_t"
@@ -4093,6 +4094,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		sqlite3_free(sqlerr);
 	    }
 
+	    logaction(bkcatalog, bkid, 5, "Copying entries to received_file_entities");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into received_file_entities select * from received_file_entities_t"
 	    )), 0, 0, &sqlerr);
@@ -4102,6 +4104,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	    }
 
 	    sqlite3_free(sqlstmt);
+	    logaction(bkcatalog, bkid, 5, "Copying entries to needed_file_entities_current");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert into needed_file_entities_current "
 		"    select device_id, inode, filename, infilename, size, cdatestamp "
@@ -4115,6 +4118,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	    }
 	    sqlite3_free(sqlstmt);
 
+	    logaction(bkcatalog, bkid, 5, "Merging hardlink file metadata");
 	    if (verbose >= 2)
 		fprintf(stderr, "Merging hardlink file metadata\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -4135,6 +4139,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	    }
 	    sqlite3_free(sqlstmt);
 		
+	    logaction(bkcatalog, bkid, 5, "Adding regular files, directories, and symlinks");
 	    if (verbose >= 2)
 		fprintf(stderr, "Adding regular files, directories, and symlinks\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -4166,6 +4171,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		sqlite3_finalize(sqlres);
 		sqlite3_free(sqlstmt);
 	    }
+	    logaction(bkcatalog, bkid, 5, "Copying to file_entities");
 	    if (verbose >= 2)
 		fprintf(stderr, "Copying to file_entities\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -4180,6 +4186,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	    }
 	    sqlite3_free(sqlstmt);
 
+	    logaction(bkcatalog, bkid, 5, "Creating backupset_detail");
 	    if (verbose >= 2)
 		fprintf(stderr, "Creating backupset_detail\n");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
