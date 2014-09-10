@@ -2921,10 +2921,10 @@ int import(int argc, char **argv)
 	exit(1);
     }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
-    sqlite3_exec(bkcatalog, "PRAGMA temp_store = 2", 0, 0, 0);
+//    sqlite3_exec(bkcatalog, "PRAGMA temp_store = 2", 0, 0, 0);
 // TODO These two should be set via command line options
-    sqlite3_exec(bkcatalog, "PRAGMA synchronous = OFF", 0, 0, 0);
-    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = MEMORY", 0, 0, 0);
+//    sqlite3_exec(bkcatalog, "PRAGMA synchronous = OFF", 0, 0, 0);
+//    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = MEMORY", 0, 0, 0);
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
     initdb(bkcatalog);
 
@@ -3330,8 +3330,6 @@ int expire(int argc, char **argv)
 	exit(1);
     }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
-    sqlite3_exec(bkcatalog, "PRAGMA synchronous = OFF", 0, 0, 0);
-    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = MEMORY", 0, 0, 0);
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
     cutoffdate = time(0) - (age * 60 * 60 * 24);
@@ -3372,7 +3370,17 @@ int expire(int argc, char **argv)
     }
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"delete from received_file_entities where backupset_id in (  "
+	"create temporary table if not exists expirelist ( "
+	"session_id integer primary key )"
+	)), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"insert or ignore into expirelist (  "
 	"select e.backupset_id from backupsets as e  "
 	"left join (  "
 	"  select c.backupset_id, d.ranknum  "
@@ -3392,6 +3400,15 @@ int expire(int argc, char **argv)
 	")", min, retention, cutoffdate,
 	strlen(bkname) > 0 ? " and e.name = " : "",
 	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+    
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"delete from received_file_entities where backupset_id in (  "
+	"select backupset_id from expirelist")), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
@@ -3400,25 +3417,7 @@ int expire(int argc, char **argv)
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"delete from needed_file_entities where backupset_id in (  "
-	"select e.backupset_id from backupsets as e  "
-	"left join (  "
-	"  select c.backupset_id, d.ranknum  "
-	"  from backupsets as c  "
-	"    inner join (  "
-	"      select a.backupset_id, count(*) as ranknum  "
-	"      from backupsets as a  "
-	"	 inner join backupsets as b on (a.name = b.name) "
-	"          and (a.retention = b.retention) "
-	"          and (a.serial <= b.serial)"
-	"      group by a.backupset_id  "
-	"      having ranknum <= %d  "
-	"    ) as d on (c.backupset_id = d.backupset_id)  "
-	"  order by c.name, d.ranknum  "
-	") as f on e.backupset_id = f.backupset_id  "
-	"where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q  "
-	")", min, retention, cutoffdate,
-	strlen(bkname) > 0 ? " and e.name = " : "",
-	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
+	"select backupset_id from expirelist")), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
@@ -3427,25 +3426,7 @@ int expire(int argc, char **argv)
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"delete from backupset_detail where backupset_id in (  "
-	"select e.backupset_id from backupsets as e  "
-	"left join (  "
-	"  select c.backupset_id, d.ranknum  "
-	"  from backupsets as c  "
-	"    inner join (  "
-	"      select a.backupset_id, count(*) as ranknum  "
-	"      from backupsets as a  "
-	"      inner join backupsets as b on (a.name = b.name) and (a.serial <= b.serial)  "
-	"      where a.retention = '%q' and b.retention = '%q'  "
-	"      group by a.backupset_id  "
-	"      having ranknum <= %d  "
-	"    ) as d on (c.backupset_id = d.backupset_id)  "
-	"  where c.retention = '%q'  "
-	"  order by c.name, d.ranknum  "
-	") as f on e.backupset_id = f.backupset_id  "
-	"where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q\
-	)", retention, retention, min, retention, retention, cutoffdate,
-	strlen(bkname) > 0 ? " and e.name = " : "",
-	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
+	"select backupset_id from expirelist")), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
@@ -3454,30 +3435,22 @@ int expire(int argc, char **argv)
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"delete from backupsets where backupset_id in (  "
-	"select e.backupset_id from backupsets as e  "
-	"left join (  "
-	"  select c.backupset_id, d.ranknum  "
-	"  from backupsets as c  "
-	"    inner join (  "
-	"      select a.backupset_id, count(*) as ranknum  "
-	"      from backupsets as a  "
-	"	 inner join backupsets as b on (a.name = b.name) "
-	"          and (a.retention = b.retention) "
-	"          and (a.serial <= b.serial)"
-	"      group by a.backupset_id  "
-	"      having ranknum <= %d  "
-	"    ) as d on (c.backupset_id = d.backupset_id)  "
-	"  order by c.name, d.ranknum  "
-	") as f on e.backupset_id = f.backupset_id  "
-	"where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q  "
-	")", min, retention, cutoffdate,
-	strlen(bkname) > 0 ? " and e.name = " : "",
-	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
+	"select backupset_id from expirelist")), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
     sqlite3_free(sqlstmt);
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"delete from log where backupset_id in (  "
+	"select backupset_id from expirelist")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+
 }
 int purge(int argc, char **argv)
 {
