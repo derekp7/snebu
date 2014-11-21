@@ -3078,7 +3078,7 @@ int import(int argc, char **argv)
     sqlite3_exec(bkcatalog, "PRAGMA temp_store = 2", 0, 0, 0);
 // TODO These two should be set via command line options
     sqlite3_exec(bkcatalog, "PRAGMA synchronous = OFF", 0, 0, 0);
-    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = MEMORY", 0, 0, 0);
+    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = TRUNCATE", 0, 0, 0);
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
     initdb(bkcatalog);
 
@@ -3479,7 +3479,7 @@ int expire(int argc, char **argv)
     sqlite3_open(bkcatalogp, &bkcatalog);
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
     sqlite3_exec(bkcatalog, "PRAGMA synchronous = OFF", 0, 0, 0);
-    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = MEMORY", 0, 0, 0);
+    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = TRUNCATE", 0, 0, 0);
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
     cutoffdate = time(0) - (age * 60 * 60 * 24);
