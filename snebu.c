@@ -3408,7 +3408,7 @@ int expire(int argc, char **argv)
 	"    ) as d on (c.backupset_id = d.backupset_id)  "
 	"  order by c.name, d.ranknum  "
 	") as f on e.backupset_id = f.backupset_id  "
-	"where f.backupset_id is null and e.retention = '%q' and e.serial < '%d'%s%Q  ",
+	"where f.backupset_id is null and e.retention = '%q' and e.serial < %d%s%Q  ",
 	min, retention, cutoffdate,
 	strlen(bkname) > 0 ? " and e.name = " : "",
 	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
