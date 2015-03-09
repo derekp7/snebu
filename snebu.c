@@ -1256,10 +1256,46 @@ int submitfiles(int argc, char **argv)
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
 
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"create temporary table if not exists current_backup_set_submitted_files_t "
+	"as select filename, size from file_entities_bd where "
+	"backupset_id = %d", bkid)), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n", sqlerr);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"create temporary table if not exists current_backup_set_needed_files_t "
+	"as select filename, size from needed_file_entities where "
+	"backupset_id = %d", bkid)), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n", sqlerr);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+    sqlite3_exec(bkcatalog, 
+	"create index if not exists cbssfti on current_backup_set_submitted_files_t ( "
+	"filename) ", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n", sqlerr);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog, 
+	"create index if not exists cbsnfti on current_backup_set_needed_files_t ( "
+	"filename) ", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n", sqlerr);
+	sqlite3_free(sqlerr);
+    }
+
     sqlite3_prepare_v2(bkcatalog,
-	(sqlstmt = sqlite3_mprintf("select sum(size)  "
-	    "from received_file_entities where backupset_id = %d",
-	    bkid)), -1, &sqlres, 0);
+	(sqlstmt = sqlite3_mprintf("select sum(a.size)  "
+	    "from current_backup_set_needed_files_t a "
+	    "join current_backup_set_submitted_files_t b "
+	    "on a.filename = b.filename")),
+	    -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bytes_readp = sqlite3_column_int64(sqlres, 0);
     }
@@ -4004,16 +4040,6 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		sqlite3_free(sqlerr);
 	    }
 
-	    logaction(bkcatalog, bkid, 5, "Copying entries to received_file_entities");
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into received_file_entities select * from received_file_entities_t"
-	    )), 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
-
-	    sqlite3_free(sqlstmt);
 	    logaction(bkcatalog, bkid, 5, "Copying entries to needed_file_entities_current");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert into needed_file_entities_current "
