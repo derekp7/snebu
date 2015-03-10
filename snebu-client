@@ -509,7 +509,7 @@ do_remote_backup()
 
     rpcsh -h ${clientname} -u "${rmtuser}" -f 'make_include_tempfile' \
         -r 'includetmp' -m 'make_include_tempfile'
-    rpcsh -h ${clientname} -u "${rmtuser}" -f FINDCMD -v "INCLUDE EXCLUDE" -m FINDCMD |\
+    rpcsh -h ${clientname} -u "${rmtuser}" -f FINDCMD -v "INCLUDE EXCLUDE EXCLUDEPAT" -m FINDCMD |\
 	$SNEBU newbackup --name ${backupname} --retention ${retention} \
         --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" |\
         rpcsh -h ${clientname} -u "${rmtuser}" -m "cat >${includetmp}"
