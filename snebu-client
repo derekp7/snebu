@@ -10,6 +10,10 @@ process_cmdline()
     then
         target=do_restore
         shift
+    elif [ "$1" == "validate" ]
+    then
+        target=do_validate
+        shift
     elif [ "$1" == "listbackups" ]
     then
         target=listbackups
@@ -154,6 +158,8 @@ usage()
 	
 	    listbackups [ -n backupname [ -d datestamp ]] [ file_list... ]
 	
+	    validate [ -n backupname ] [ -d datestamp ]
+	
 	    help [subcommand]
 	EOT
     elif [ "$1" = "backup" ]; then
@@ -235,6 +241,38 @@ usage()
 
 	 [ file-list ]              List of files to restore.  Defaults to all.
 	EOT
+    elif [ "$1" = "validate" ]; then
+	cat <<-EOT
+	Usage: snebu-client validate [ -n backupname ] [ -d datestamp ] [ file-list ]
+	 Compares the contents a given backup session identified by "-n" and "-d"
+	 parameters, to what is on the client.  Use the "listbackups" subcommand to
+	 get a list of available
+	 backup sessions.
+	
+	Options:
+	 -c, --config config_file   Name of the configuration file.  Default is
+	                            /etc/snebu-client.conf.
+	
+	 -n, --name backupname      Name of the backup.  Usually set to the server
+	                            name that you are backing up.
+	
+	 -d, --date datestamp       Date stamp for this backup set.  The format is in
+	                            time_t format, sames as the output of the "date
+	                            +%s" command.
+	
+	 -C, --changedir path       Changes to the given directory path before
+	                            validating
+
+	     --remote-client hostname
+	                            Host name / IP address of remote server.  Used to
+	                            backup a remote server to local host.
+	
+	     --backup-server hostname
+	                            Host name / IP address of backup server.  Used to
+	                            backup to a remote server.
+
+	 [ file-list ]              List of files to validate.  Defaults to all.
+	EOT
     elif [ "$1" = "listbackups" ]; then
 	cat <<-EOT
 Usage: snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
@@ -271,6 +309,7 @@ main()
     then
 	[ "${target}" = "do_backup" ] && target=do_remote_backup
 	[ "${target}" = "do_restore" ] && target=do_remote_restore
+	[ "${target}" = "validate" ] && target=remote_validate
     fi
 
     ${target} "${filelist[@]}"
@@ -554,6 +593,27 @@ do_remote_restore()
 
 }
 
+validate()
+{
+    [ -n "${graftdir}" ] && restoreopts=( "${restoreopts[@]}" --graft "${graftdir}" )
+    if [ -n "${tgtdirectory}" ]
+    then
+        tarargs=( "${tarargs[@]}" -C $tgtdirectory )
+    fi
+
+    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${restoreopts[@]}" "${@}" </dev/null |tar "${tarargs[@]}" --acls --selinux --xattrs -df -
+}
+
+remote_validate()
+{
+    if [ -n "${tgtdirectory}" ]
+    then
+        tarargs=( "${tarargs[@]}" -C $tgtdirectory )
+    fi
+    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${@}" </dev/null |\
+    rpcsh -h ${clientname} -u "${rmtuser}" -m "tar ${tarargs[*]} --acls --selinux --xattrs -df -"
+
+}
 listbackups()
 {
     [ -n "${backupname}" ] && sargs=( "${sargs[@]}" -n ${backupname} )
