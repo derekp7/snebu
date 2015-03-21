@@ -534,7 +534,7 @@ newbackup(int argc, char **argv)
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
 	    "(backupset_id, device_id, inode, filename, infilename, size, cdatestamp)  "
-	    "select distinct i.backupset_id, i.device_id, i.inode, i.filename, i.infilename, "
+	    "select distinct %d, i.device_id, i.inode, i.filename, i.infilename, "
 	    "i.size, i.cdatestamp from inbound_file_entities i  "
 	    "left join thishost_file_details f on  "
 	    "i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
@@ -548,7 +548,7 @@ newbackup(int argc, char **argv)
 	    "left join diskfiles d "
 	    "on f.sha1 = d.sha1  where "
 	    "(f.file_id is null or "
-	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))")), 0, 0, &sqlerr);
+	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S')))", bkid)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -560,7 +560,7 @@ newbackup(int argc, char **argv)
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into backupset_detail  "
 	    "(backupset_id, file_id)  "
-	    "select i.backupset_id, f.file_id from file_entities f  "
+	    "select %d, f.file_id from thishost_file_details f  "
 	    "join inbound_file_entities i  "
 	    "on i.ftype = case when f.ftype = 'S' then '0' else f.ftype end  "
 	    "and i.permission = f.permission  "
@@ -569,7 +569,7 @@ newbackup(int argc, char **argv)
 	    "and i.group_name = f.group_name and i.group_id = f.group_id  "
 	    "and i.size = f.size and i.cdatestamp = f.cdatestamp and i.datestamp = f.datestamp  "
 	    "and i.filename = f.filename and ((i.ftype = '0' and f.ftype = 'S')  "
-	    "or i.extdata = f.extdata)")), 0, 0, &sqlerr);
+	    "or i.extdata = f.extdata)", bkid)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
