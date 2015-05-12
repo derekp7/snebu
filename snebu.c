@@ -3241,6 +3241,7 @@ int expire(int argc, char **argv)
     sqlite3_stmt *sqlres;
     char *bkcatalogp;
     char *sqlstmt = 0;
+    char *sqlstmt_tmp = 0;
     char *sqlerr;
     int i;
     char catalogpath[512];
@@ -3346,6 +3347,9 @@ int expire(int argc, char **argv)
     }
     sqlite3_free(sqlstmt);
 
+    if (strlen(bkname) > 0)
+	sqlstmt_tmp = sqlite3_mprintf(" and e.name = %Q", bkname);
+
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into expirelist   "
 	"select e.backupset_id from backupsets as e  "
@@ -3363,15 +3367,16 @@ int expire(int argc, char **argv)
 	"    ) as d on (c.backupset_id = d.backupset_id)  "
 	"  order by c.name, d.ranknum  "
 	") as f on e.backupset_id = f.backupset_id  "
-	"where f.backupset_id is null and e.retention = '%q' and e.serial < %d%s%Q  ",
+	"where f.backupset_id is null and e.retention = '%q' and e.serial < %d%s ",
 	min, retention, cutoffdate,
-	strlen(bkname) > 0 ? " and e.name = " : "",
-	strlen(bkname) > 0 ? bkname : "")), 0, 0, &sqlerr);
+	strlen(bkname) > 0 ? sqlstmt_tmp : "")), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
     sqlite3_free(sqlstmt);
+    if (strlen(bkname) > 0)
+        sqlite3_free(sqlstmt_tmp);
     
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"delete from received_file_entities where backupset_id in ( "
