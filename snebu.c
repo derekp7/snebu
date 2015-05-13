@@ -2294,7 +2294,7 @@ int restore(int argc, char **argv)
 	    strcpy(xtarhead.mode, "0000000");
 	    sprintf(xtarhead.size, "%11.11o", xheaderlen);
 	    strcpy(xtarhead.modtime, "00000000000");
-	    sprintf(xtarhead.ustar, "ustar", 6);
+	    sprintf(xtarhead.ustar, "ustar");
 	    strncpy(xtarhead.ustarver, "00", 2);
 	    strcpy(xtarhead.auid, "root");
 	    strcpy(xtarhead.agid, "root");
@@ -2325,7 +2325,7 @@ int restore(int argc, char **argv)
 	}
 	else {
 	    sprintf(tarhead.ustar, "ustar");
-	    strncpy(tarhead.ustarver, "00", 6);
+	    strncpy(tarhead.ustarver, "00", 2);
 	}
 	*(tarhead.ftype) = t.ftype;
 	sprintf(tarhead.mode, "%7.7o", t.mode);
