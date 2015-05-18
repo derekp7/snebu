@@ -82,7 +82,7 @@ ora_pluginpost() {
 	then
 	    if [ -n "${clientname}" ]
 	    then
-		rpcsh -h ${clientname} -u "${rmtuser}" -f 'ora_hbe sql' -v 'sid' -m "ora_hbe ${sid}"
+		rpcsh -h ${clientname} -u "${rmtuser}" -f 'ora_hbe sql' -v 'sid archlogdest' -m "ora_hbe ${sid}"
 	    else
 		ora_hbe ${sid}
 	    fi
