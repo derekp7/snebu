@@ -12,7 +12,7 @@ process_cmdline()
         shift
     elif [ "$1" == "validate" ]
     then
-        target=do_validate
+        target=validate
         shift
     elif [ "$1" == "listbackups" ]
     then
