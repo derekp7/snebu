@@ -3463,7 +3463,7 @@ int purge(int argc, char **argv)
 	    "    GROUP BY a.rowid "
 	    "    HAVING ranknum <= 1 "
 	    "  ) AS d ON (c.rowid = d.rowid) "
-	    "where c.action < 6 and c.action >= 4 ORDER BY c.logdate limit 1")), -1, &sqlres, 0);
+	    "where c.action < 6 and c.action >= 4 and c.logdate >= date('now', '-3 days') ORDER BY c.logdate limit 1")), -1, &sqlres, 0);
     if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
         purgedate = sqlite3_column_int(sqlres, 0);
     }
