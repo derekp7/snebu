@@ -1346,7 +1346,7 @@ int submitfiles(int argc, char **argv)
         // A file type of "L" means a long (> 100 character) filename.  File name begins in next block.
         if (*(tarhead.ftype) == 'L') {
             bytestoread=strtoull(tarhead.size, 0, 8);
-            blockpad = 512 - (bytestoread % 512);
+	    blockpad = 512 - ((bytestoread - 1) % 512 + 1);
             fs.filename = malloc(bytestoread + 1);
             count = fread(fs.filename, 1, bytestoread, stdin);
             if (count < bytestoread) {
@@ -1366,7 +1366,7 @@ int submitfiles(int argc, char **argv)
         // A file type of "K" means a long (> 100 character) link target.
         if (*(tarhead.ftype) == 'K') {
             bytestoread=strtoull(tarhead.size, 0, 8);
-            blockpad = 512 - (bytestoread % 512);
+	    blockpad = 512 - ((bytestoread - 1) % 512 + 1);
             fs.linktarget = malloc(bytestoread + 1);
             tcount = 0;
             while (bytestoread - tcount > 0) {
@@ -1385,7 +1385,7 @@ int submitfiles(int argc, char **argv)
 	if (*(tarhead.ftype) == 'x') {
             bytestoread=strtoull(tarhead.size, 0, 8);
 	    fs.xheaderlen = bytestoread;
-            blockpad = 512 - (bytestoread % 512);
+	    blockpad = 512 - ((bytestoread - 1) % 512 + 1);
 //            fs.xheader = malloc(bytestoread + 1);
             fs.xheader = malloc(bytestoread);
             tcount = 0;
