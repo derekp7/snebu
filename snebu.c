@@ -9,6 +9,7 @@
 #include <sqlite3.h>
 #include <string.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #include <openssl/sha.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -43,6 +44,7 @@ int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt
 int getconfig(char *configpatharg);
 int newbackup(int argc, char **argv);
 int submitfiles(int argc, char **argv);
+int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid);
 int restore(int argc, char **argv);
 int listbackups(int argc, char **argv);
 int export(int argc, char **argv);
@@ -50,9 +52,11 @@ int import(int argc, char **argv);
 int expire(int argc, char **argv);
 int purge(int argc, char **argv);
 int gethelp(int argc, char **argv);
+void help(char *topic);
 
 void concurrency_request_signal();
 void concurrency_request();
+void usage();
 
 int concurrency_sleep_requested = 0;
 int in_a_transaction = 0;
@@ -68,6 +72,9 @@ struct cfile *cfinit(FILE *outfile);
 struct cfile *cfinit_r(FILE *infile);
 int cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile);
 int cread(void *buf, size_t sz, size_t count, struct cfile *cfile);
+int cgetline(char **buf, size_t *sz, struct cfile *cfile);
+int cclose(struct cfile *cfile);
+int cclose_r(struct cfile *cfile);
 uint32_t *htonlp(uint32_t v);
 uint16_t *htonsp(uint16_t v);
 size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, uint32_t *chksum);
@@ -143,7 +150,7 @@ int main(int argc, char **argv)
     usage();
     return 0;
 }
-newbackup(int argc, char **argv)
+int newbackup(int argc, char **argv)
 {
     int optc;
     char bkname[128];
@@ -856,7 +863,7 @@ int initdb(sqlite3 *bkcatalog)
     return(0);
 }
 
-usage()
+void usage()
 {
     printf(
 	    "Usage: snebu [-c | --config filepath ] [ subcommand ] [ options ]\n"
@@ -886,14 +893,14 @@ usage()
     );
 }
 
-gethelp(int argc, char **argv) {
+int gethelp(int argc, char **argv) {
     if (argc > 1)
 	help(argv[1]);
     else
 	usage();
 }
 
-help(char *topic)
+void help(char *topic)
 {
     if (strcmp(topic, "newbackup") == 0)
 	printf(
@@ -3790,7 +3797,7 @@ int cgetline(char **buf, size_t *sz, struct cfile *cfile)
 }
 
 // Close lzop file
-cclose(struct cfile *cfile)
+int cclose(struct cfile *cfile)
 {
     int err;
     uint32_t chksum;
@@ -3816,7 +3823,7 @@ cclose(struct cfile *cfile)
     free(cfile->working_memory);
     free(cfile);
 }
-cclose_r(struct cfile *cfile)
+int cclose_r(struct cfile *cfile)
 {
     free(cfile->buf);
     free(cfile->cbuf);
