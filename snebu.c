@@ -283,7 +283,10 @@ int newbackup(int argc, char **argv)
         usage();
         exit(1);
     }
-    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
+	fprintf(stderr, "Memory allocation error\n");
+	exit(1);
+    }
     if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
 	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
 	exit(1);
@@ -1216,7 +1219,10 @@ int submitfiles(int argc, char **argv)
         usage();
         return(1);
     }
-    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
+	fprintf(stderr, "Memory allocation error\n");
+	exit(1);
+    }
     FD_SET(0, &input_s);
     select(1, &input_s, 0, 0, 0);
     if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
@@ -1590,17 +1596,26 @@ int submitfiles(int argc, char **argv)
             if (*(tarhead.ftype) == 'S' || paxsparse == 1) {
 		for (i = 0; i < n_sparsedata; i++) {
 		    if (i == 0) {
-			asprintf(&sparsefilep, "%llu:%llu:%llu", fs.filesize, sparsedata[i].offset, sparsedata[i].size);
+			if (asprintf(&sparsefilep, "%llu:%llu:%llu", fs.filesize, sparsedata[i].offset, sparsedata[i].size) < 0) {
+			    fprintf(stderr, "Memory allocation error\n");
+			    exit(0);
+			}
 			cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
 			SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
 		    }
 		    else {
-			asprintf(&sparsefilep, ":%llu:%llu", sparsedata[i].offset, sparsedata[i].size);
+			if (asprintf(&sparsefilep, ":%llu:%llu", sparsedata[i].offset, sparsedata[i].size) < 0) {
+			    fprintf(stderr, "Memory allocation failure\n");
+			    exit(1);
+			}
 			cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
 			SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
 		    }
 		}
-		asprintf(&sparsefilep, "\n");
+		if (asprintf(&sparsefilep, "\n") < 0) {
+		    fprintf(stderr, "Memory allocation failure\n");
+		    exit(1);
+		}
                 cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
                 SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
 	    }
@@ -1826,7 +1841,7 @@ int restore(int argc, char **argv)
     int foundopts = 0;
     int i, j;
     char *p;
-    unsigned long tmpchksum;
+    unsigned int tmpchksum;
     char *sha1filepath;
     int zin[2];
     pid_t cprocess;
@@ -1982,7 +1997,10 @@ int restore(int argc, char **argv)
     }
 
 
-    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
+	fprintf(stderr, "Memory allocation failure\n");
+	exit(1);
+    }
     if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
 	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
 	exit(1);
@@ -2194,7 +2212,7 @@ int restore(int argc, char **argv)
 		    strcpy(longtarhead.nuid, "0000000");
 		    strcpy(longtarhead.ngid, "0000000");
 		    strcpy(longtarhead.mode, "0000000");
-		    sprintf(longtarhead.size, "%11.11o", strlen(linktarget));
+		    sprintf(longtarhead.size, "%11.11o", (unsigned int) strlen(linktarget));
 		    strcpy(longtarhead.modtime, "00000000000");
 		    strncpy(longtarhead.ustar, "ustar ", 6);
 		    strcpy(longtarhead.auid, "root");
@@ -2229,7 +2247,7 @@ int restore(int argc, char **argv)
 		strcpy(longtarhead.nuid, "0000000");
 		strcpy(longtarhead.ngid, "0000000");
 		strcpy(longtarhead.mode, "0000000");
-		sprintf(longtarhead.size, "%11.11o", strlen(filename));
+		sprintf(longtarhead.size, "%11.11o", (unsigned int) strlen(filename));
 		strcpy(longtarhead.modtime, "00000000000");
 		strncpy(longtarhead.ustar, "ustar ", 6);
 		strcpy(longtarhead.auid, "root");
@@ -2347,7 +2365,7 @@ int restore(int argc, char **argv)
 	    if (use_pax_header == 0) {
 
 		if (sparseinfo[0] <= 077777777777LL)
-		    sprintf(tarhead.u.sph.realsize, "%11.11o", sparseinfo[0]);
+		    sprintf(tarhead.u.sph.realsize, "%11.11o", (unsigned int) sparseinfo[0]);
 		else {
 		    tarhead.u.sph.realsize[0] = 0x80;
 		    for (i = 0; i < sizeof(sparseinfo[0]); i++)
@@ -2358,7 +2376,7 @@ int restore(int argc, char **argv)
 		}
 		for (i = 1; i < nsi && i < 9; i++) {
 		    if (sparseinfo[i] <= 077777777777LL) {
-			sprintf(tarhead.u.sph.item[i - 1], "%11.11o", sparseinfo[i]);
+			sprintf(tarhead.u.sph.item[i - 1], "%11.11o", (unsigned int) sparseinfo[i]);
 		    }
 		    else {
 			tarhead.u.sph.item[i][0] = 0x80;
@@ -2391,7 +2409,7 @@ int restore(int argc, char **argv)
 	}
 
 	if (use_pax_header == 1 && t.filesize > 0xFFFFFFFFULL)
-	    sprintf(tarhead.size, "%11.11llo", 0);
+	    sprintf(tarhead.size, "%11.11llo", 0LL);
 	else {
 	    if (t.filesize <= 077777777777LL) {
 		sprintf(tarhead.size, "%11.11llo", t.filesize);
@@ -2420,7 +2438,7 @@ int restore(int argc, char **argv)
 		((unsigned char *) &speh)[i] = 0;
 	    for (i = 9; i < nsi; i++) {
 		if (sparseinfo[i] <= 077777777777LL)
-		    sprintf(speh.item[(i - 9) % 42], "%11.11o", sparseinfo[i]);
+		    sprintf(speh.item[(i - 9) % 42], "%11.11o", (unsigned int) sparseinfo[i]);
 		else {
 		    speh.item[(i - 9) % 42][0] = 0x80;
 		    for (j = 0; i < sizeof(sparseinfo[i]); j++)
@@ -2450,7 +2468,7 @@ int restore(int argc, char **argv)
 	if (t.ftype == '0' || t.ftype == 'S') {
 	    if (use_pax_header == 1 && t.ftype == 'S') {
 		paxsparsehdrsz = 0;
-		paxsparsehdrsz += (fprintf(stdout, "%llu\n", (int) ((nsi - 1) / 2)));
+		paxsparsehdrsz += (fprintf(stdout, "%u\n", (unsigned int) ((nsi - 1) / 2)));
 		for (i = 1; i < nsi; i++) {
 		    paxsparsehdrsz += (fprintf(stdout, "%llu\n", sparseinfo[i]));
 		}
@@ -2509,8 +2527,10 @@ int getconfig(char *configpatharg)
     config.meta = 0;
     if (configpatharg == NULL)
 	snprintf(configpath, 256, "%s/.snebu.conf", getenv("HOME"));
-    else
-	snprintf(configpath, 256, configpatharg);
+    else {
+	strncpy(configpath, configpatharg, 255);
+	configpath[255] = 0;
+    }
     if (stat(configpath, &tmpfstat) != 0)
 	snprintf(configpath, 256, "/etc/snebu.conf");
     if (stat(configpath, &tmpfstat) != 0)
@@ -2530,9 +2550,15 @@ int getconfig(char *configpatharg)
 		for (i = strlen(configvalue) - 1; i >= 0 && strchr(" \t\r\n", configvalue[i]); i--)
 		    configvalue[i] = '\0';
 		if (strcmp(configvar, "vault") == 0)
-		    asprintf(&(config.vault), configvalue);
+		    if (asprintf(&(config.vault), "%s", configvalue) < 0) {
+			fprintf(stderr, "Memory allocation failure\n");
+			exit(1);
+		    }
 		if (strcmp(configvar, "meta") == 0)
-		    asprintf(&(config.meta), configvalue);
+		    if (asprintf(&(config.meta), "%s", configvalue) < 0) {
+			fprintf(stderr, "Memory allocation failure\n");
+			exit(1);
+		    }
 	    }
 	}
     }
@@ -2619,7 +2645,10 @@ int listbackups(int argc, char **argv)
 	}
 	strcat(filespec, ")");
     }
-    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
+	fprintf(stderr, "Memory allocation failure\n");
+	exit(1);
+    }
     if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
 	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
 	exit(1);
@@ -2661,7 +2690,7 @@ int listbackups(int argc, char **argv)
 		if (strcmp(dbbkname, oldbkname) != 0)
 		    printf("%s:\n", dbbkname);
 		if (bktime != oldbktime)
-		    printf("    %-10d %s:\n", bktime, bktimes);
+		    printf("    %-10lu %s:\n", bktime, bktimes);
 		printf("        %s\n", sqlite3_column_text(sqlres, 2));
 		strncpy(oldbkname, dbbkname, 127);
 		oldbkname[127] = 0;
@@ -2686,7 +2715,7 @@ int listbackups(int argc, char **argv)
 	    bktime = sqlite3_column_int(sqlres, 1),
 	    bktimes = ctime(&bktime);
 	    bktimes[strlen(bktimes) - 1] = 0;
-	    printf("    %d / %s / %s\n",
+	    printf("    %lu / %s / %s\n",
 		bktime, sqlite3_column_text(sqlres, 0), bktimes);
 
 	}
@@ -2889,7 +2918,10 @@ int import(int argc, char **argv)
 	}
 	strcat(filespec, ")");
     }
-    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
+	fprintf(stderr, "Memory allocation failure\n");
+	exit(1);
+    }
     if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
 	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
 	exit(1);
@@ -2986,7 +3018,6 @@ int import(int argc, char **argv)
 	endfptr = strstr(fptr, "\t");
 	if (endfptr == 0) {
 	    endfptr = strlen(fptr) + fptr;
-	    fprintf(stderr, "Debug: fptr -> %s :: fptr = %d :: endfptr = %d\n", fptr, fptr, endfptr);
 	}
 	efilename = realloc(efilename, endfptr - fptr + 1);
 	strncpy(efilename, fptr, endfptr - fptr);
@@ -3008,9 +3039,12 @@ int import(int argc, char **argv)
 	    strncpy(elinktarget, lptr, endlptr - lptr);
 	    elinktarget[endlptr - lptr] = 0;
 
-	    asprintf(&sparsefilepath, "%s/%.2s/%s.s", destdir, sha1, sha1 + 2);
+	    if (asprintf(&sparsefilepath, "%s/%.2s/%s.s", destdir, sha1, sha1 + 2) < 0) {
+		fprintf(stderr, "Memory allocation error\n");
+		exit(1);
+	    }
 	    sparsefileh = fopen(sparsefilepath, "w");
-	    fprintf(sparsefileh, elinktarget);
+	    fprintf(sparsefileh, "%s", elinktarget);
 	    fclose(sparsefileh);
 	}
 
@@ -3174,7 +3208,10 @@ int export(int argc, char **argv)
 	}
 	strcat(filespec, ")");
     }
-    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
+	fprintf(stderr, "Memory allocation falure\n");
+	exit(1);
+    }
     if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
 	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
 	exit(1);
@@ -3299,7 +3336,10 @@ int expire(int argc, char **argv)
         usage();
         return(1);
     }
-    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
+	fprintf(stderr, "Memory allocation error\n");
+	exit(1);
+    }
     if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
 	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
 	exit(1);
@@ -3445,7 +3485,10 @@ int purge(int argc, char **argv)
     char *destfilepath;
     char *destfilepathd;
 
-    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
+	fprintf(stderr, "Memory allocation error\n");
+	exit(1);
+    }
     if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
 	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
 	exit(1);
@@ -3567,6 +3610,7 @@ struct cfile *cfinit(FILE *outfile)
     struct cfile *cfile;
     char magic[] = {  0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a };
     uint32_t chksum = 1;
+    int x;
 
     cfile = malloc(sizeof(*cfile));
     cfile->bufsize = 256 * 1024;
@@ -3616,6 +3660,7 @@ struct cfile *cfinit_r(FILE *infile)
 	char filename[256];
 	uint32_t chksum;
     } lzop_header;
+    int x;
 
     cfile = malloc(sizeof(*cfile));
     cfile->bufsize = 0;
@@ -3626,34 +3671,34 @@ struct cfile *cfinit_r(FILE *infile)
     cfile->handle = infile;
 
     // Process header
-    fread(&(lzop_header.magic), 1, sizeof(magic), infile);
-    fread(&tmp16, 1, 2, infile);
+    x = fread(&(lzop_header.magic), 1, sizeof(magic), infile);
+    x = fread(&tmp16, 1, 2, infile);
     lzop_header.version = ntohs(tmp16);
-    fread(&tmp16, 1, 2, infile);
+    x = fread(&tmp16, 1, 2, infile);
     lzop_header.libversion = ntohs(tmp16);
     if (lzop_header.version >= 0x0940) {
-	fread(&tmp16, 1, 2, infile);
+	x = fread(&tmp16, 1, 2, infile);
 	lzop_header.minversion = ntohl(tmp16);
     }
-    fread(&(lzop_header.compmethod), 1, 1, infile);
+    x = fread(&(lzop_header.compmethod), 1, 1, infile);
     if (lzop_header.version >= 0x0940)
-	fread(&(lzop_header.level), 1, 1, infile);
-    fread(&tmp32, 1, 4, infile);
+	x = fread(&(lzop_header.level), 1, 1, infile);
+    x = fread(&tmp32, 1, 4, infile);
     lzop_header.flags = ntohl(tmp32);
     if (lzop_header.flags & F_H_FILTER) {
-	fread(&tmp32, 1, 4, infile);
+	x = fread(&tmp32, 1, 4, infile);
 	lzop_header.filter = ntohl(tmp32);
     }
-    fread(&tmp32, 1, 4, infile);
+    x = fread(&tmp32, 1, 4, infile);
     lzop_header.mode = ntohl(tmp32);
-    fread(&tmp32, 1, 4, infile);
+    x = fread(&tmp32, 1, 4, infile);
     lzop_header.mtime_low = ntohl(tmp32);
-    fread(&tmp32, 1, 4, infile);
+    x = fread(&tmp32, 1, 4, infile);
     lzop_header.mtime_high = ntohl(tmp32);
-    fread(&(lzop_header.filename_len), 1, 1, infile);
+    x = fread(&(lzop_header.filename_len), 1, 1, infile);
     if (lzop_header.filename_len > 0)
-	fread(&(lzop_header.filename), 1, lzop_header.filename_len, infile);
-    fread(&tmp32, 1, 4, infile);
+	x = fread(&(lzop_header.filename), 1, lzop_header.filename_len, infile);
+    x = fread(&tmp32, 1, 4, infile);
     lzop_header.chksum = ntohl(tmp32);
     return(cfile);
 }
@@ -3709,6 +3754,7 @@ int cread(void *buf, size_t sz, size_t count, struct cfile *cfile)
     uint32_t ucblocksz;
     uint32_t cblocksz;
     size_t orig_bytesin = bytesin;
+    int x;
 
     do {
 	if (bytesin <= cfile->buf + cfile->bufsize - cfile->bufp) {
@@ -3720,15 +3766,15 @@ int cread(void *buf, size_t sz, size_t count, struct cfile *cfile)
 	    memcpy(buf, cfile->bufp, cfile->buf + cfile->bufsize - cfile->bufp);
 	    bytesin -= (cfile->buf + cfile->bufsize - cfile->bufp);
 	    buf += (cfile->buf + cfile->bufsize - cfile->bufp);
-	    fread(&tucblocksz, 1, 4, cfile->handle);
+	    x = fread(&tucblocksz, 1, 4, cfile->handle);
 	    ucblocksz = ntohl(tucblocksz);
 	    if (ucblocksz == 0)
 		return(cfile->buf + cfile->bufsize - cfile->bufp);
-	    fread(&tcblocksz, 1, 4, cfile->handle);
+	    x = fread(&tcblocksz, 1, 4, cfile->handle);
 	    cblocksz = ntohl(tcblocksz);
-	    fread(&tchksum, 1, 4, cfile->handle);
+	    x = fread(&tchksum, 1, 4, cfile->handle);
 	    chksum = ntohl(tchksum);
-	    fread(cfile->cbuf, 1, cblocksz, cfile->handle);
+	    x = fread(cfile->cbuf, 1, cblocksz, cfile->handle);
 	    if (cblocksz < ucblocksz) {
 		lzo1x_decompress(cfile->cbuf, cblocksz, cfile->buf, &(cfile->bufsize), NULL);
 	    }
@@ -3753,6 +3799,7 @@ int cgetline(char **buf, size_t *sz, struct cfile *cfile)
     uint32_t cblocksz;
     size_t count = 0;
     int n = 0;
+    int x;
 
     if (*buf == NULL) {
         *sz = 64;
@@ -3773,17 +3820,17 @@ int cgetline(char **buf, size_t *sz, struct cfile *cfile)
             return(n);
         }
         {
-            fread(&tucblocksz, 1, 4, cfile->handle);
+            x = fread(&tucblocksz, 1, 4, cfile->handle);
             ucblocksz = ntohl(tucblocksz);
             if (ucblocksz == 0) {
                 *(buf[n]) = '\0';
                 return(n);
             }
-            fread(&tcblocksz, 1, 4, cfile->handle);
+            x = fread(&tcblocksz, 1, 4, cfile->handle);
             cblocksz = ntohl(tcblocksz);
-            fread(&tchksum, 1, 4, cfile->handle);
+            x = fread(&tchksum, 1, 4, cfile->handle);
             chksum = ntohl(tchksum);
-            fread(cfile->cbuf, 1, cblocksz, cfile->handle);
+            x = fread(cfile->cbuf, 1, cblocksz, cfile->handle);
             if (cblocksz < ucblocksz) {
                 lzo1x_decompress(cfile->cbuf, cblocksz, cfile->buf, &(cfile->bufsize), NULL);
             }
