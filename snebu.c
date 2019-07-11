@@ -29,8 +29,8 @@ struct {
 
 int initdb(sqlite3 *bkcatalog);
 int sqlbusy(void *x, int y);
-char *stresc(char *src, unsigned char **target);
-char *strunesc(char *src, unsigned char **target);
+char *stresc(char *src, char **target);
+char *strunesc(char *src, char **target);
 long int strtoln(char *nptr, char **endptr, int base, int len);
 int parsex(char *instr, char p, char ***b, int max);
 int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
@@ -41,7 +41,7 @@ int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, c
 int my_sqlite3_step(sqlite3_stmt *stmt);
 int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt **ppStmt, const char **pzTail);
 
-int getconfig(char *configpatharg);
+void getconfig(char *configpatharg);
 int newbackup(int argc, char **argv);
 int submitfiles(int argc, char **argv);
 int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid);
@@ -52,7 +52,7 @@ int import(int argc, char **argv);
 int expire(int argc, char **argv);
 int purge(int argc, char **argv);
 int gethelp(int argc, char **argv);
-void help(char *topic);
+int help(char *topic);
 
 void concurrency_request_signal();
 void concurrency_request();
@@ -101,9 +101,6 @@ struct subfuncs{
 
 int main(int argc, char **argv)
 {
-    sqlite3 *bkcatalog;
-    int err;
-    char *subfunc;
     struct subfuncs subfuncs[] = {
 	{ "newbackup", &newbackup },
 	{ "submitfiles", &submitfiles },
@@ -178,13 +175,10 @@ int newbackup(int argc, char **argv)
 	char *filename;
 	char *linktarget;
     } fs;
-    int flen1;
     int x;
     char *sqlstmt = 0;
-    char *sqlstmt2 = 0;
     sqlite3_stmt *sqlres;
     int bkid = 0;
-    int fileid;
     sqlite3 *bkcatalog;
     char *bkcatalogp;
     char *sqlerr;
@@ -194,10 +188,9 @@ int newbackup(int argc, char **argv)
     int input_terminator = 0;
     int output_terminator = 0;
     int force_full_backup = 0;
-    unsigned char *escfname = 0;
-    unsigned char *escltarget = 0;
-    unsigned char *unescfname = 0;
-    unsigned char *unescltarget = 0;
+    char *escfname = 0;
+    char *unescfname = 0;
+    char *unescltarget = 0;
     int verbose = 0;
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
@@ -215,7 +208,7 @@ int newbackup(int argc, char **argv)
     };
     int longoptidx;
     int i;
-    int numfld;
+
 
     while ((optc = getopt_long(argc, argv, "n:d:r:v", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
@@ -381,8 +374,8 @@ int newbackup(int argc, char **argv)
     while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
 	int pathskip = 0;
 	char pathsub[4096];
-        flen1 = 0;
-	numfld = parsex(filespecs, '\t', &filespecsl, 13);
+	parsex(filespecs, '\t', &filespecsl, 13);
+
 	fs.ftype = *(filespecsl[0]);
 	fs.mode = (int) strtol(filespecsl[1], NULL, 8);
 	strncpy(fs.devid, filespecsl[2], 32);
@@ -901,9 +894,10 @@ int gethelp(int argc, char **argv) {
 	help(argv[1]);
     else
 	usage();
+    return(0);
 }
 
-void help(char *topic)
+int help(char *topic)
 {
     if (strcmp(topic, "newbackup") == 0)
 	printf(
@@ -1038,6 +1032,7 @@ void help(char *topic)
 	    "Usage: snebu help [ subcommand ]\n"
 	    " Displays help text\n"
 	);
+    return(0);
 }
 
 int submitfiles(int argc, char **argv)
@@ -1045,10 +1040,9 @@ int submitfiles(int argc, char **argv)
     int optc;
     char bkname[128];
     char datestamp[128];
-    char retention[128];
     int foundopts = 0;
     struct {
-        unsigned char filename[100];    //   0 - 99
+        char filename[100];    //   0 - 99
         char mode[8];                   // 100 - 107
         char nuid[8];                   // 108 - 115
         char ngid[8];                   // 116 - 123
@@ -1056,7 +1050,7 @@ int submitfiles(int argc, char **argv)
         char modtime[12];               // 136 - 147
         char chksum[8];                 // 148 - 155
         char ftype[1];                  // 156
-        unsigned char linktarget[100];  // 157 - 256
+        char linktarget[100];  // 157 - 256
         char ustar[6];                  // 257 - 262
         char ustarver[2];               // 263 - 264
         char auid[32];                  // 265 - 296
@@ -1127,14 +1121,9 @@ int submitfiles(int argc, char **argv)
     char cfsha1a[SHA_DIGEST_LENGTH * 2 + 10];
     char cfsha1d[SHA_DIGEST_LENGTH * 2 + 10];
     char cfsha1f[SHA_DIGEST_LENGTH * 2 + 10];
-    int zin[2]; // input pipe for compression
-    int zout[2]; // output pipe for compression
-    pid_t cprocess;
     int bkid = 0;
-    int fileid = 0;
     int x;
     char *sqlstmt = 0;
-    char *sqlstmt2 = 0;
     sqlite3_stmt *sqlres;
     struct stat tmpfstat;
     sqlite3 *bkcatalog;
@@ -1151,9 +1140,6 @@ int submitfiles(int argc, char **argv)
     int n_sparsedata;
     int n_esparsedata;
     int m_sparsedata = 20;
-    char *tsparsedata = 0;
-    char *destfilepaths = 0;
-    FILE *sparsefileh;
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
 	{ "datestamp", required_argument, NULL, 'd' },
@@ -1181,8 +1167,6 @@ int submitfiles(int argc, char **argv)
     char *paxsparsesegt = malloc(64);
     size_t paxsparsesegtn = 0;
     int paxsparsenseg = 0;
-    char *paxj = NULL;
-    int paxjn = 0;
     int paxsparsehdrsz = 0;
     int blocksize;
     char *mp1;
@@ -1227,10 +1211,6 @@ int submitfiles(int argc, char **argv)
     select(1, &input_s, 0, 0, 0);
     if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
 	fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
-	exit(1);
-    }
-    if (x != 0) {
-	fprintf(stderr, "Error %d opening backup catalog\n", x);
 	exit(1);
     }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
@@ -1710,7 +1690,10 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_bind_text(inbfrec, 11, fs.filename, -1, SQLITE_STATIC);
 	    sqlite3_bind_text(inbfrec, 12, fs.extdata == 0 ? "" : fs.extdata, -1, SQLITE_STATIC);
 	    sqlite3_bind_blob(inbfrec, 13, fs.xheaderlen == 0 ? "" : fs.xheader, fs.xheaderlen, SQLITE_STATIC);
-	    sqlite3_step(inbfrec) || fprintf(stderr, "sqlite3_step error\n"); ;
+	    if ( ! sqlite3_step(inbfrec)) {
+		fprintf(stderr, "sqlite3_step error\n");
+		exit(1);
+	    }
 	    sqlite3_reset(inbfrec);
 	    sqlite3_free(mp1);
 	    sqlite3_free(mp2);
@@ -1741,7 +1724,10 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_bind_text(inbfrec, 11, fs.filename, -1, SQLITE_STATIC);
 	    sqlite3_bind_text(inbfrec, 12, fs.linktarget == 0 ? "" : fs.linktarget, -1, SQLITE_STATIC);
 	    sqlite3_bind_blob(inbfrec, 13, fs.xheaderlen == 0 ? "" : fs.xheader, fs.xheaderlen, SQLITE_STATIC);
-	    sqlite3_step(inbfrec) || fprintf(stderr, "sqlite3_step error\n"); ;
+	    if (! sqlite3_step(inbfrec)) {
+	        fprintf(stderr, "sqlite3_step error\n"); ;
+		exit(1);
+	    }
 	    sqlite3_reset(inbfrec);
 	    sqlite3_free(mp1);
 	    sqlite3_free(mp2);
@@ -1771,7 +1757,7 @@ int submitfiles(int argc, char **argv)
 }
 
 struct tarhead {
-        unsigned char filename[100];
+        char filename[100];
         char mode[8];
         char nuid[8];
         char ngid[8];
@@ -1779,7 +1765,7 @@ struct tarhead {
         char modtime[12];
         char chksum[8];
         char ftype[1];
-        unsigned char linktarget[100];
+        char linktarget[100];
         char ustar[6];
         char ustarver[2];
         char auid[32];
@@ -1825,16 +1811,14 @@ int restore(int argc, char **argv)
     char retention[128];
 
     char *srcdir = 0;
-    char *manifestpath = 0;
-    FILE *manifest;
 //    FILE *curfile;
     struct cfile *curfile;
     const unsigned char *sha1;
-    const unsigned char *sfilename = 0;
-    unsigned char *filename;
+    const char *sfilename = 0;
+    char *filename;
     char graftfilename[8192];
-    const unsigned char *linktarget = 0;
-    const unsigned char *xheader_d = 0;
+    char *linktarget = 0;
+    const char *xheader_d = 0;
     char *xheader = 0;
     int xheaderlen = 0;
     int optc;
@@ -1843,14 +1827,10 @@ int restore(int argc, char **argv)
     char *p;
     unsigned int tmpchksum;
     char *sha1filepath;
-    int zin[2];
-    pid_t cprocess;
     int sha1file;
     unsigned long long bytestoread;
     int count;
     char curblock[512];
-    char *instr = 0;
-    size_t instrlen = 0;
     int paxsparsehdrsz = 0;
 
     struct {
@@ -1867,30 +1847,16 @@ int restore(int argc, char **argv)
     unsigned int lendian = 1;	// Little endian?
     int blocksize;
 
-    struct {
-        unsigned long long int offset;
-        unsigned long long int size;
-    } *sparsedata;
-    unsigned long long int s_realsize;
-    char s_isextended;
-    int n_sparsedata;
-    int n_esparsedata;
-    int m_sparsedata = 20;
     char *ssparseinfo = 0;
     size_t ssparseinfosz;
-    char *destdir = config.vault;
     long long int *sparseinfo;
     char *sparsefilepath = 0;
-    FILE *sparsefileh;
     int nsi;
     int msi;
-    int x;
     char *sqlstmt = 0;
     sqlite3_stmt *sqlres;
-    int bkid;
     sqlite3 *bkcatalog;
     char *bkcatalogp;
-    char *restore_filename = 0;
     char *filespec = 0;
     int filespeclen;
     char *sqlerr;
@@ -2139,15 +2105,15 @@ int restore(int argc, char **argv)
 
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
 	t.ftype = *sqlite3_column_text(sqlres, 0);
-	t.mode = strtol(sqlite3_column_text(sqlres, 1), 0, 8);
-	strncpy(t.auid, sqlite3_column_text(sqlres, 4), 32); t.auid[32] = 0;
+	t.mode = strtol((char *) sqlite3_column_text(sqlres, 1), 0, 8);
+	strncpy(t.auid, (char *) sqlite3_column_text(sqlres, 4), 32); t.auid[32] = 0;
 	t.nuid = sqlite3_column_int(sqlres, 5);
-	strncpy(t.agid, sqlite3_column_text(sqlres, 6), 32); t.agid[32] = 0;
+	strncpy(t.agid, (char *) sqlite3_column_text(sqlres, 6), 32); t.agid[32] = 0;
 	t.ngid = sqlite3_column_int(sqlres, 7);
 	t.filesize = sqlite3_column_int64(sqlres, 8);
 	sha1 = sqlite3_column_text(sqlres, 9);
 	t.modtime = sqlite3_column_int(sqlres, 10);
-	sfilename = sqlite3_column_text(sqlres, 11);
+	sfilename = (char *) sqlite3_column_text(sqlres, 11);
 	linktarget = 0;
 
 	sprintf(sha1filepath, "%s/%c%c/%s.lzo", srcdir, sha1[0], sha1[1], sha1 + 2);
@@ -2179,7 +2145,7 @@ int restore(int argc, char **argv)
 	}
 
 	if (t.ftype == '1' || t.ftype == '2') {
-	    linktarget = sqlite3_column_text(sqlres, 12);
+	    linktarget = (char *) sqlite3_column_text(sqlres, 12);
 	    t.filesize = 0;
 	}
 /*
@@ -2218,7 +2184,7 @@ int restore(int argc, char **argv)
 		    strcpy(longtarhead.auid, "root");
 		    strcpy(longtarhead.agid, "root");
 		    memcpy(longtarhead.chksum, "        ", 8);
-		    for (tmpchksum = 0, p = (unsigned char *) (&longtarhead), i = 512;
+		    for (tmpchksum = 0, p = (char *) (&longtarhead), i = 512;
 			i != 0; --i, ++p)
 			tmpchksum += 0xFF & *p;
 		    sprintf(longtarhead.chksum, "%6o", tmpchksum);
@@ -2253,7 +2219,7 @@ int restore(int argc, char **argv)
 		strcpy(longtarhead.auid, "root");
 		strcpy(longtarhead.agid, "root");
 		memcpy(longtarhead.chksum, "        ", 8);
-		for (tmpchksum = 0, p = (unsigned char *) (&longtarhead), i = 512;
+		for (tmpchksum = 0, p = (char *) (&longtarhead), i = 512;
 		    i != 0; --i, ++p)
 		    tmpchksum += 0xFF & *p;
 		sprintf(longtarhead.chksum, "%6.6o", tmpchksum);
@@ -2324,7 +2290,7 @@ int restore(int argc, char **argv)
 	    strcpy(xtarhead.auid, "root");
 	    strcpy(xtarhead.agid, "root");
 	    memcpy(xtarhead.chksum, "        ", 8);
-	    for (tmpchksum = 0, p = (unsigned char *) (&xtarhead), i = 512;
+	    for (tmpchksum = 0, p = (char *) (&xtarhead), i = 512;
 		i != 0; --i, ++p)
 		tmpchksum += 0xFF & *p;
 	    sprintf(xtarhead.chksum, "%6o", tmpchksum);
@@ -2426,7 +2392,7 @@ int restore(int argc, char **argv)
 	}
 
 	memcpy(tarhead.chksum, "        ", 8);
-	for (tmpchksum = 0, p = (unsigned char *) (&tarhead), i = 512;
+	for (tmpchksum = 0, p = (char *) (&tarhead), i = 512;
 	    i != 0; --i, ++p)
 	    tmpchksum += 0xFF & *p;
 	sprintf(tarhead.chksum, "%6.6o", tmpchksum);
@@ -2509,8 +2475,9 @@ int restore(int argc, char **argv)
 	curblock[i] = 0;
     for (i = 0; i < 20 - (tblocks % 20) ; i++)
 	fwrite(curblock, 1, 512, stdout);
+    return(0);
 }
-int getconfig(char *configpatharg)
+void getconfig(char *configpatharg)
 {
     char *configline = 0;
     size_t configlinesz;
@@ -2589,7 +2556,6 @@ int listbackups(int argc, char **argv)
     sqlite3_stmt *sqlres;
     char *bkcatalogp;
     char *sqlstmt = 0;
-    int bkid;
     int i;
     time_t bktime;
     char *bktimes;
@@ -2666,7 +2632,10 @@ int listbackups(int argc, char **argv)
 		rowcount++;
 		printf("%s\n", sqlite3_column_text(sqlres, 0));
 	    }
-	    rowcount == 0 && printf("No backups found %s %d\n", sqlstmt, err);
+	    if (rowcount == 0) {
+	        printf("No backups found %s %d\n", sqlstmt, err);
+		exit(1);
+	    }
 	    sqlite3_finalize(sqlres);
 	    sqlite3_free(sqlstmt);
 	}
@@ -2696,7 +2665,10 @@ int listbackups(int argc, char **argv)
 		oldbkname[127] = 0;
 		oldbktime = bktime;
 	    }
-	    rowcount == 0 && printf("No backups found for %s\n", sqlstmt);
+	    if (rowcount == 0) {
+		printf("No backups found for %s\n", sqlstmt);
+		exit(1);
+	    }
 	    sqlite3_finalize(sqlres);
 	    sqlite3_free(sqlstmt);
 	}
@@ -2719,7 +2691,10 @@ int listbackups(int argc, char **argv)
 		bktime, sqlite3_column_text(sqlres, 0), bktimes);
 
 	}
-	rowcount == 0 && printf("No backups found\n");
+	if (rowcount == 0) {
+	    printf("No backups found\n");
+	    exit(1);
+	}
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
@@ -2758,9 +2733,10 @@ int listbackups(int argc, char **argv)
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
+    return(0);
 }
 
-char *stresc(char *src, unsigned char **target)
+char *stresc(char *src, char **target)
 {
     int i;
     int j;
@@ -2790,7 +2766,7 @@ char *stresc(char *src, unsigned char **target)
     }
     return(*target);
 }
-char *strunesc(char *src, unsigned char **target)
+char *strunesc(char *src, char **target)
 {
     int i;
     int j;
@@ -2834,7 +2810,6 @@ int import(int argc, char **argv)
     char *sqlstmt = 0;
     char *sqlerr;
     int bkid;
-    int fileid;
     int i;
     char catalogpath[512];
     FILE *catalog;
@@ -2843,10 +2818,10 @@ int import(int argc, char **argv)
     char *destdir = config.vault;
     char *sparsefilepath = 0;
     FILE *sparsefileh;
-    unsigned char *filename = 0;
-    unsigned char *efilename = 0;
-    unsigned char *linktarget = 0;
-    unsigned char *elinktarget = 0;
+    char *filename = 0;
+    char *efilename = 0;
+    char *linktarget = 0;
+    char *elinktarget = 0;
     char sha1[SHA_DIGEST_LENGTH * 2 + 1];
     struct {
         char ftype[2];
@@ -3110,6 +3085,7 @@ int import(int argc, char **argv)
 
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 
+    return(0);
 }
 
 int export(int argc, char **argv)
@@ -3125,33 +3101,12 @@ int export(int argc, char **argv)
     sqlite3_stmt *sqlres;
     char *bkcatalogp;
     char *sqlstmt = 0;
-    char *sqlerr;
     int bkid;
-    int fileid;
     int i;
     char catalogpath[512];
     FILE *catalog;
-    char *instr = 0;
-    size_t instrlen = 0;
-    char *destdir = config.vault;
-    char *sparsefilepath = 0;
-    FILE *sparsefileh;
-    unsigned char *efilename = 0;
-    unsigned char *eextdata= 0;
-    char sha1[SHA_DIGEST_LENGTH * 2 + 1];
-    struct {
-        char ftype[2];
-        int mode;
-	char devid[33];
-	char inode[33];
-        char auid[33];
-        char agid[33];
-        int nuid;
-        int ngid;
-        int modtime;
-        unsigned long long int filesize;
-    } t;
-    int count;
+    char *efilename = 0;
+    char *eextdata= 0;
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
 	{ "datestamp", required_argument, NULL, 'd' },
@@ -3269,6 +3224,7 @@ int export(int argc, char **argv)
     }
     sqlite3_free(sqlstmt);
     fclose(catalog);
+    return(0);
 }
 
 int expire(int argc, char **argv)
@@ -3287,8 +3243,6 @@ int expire(int argc, char **argv)
     char *sqlstmt = 0;
     char *sqlstmt_tmp = 0;
     char *sqlerr;
-    int i;
-    char catalogpath[512];
     time_t cutoffdate;
     bkname[0] = 0;
     struct option longopts[] = {
@@ -3469,7 +3423,7 @@ int expire(int argc, char **argv)
 	sqlite3_free(sqlerr);
     }
     sqlite3_free(sqlstmt);
-
+    return(0);
 }
 int purge(int argc, char **argv)
 {
@@ -3580,7 +3534,7 @@ int purge(int argc, char **argv)
 	-1, &sqlres, 0);
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
 
-	sha1 = sqlite3_column_text(sqlres, 0);
+	sha1 = (char *) sqlite3_column_text(sqlres, 0);
 	sprintf((destfilepath = malloc(strlen(destdir) + strlen(sha1) + 7)), "%s/%2.2s/%s.lzo", destdir, sha1, sha1 + 2);
 	sprintf((destfilepathd = malloc(strlen(destdir) + strlen(sha1) + 9)), "%s/%2.2s/%s.lzo.d", destdir, sha1, sha1 + 2);
 	if (rename(destfilepath, destfilepathd) == 0) {
@@ -3599,6 +3553,7 @@ int purge(int argc, char **argv)
 	    "delete from purgelist where sha1 = '%s'", sha1)), 0, 0, &sqlerr);
     }
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+    return(0);
 }
 
 
@@ -3610,7 +3565,6 @@ struct cfile *cfinit(FILE *outfile)
     struct cfile *cfile;
     char magic[] = {  0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a };
     uint32_t chksum = 1;
-    int x;
 
     cfile = malloc(sizeof(*cfile));
     cfile->bufsize = 256 * 1024;
@@ -3641,7 +3595,6 @@ struct cfile *cfinit_r(FILE *infile)
 {
     struct cfile *cfile;
     char magic[] = {  0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a };
-    uint32_t chksum = 1;
     uint16_t tmp16;
     uint32_t tmp32;
     struct {
@@ -3660,7 +3613,6 @@ struct cfile *cfinit_r(FILE *infile)
 	char filename[256];
 	uint32_t chksum;
     } lzop_header;
-    int x;
 
     cfile = malloc(sizeof(*cfile));
     cfile->bufsize = 0;
@@ -3671,34 +3623,34 @@ struct cfile *cfinit_r(FILE *infile)
     cfile->handle = infile;
 
     // Process header
-    x = fread(&(lzop_header.magic), 1, sizeof(magic), infile);
-    x = fread(&tmp16, 1, 2, infile);
+    fread(&(lzop_header.magic), 1, sizeof(magic), infile);
+    fread(&tmp16, 1, 2, infile);
     lzop_header.version = ntohs(tmp16);
-    x = fread(&tmp16, 1, 2, infile);
+    fread(&tmp16, 1, 2, infile);
     lzop_header.libversion = ntohs(tmp16);
     if (lzop_header.version >= 0x0940) {
-	x = fread(&tmp16, 1, 2, infile);
+	fread(&tmp16, 1, 2, infile);
 	lzop_header.minversion = ntohl(tmp16);
     }
-    x = fread(&(lzop_header.compmethod), 1, 1, infile);
+    fread(&(lzop_header.compmethod), 1, 1, infile);
     if (lzop_header.version >= 0x0940)
-	x = fread(&(lzop_header.level), 1, 1, infile);
-    x = fread(&tmp32, 1, 4, infile);
+	fread(&(lzop_header.level), 1, 1, infile);
+    fread(&tmp32, 1, 4, infile);
     lzop_header.flags = ntohl(tmp32);
     if (lzop_header.flags & F_H_FILTER) {
-	x = fread(&tmp32, 1, 4, infile);
+	fread(&tmp32, 1, 4, infile);
 	lzop_header.filter = ntohl(tmp32);
     }
-    x = fread(&tmp32, 1, 4, infile);
+    fread(&tmp32, 1, 4, infile);
     lzop_header.mode = ntohl(tmp32);
-    x = fread(&tmp32, 1, 4, infile);
+    fread(&tmp32, 1, 4, infile);
     lzop_header.mtime_low = ntohl(tmp32);
-    x = fread(&tmp32, 1, 4, infile);
+    fread(&tmp32, 1, 4, infile);
     lzop_header.mtime_high = ntohl(tmp32);
-    x = fread(&(lzop_header.filename_len), 1, 1, infile);
+    fread(&(lzop_header.filename_len), 1, 1, infile);
     if (lzop_header.filename_len > 0)
-	x = fread(&(lzop_header.filename), 1, lzop_header.filename_len, infile);
-    x = fread(&tmp32, 1, 4, infile);
+	fread(&(lzop_header.filename), 1, lzop_header.filename_len, infile);
+    fread(&tmp32, 1, 4, infile);
     lzop_header.chksum = ntohl(tmp32);
     return(cfile);
 }
@@ -3708,7 +3660,6 @@ int cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile)
 {
     size_t bytesin = sz * count;
     uint32_t chksum;
-    int err;
 
     do {
 	if (bytesin <= cfile->bufsize - (cfile->bufp - cfile->buf)) {
@@ -3724,8 +3675,8 @@ int cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile)
 
 	    // write uncompressed block size
 	    fwrite(htonlp(cfile->bufsize), 1, 4, cfile->handle);
-	    chksum = lzo_adler32(1, cfile->buf, cfile->bufsize);
-	    err = lzo1x_1_compress(cfile->buf, cfile->bufsize, cfile->cbuf, &(cfile->cbufsize), cfile->working_memory);
+	    chksum = lzo_adler32(1, (unsigned char *) cfile->buf, cfile->bufsize);
+	    lzo1x_1_compress((unsigned char *) cfile->buf, cfile->bufsize, (unsigned char *) cfile->cbuf, &(cfile->cbufsize), cfile->working_memory);
 	    // write compressed block size
 	    if (cfile->cbufsize < cfile->bufsize)
 		fwrite(htonlp(cfile->cbufsize), 1, 4, cfile->handle);
@@ -3741,6 +3692,7 @@ int cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile)
 	    cfile->bufp = cfile->buf;
 	}
     } while (bytesin > 0);
+    return(0);
 }
 
 int cread(void *buf, size_t sz, size_t count, struct cfile *cfile)
@@ -3748,13 +3700,11 @@ int cread(void *buf, size_t sz, size_t count, struct cfile *cfile)
     size_t bytesin = sz * count;
     uint32_t tchksum;
     uint32_t chksum;
-    int err;
     uint32_t tucblocksz;
     uint32_t tcblocksz;
     uint32_t ucblocksz;
     uint32_t cblocksz;
     size_t orig_bytesin = bytesin;
-    int x;
 
     do {
 	if (bytesin <= cfile->buf + cfile->bufsize - cfile->bufp) {
@@ -3766,17 +3716,17 @@ int cread(void *buf, size_t sz, size_t count, struct cfile *cfile)
 	    memcpy(buf, cfile->bufp, cfile->buf + cfile->bufsize - cfile->bufp);
 	    bytesin -= (cfile->buf + cfile->bufsize - cfile->bufp);
 	    buf += (cfile->buf + cfile->bufsize - cfile->bufp);
-	    x = fread(&tucblocksz, 1, 4, cfile->handle);
+	    fread(&tucblocksz, 1, 4, cfile->handle);
 	    ucblocksz = ntohl(tucblocksz);
 	    if (ucblocksz == 0)
 		return(cfile->buf + cfile->bufsize - cfile->bufp);
-	    x = fread(&tcblocksz, 1, 4, cfile->handle);
+	    fread(&tcblocksz, 1, 4, cfile->handle);
 	    cblocksz = ntohl(tcblocksz);
-	    x = fread(&tchksum, 1, 4, cfile->handle);
+	    fread(&tchksum, 1, 4, cfile->handle);
 	    chksum = ntohl(tchksum);
-	    x = fread(cfile->cbuf, 1, cblocksz, cfile->handle);
+	    fread(cfile->cbuf, 1, cblocksz, cfile->handle);
 	    if (cblocksz < ucblocksz) {
-		lzo1x_decompress(cfile->cbuf, cblocksz, cfile->buf, &(cfile->bufsize), NULL);
+		lzo1x_decompress((unsigned char *) cfile->cbuf, cblocksz, (unsigned char *) cfile->buf, &(cfile->bufsize), NULL);
 	    }
 	    else {
 		memcpy(cfile->buf, cfile->cbuf, cblocksz);
@@ -3792,14 +3742,11 @@ int cgetline(char **buf, size_t *sz, struct cfile *cfile)
 {
     uint32_t tchksum;
     uint32_t chksum;
-    int err;
     uint32_t tucblocksz;
     uint32_t tcblocksz;
     uint32_t ucblocksz;
     uint32_t cblocksz;
-    size_t count = 0;
     int n = 0;
-    int x;
 
     if (*buf == NULL) {
         *sz = 64;
@@ -3820,19 +3767,19 @@ int cgetline(char **buf, size_t *sz, struct cfile *cfile)
             return(n);
         }
         {
-            x = fread(&tucblocksz, 1, 4, cfile->handle);
+            fread(&tucblocksz, 1, 4, cfile->handle);
             ucblocksz = ntohl(tucblocksz);
             if (ucblocksz == 0) {
                 *(buf[n]) = '\0';
                 return(n);
             }
-            x = fread(&tcblocksz, 1, 4, cfile->handle);
+            fread(&tcblocksz, 1, 4, cfile->handle);
             cblocksz = ntohl(tcblocksz);
-            x = fread(&tchksum, 1, 4, cfile->handle);
+            fread(&tchksum, 1, 4, cfile->handle);
             chksum = ntohl(tchksum);
-            x = fread(cfile->cbuf, 1, cblocksz, cfile->handle);
+            fread(cfile->cbuf, 1, cblocksz, cfile->handle);
             if (cblocksz < ucblocksz) {
-                lzo1x_decompress(cfile->cbuf, cblocksz, cfile->buf, &(cfile->bufsize), NULL);
+                lzo1x_decompress((unsigned char *) cfile->cbuf, cblocksz, (unsigned char *) cfile->buf, &(cfile->bufsize), NULL);
             }
             else {
                 memcpy(cfile->buf, cfile->cbuf, cblocksz);
@@ -3846,13 +3793,12 @@ int cgetline(char **buf, size_t *sz, struct cfile *cfile)
 // Close lzop file
 int cclose(struct cfile *cfile)
 {
-    int err;
     uint32_t chksum;
 
     if (cfile->bufp - cfile->buf > 0) {
 	fwrite(htonlp(cfile->bufp - cfile->buf), 1, 4, cfile->handle);
-	chksum = lzo_adler32(1, cfile->buf, cfile->bufp - cfile->buf);
-	err = lzo1x_1_compress(cfile->buf, cfile->bufp - cfile->buf, cfile->cbuf, &(cfile->cbufsize), cfile->working_memory);
+	chksum = lzo_adler32(1, (unsigned char *) cfile->buf, cfile->bufp - cfile->buf);
+	lzo1x_1_compress((unsigned char *) cfile->buf, cfile->bufp - cfile->buf, (unsigned char *) cfile->cbuf, &(cfile->cbufsize), cfile->working_memory);
 	if (cfile->cbufsize < (cfile->bufp - cfile->buf))
 	    fwrite(htonlp(cfile->cbufsize), 1, 4, cfile->handle);
 	else
@@ -3869,6 +3815,7 @@ int cclose(struct cfile *cfile)
     free(cfile->cbuf);
     free(cfile->working_memory);
     free(cfile);
+    return(0);
 }
 int cclose_r(struct cfile *cfile)
 {
@@ -3877,6 +3824,7 @@ int cclose_r(struct cfile *cfile)
 //    free(cfile->working_memory);
     fclose(cfile->handle);
     free(cfile);
+    return(0);
 }
 
 uint32_t *htonlp(uint32_t v)
@@ -3895,7 +3843,7 @@ uint16_t *htonsp(uint16_t v)
 size_t fwritec(const void *ptr, size_t size, size_t nmemb, FILE *stream, uint32_t *chksum)
 {
     size_t r;
-    fwrite(ptr, size, nmemb, stream);
+    r = fwrite(ptr, size, nmemb, stream);
     *chksum = lzo_adler32(*chksum, ptr, size * nmemb);
     return(r);
 }
@@ -3974,8 +3922,6 @@ int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int inva
     char *cname;
     int cnamelen;
     char *cvalue;
-    int cvaluelen;
-    int addnvplen = 0;
     int innamelen = strlen(inname);
     int innvplen;
     static char *nvpline = NULL;
@@ -3992,7 +3938,6 @@ int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int inva
         cvalue = strchr(cname, '=');
         cnamelen = cvalue - cname;
         cvalue++;
-        cvaluelen = cnvp + cnvplen - cvalue;
         if (strncmp(inname, cname, cnamelen) == 0) {
             if (innvplen > cnvplen) {
                 *paxlen = *paxlen + (innvplen - cnvplen);
@@ -4027,7 +3972,6 @@ int delpaxvar(char **paxdata, int *paxlen, char *inname) {
     char *cname;
     int cnamelen;
     char *cvalue;
-    int cvaluelen;
 
     while (cnvp < *paxdata + *paxlen) {
         cnvplen = strtol(cnvp, &cname, 10);
@@ -4035,7 +3979,6 @@ int delpaxvar(char **paxdata, int *paxlen, char *inname) {
         cvalue = strchr(cname, '=');
         cnamelen = cvalue - cname;
         cvalue++;
-        cvaluelen = cnvp + cnvplen - cvalue;
         if (strncmp(inname, cname, cnamelen) == 0) {
             memmove(cnvp, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
             *paxlen = *paxlen - cnvplen;
@@ -4070,6 +4013,7 @@ unsigned int ilog10(unsigned int n) {
 		min = mid;
 	}
     }
+    return(0);
 }
 
 
@@ -4207,161 +4151,162 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 {
     char *sqlerr;
-    sqlite3_stmt *sqlres;
     char *sqlstmt = 0;
-	    sqlite3_exec(bkcatalog,
-		"create temporary table if not exists received_file_entities_ldi_t (  \n"
-		"    ftype         char,  \n"
-		"    permission    char,  \n"
-		"    device_id     char,  \n"
-		"    inode         char,  \n"
-		"    user_name     char,  \n"
-		"    user_id       integer,  \n"
-		"    group_name    char,  \n"
-		"    group_id      integer,  \n"
-		"    size          integer,  \n"
-		"    sha1           char,  \n"
-		"    cdatestamp    integer,  \n"
-		"    datestamp     integer,  \n"
-		"    filename      char,  \n"
-		"    extdata       char default '',  \n"
-		"    xheader       blob default '',  \n"
-		"constraint received_file_entities_ldi_t_c1 unique (  \n"
-		"    ftype,  \n"
-		"    permission,  \n"
-		"    device_id,  \n"
-		"    inode,  \n"
-		"    user_name,  \n"
-		"    user_id,  \n"
-		"    group_name,  \n"
-		"    group_id,  \n"
-		"    size,  \n"
-		"    sha1,  \n"
-		"    cdatestamp,  \n"
-		"    datestamp,  \n"
-		"    filename,  \n"
-		"    extdata,  \n"
-		"    xheader ))", 0, 0, &sqlerr);
+    sqlite3_exec(bkcatalog,
+	"create temporary table if not exists received_file_entities_ldi_t (  \n"
+	"    ftype         char,  \n"
+	"    permission    char,  \n"
+	"    device_id     char,  \n"
+	"    inode         char,  \n"
+	"    user_name     char,  \n"
+	"    user_id       integer,  \n"
+	"    group_name    char,  \n"
+	"    group_id      integer,  \n"
+	"    size          integer,  \n"
+	"    sha1           char,  \n"
+	"    cdatestamp    integer,  \n"
+	"    datestamp     integer,  \n"
+	"    filename      char,  \n"
+	"    extdata       char default '',  \n"
+	"    xheader       blob default '',  \n"
+	"constraint received_file_entities_ldi_t_c1 unique (  \n"
+	"    ftype,  \n"
+	"    permission,  \n"
+	"    device_id,  \n"
+	"    inode,  \n"
+	"    user_name,  \n"
+	"    user_id,  \n"
+	"    group_name,  \n"
+	"    group_id,  \n"
+	"    size,  \n"
+	"    sha1,  \n"
+	"    cdatestamp,  \n"
+	"    datestamp,  \n"
+	"    filename,  \n"
+	"    extdata,  \n"
+	"    xheader ))", 0, 0, &sqlerr);
 
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
 
-	    sqlite3_exec(bkcatalog,
-		"create temporary table if not exists received_file_entities_ldi_t1 (  \n"
-		"    ftype         char,  \n"
-		"    permission    char,  \n"
-		"    user_name     char,  \n"
-		"    user_id       integer,  \n"
-		"    group_name    char,  \n"
-		"    group_id      integer,  \n"
-		"    size          integer,  \n"
-		"    sha1           char,  \n"
-		"    datestamp     integer,  \n"
-		"    filename      char,  \n"
-		"    extdata       char default '',  \n"
-		"    xheader       blob default '',  \n"
-		"constraint received_file_entities_ldi_t_c1 unique (  \n"
-		"    ftype,  \n"
-		"    permission,  \n"
-		"    user_name,  \n"
-		"    user_id,  \n"
-		"    group_name,  \n"
-		"    group_id,  \n"
-		"    size,  \n"
-		"    sha1,  \n"
-		"    datestamp,  \n"
-		"    filename,  \n"
-		"    extdata,  \n"
-		"    xheader ))", 0, 0, &sqlerr);
+    sqlite3_exec(bkcatalog,
+	"create temporary table if not exists received_file_entities_ldi_t1 (  \n"
+	"    ftype         char,  \n"
+	"    permission    char,  \n"
+	"    user_name     char,  \n"
+	"    user_id       integer,  \n"
+	"    group_name    char,  \n"
+	"    group_id      integer,  \n"
+	"    size          integer,  \n"
+	"    sha1           char,  \n"
+	"    datestamp     integer,  \n"
+	"    filename      char,  \n"
+	"    extdata       char default '',  \n"
+	"    xheader       blob default '',  \n"
+	"constraint received_file_entities_ldi_t_c1 unique (  \n"
+	"    ftype,  \n"
+	"    permission,  \n"
+	"    user_name,  \n"
+	"    user_id,  \n"
+	"    group_name,  \n"
+	"    group_id,  \n"
+	"    size,  \n"
+	"    sha1,  \n"
+	"    datestamp,  \n"
+	"    filename,  \n"
+	"    extdata,  \n"
+	"    xheader ))", 0, 0, &sqlerr);
 
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
-	    sqlite3_exec(bkcatalog,
-		"create index if not exists "
-		"received_file_entities_ldi_t1_i1 "
-		"on received_file_entities_ldi_t1 ( "
-		"extdata, filename)", 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
-	    sqlite3_exec(bkcatalog,
-		"create index if not exists "
-		"received_file_entities_ldi_t1_i2 "
-		"on received_file_entities_ldi_t1 ( "
-		"filename, extdata)", 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog,
+	"create index if not exists "
+	"received_file_entities_ldi_t1_i1 "
+	"on received_file_entities_ldi_t1 ( "
+	"extdata, filename)", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog,
+	"create index if not exists "
+	"received_file_entities_ldi_t1_i2 "
+	"on received_file_entities_ldi_t1 ( "
+	"filename, extdata)", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
 
-            sqlite3_exec(bkcatalog,
-                "create temporary table if not exists needed_file_entities_current ( "
-		"    device_id     char, "
-		"    inode         char, "
-		"    filename      char, "
-		"    infilename    char, "
-		"    size          integer, "
-		"    cdatestamp    integer, "
-		"unique ( "
-		"    filename, "
-		"    infilename ))", 0, 0, &sqlerr);
+    sqlite3_exec(bkcatalog,
+	"create temporary table if not exists needed_file_entities_current ( "
+	"    device_id     char, "
+	"    inode         char, "
+	"    filename      char, "
+	"    infilename    char, "
+	"    size          integer, "
+	"    cdatestamp    integer, "
+	"unique ( "
+	"    filename, "
+	"    infilename ))", 0, 0, &sqlerr);
 
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
 
-	    sqlite3_exec(bkcatalog,
-		"create index if not exists "
-		"needed_file_entities_current_i1 "
-		"on needed_file_entities_current ( "
-		"infilename)", 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
-	    sqlite3_exec(bkcatalog,
-		"create index if not exists "
-		"needed_file_entities_current_i2 "
-		"on needed_file_entities_current ( "
-		"filename)", 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
-	    sqlite3_exec(bkcatalog,
-		"create temporary table if not exists received_file_entities_t "
-		"as select * from received_file_entities where 0", 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
-	    sqlite3_exec(bkcatalog,
-	    "create index if not exists received_file_entities_t_i1 on received_file_entities_t (  \n"
-	    "    filename)", 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s\n\n\n",sqlerr);
-		sqlite3_free(sqlerr);
-	    }
-	    sqlite3_exec(bkcatalog,
-	    "create index if not exists received_file_entities_t_i2 on received_file_entities_t (  \n"
-	    "    extdata)", 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s\n\n\n",sqlerr);
-		sqlite3_free(sqlerr);
-	    }
-	    sqlite3_exec(bkcatalog,
-		"create temporary table if not exists diskfiles_t "
-		"as select * from diskfiles where 0", 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		sqlite3_free(sqlerr);
-	    }
+    sqlite3_exec(bkcatalog,
+	"create index if not exists "
+	"needed_file_entities_current_i1 "
+	"on needed_file_entities_current ( "
+	"infilename)", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog,
+	"create index if not exists "
+	"needed_file_entities_current_i2 "
+	"on needed_file_entities_current ( "
+	"filename)", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog,
+	"create temporary table if not exists received_file_entities_t "
+	"as select * from received_file_entities where 0", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog,
+    "create index if not exists received_file_entities_t_i1 on received_file_entities_t (  \n"
+    "    filename)", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n\n\n",sqlerr);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog,
+    "create index if not exists received_file_entities_t_i2 on received_file_entities_t (  \n"
+    "    extdata)", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n\n\n",sqlerr);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_exec(bkcatalog,
+	"create temporary table if not exists diskfiles_t "
+	"as select * from diskfiles where 0", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+	
+    return(0);
 }
 int logaction(sqlite3 *bkcatalog, int backupset_id, int action, char *message)
 {
@@ -4379,7 +4324,6 @@ int logaction(sqlite3 *bkcatalog, int backupset_id, int action, char *message)
 int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, char **, char **), void *carg1, char **errmsg)
 {
     int r = 0;
-    int count = 0;
     if (concurrency_sleep_requested == 1) {
 	concurrency_sleep_requested = 0;
 	fprintf(stderr, "sqlite3_exec pausing by request\n");
@@ -4395,8 +4339,6 @@ int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, c
 	    sleep(2);
     }
     do {
-//	if ((++count) % 20 == 0)
-//	    concurrency_request();
         r = sqlite3_exec(db, sql, callback, carg1, errmsg);
 	if (r == 5) {
 	    usleep(100000);
@@ -4409,15 +4351,12 @@ int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, c
 int my_sqlite3_step(sqlite3_stmt *stmt)
 {
     int r = 0;
-    int count = 0;
     if (concurrency_sleep_requested == 1) {
 	fprintf(stderr, "sqlite3_step pausing by request\n");
 	sleep(2);
 	concurrency_sleep_requested = 0;
     }
     do {
-//	if ((++count) % 20 == 0)
-//	    concurrency_request();
         r = sqlite3_step(stmt);
 	if (r == 5) {
 	    usleep(100000);
@@ -4428,7 +4367,6 @@ int my_sqlite3_step(sqlite3_stmt *stmt)
 int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt **ppStmt, const char **pzTail)
 {
     int r = 0;
-    int count = 0;
     if (concurrency_sleep_requested == 1) {
 	fprintf(stderr, "sqlite3_prepare_v2 pausing by request\n");
 	if (in_a_transaction == 1) {
@@ -4441,8 +4379,6 @@ int my_sqlite3_prepare_v2(sqlite3 *db, const char *zSql, int nByte, sqlite3_stmt
 	concurrency_sleep_requested = 0;
     }
     do {
-//	if ((++count) % 20 == 0)
-//	    concurrency_request();
 	r = sqlite3_prepare_v2(db, zSql, nByte, ppStmt, pzTail);
 	if (r == 5) {
 	    usleep(100000);
@@ -4472,7 +4408,6 @@ void concurrency_request()
     size_t instrlen = 0;
     int numpid = 0;
     pid_t mypid;
-    char *p;
     int i;
 
     fprintf(stderr, "Requesting concurrency\n");
