@@ -113,19 +113,30 @@ int main(int argc, char **argv)
 	{ "help", &gethelp }
     };
     struct option longopts[] = {
-	{ "config", required_argument, NULL, 'c' }
+	{ "config", required_argument, NULL, 'c' },
+	{ "vault", required_argument, NULL, 'v' },
+	{ "catalog", required_argument, NULL, 'm' },
+	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
     int optc;
     char *configfile = NULL;
     int i;
     int n;
+    char *vaultdir = NULL;
+    char *metadir = NULL;
     signal(SIGUSR1, concurrency_request_signal);
 
-    while ((optc = getopt_long(argc, argv, "+c:", longopts, &longoptidx)) >= 0) {
+    while ((optc = getopt_long(argc, argv, "+c:v:m:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'c':
 		configfile = optarg;
+		break;
+	    case 'v':
+		vaultdir = optarg;
+		break;
+	    case 'm':
+		metadir = optarg;
 		break;
 	    default:
 		usage();
@@ -134,6 +145,13 @@ int main(int argc, char **argv)
     }
 
     getconfig(configfile);
+    if (vaultdir != NULL) {
+	asprintf(&(config.vault), "%s", vaultdir);
+    }
+    if (metadir != NULL) {
+	asprintf(&(config.meta), "%s", metadir);
+    }
+
     if (optind < argc) {
 	for (i = 0; i < sizeof(subfuncs) / sizeof(*subfuncs); i++) {
 	    if (strcmp(argv[optind], subfuncs[i].funcname) == 0) {
@@ -1874,18 +1892,26 @@ int restore(int argc, char **argv)
 	{ "nopax", no_argument, NULL, 0 },
 	{ "graft", required_argument, NULL, 0 },
 	{ "verbose", no_argument, NULL, 'v' },
+	{ "files-from", required_argument, NULL, 'T' },
+	{ "null", no_argument, NULL, 0 },
 	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
     time_t bdatestamp;
     time_t edatestamp;
     char *range;
+    FILE *FILES_FROM = NULL;
+    char *files_from_fname = malloc(4097);
+    char *files_from_fnameu = malloc(4097);
+    char files_from_0 = 0;
+    int files_from_fname_len = 4096;
+    char *join_files_from_sql = NULL;
 
     lendian = (unsigned int) (((unsigned char *)(&lendian))[0]); // little endian test
     msi = 256;
     sparseinfo = malloc(msi * sizeof(*sparseinfo));
 
-    while ((optc = getopt_long(argc, argv, "n:d:", longopts, &longoptidx)) >= 0) {
+    while ((optc = getopt_long(argc, argv, "n:d:T:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -1918,7 +1944,7 @@ int restore(int argc, char **argv)
 			graft = realloc(graft, sizeof(*graft) * maxgrafts);
 		    }
 		    if ((grafteqptr = strchr(optarg, '=')) == 0) {
-			help("newbackup");
+			help("restore");
 			exit(1);
 		    }
 		    graft[numgrafts][0] = optarg;
@@ -1932,8 +1958,18 @@ int restore(int argc, char **argv)
 		    while (*grafteqptr != 0 && *grafteqptr == ' ')
 			*(grafteqptr++) = 0;
 		    numgrafts++;
-
 		}
+		if (strcmp("null", longopts[longoptidx].name) == 0)
+                    files_from_0 = 1;
+		break;
+	    case 'T':
+		if (strcmp(optarg, "-") == 0)
+		    FILES_FROM = stdin;
+		else
+		    if ((FILES_FROM = fopen(optarg, "r")) == NULL) {
+			fprintf(stderr, "Error opening file %s\n", optarg);
+			return(1);
+		    }
 		break;
 	    default:
 		usage();
@@ -1954,9 +1990,9 @@ int restore(int argc, char **argv)
 	filespec[0] = 0;
 	for (i = optind; i < argc; i++) {
 	    if (i == optind)
-		strcat(filespec, " and (filename glob ");
+		strcat(filespec, " and (f.filename glob ");
 	    else
-		strcat(filespec, " or filename glob ");
+		strcat(filespec, " or f.filename glob ");
 	    strcat(filespec, sqlite3_mprintf("'%q'", argv[i]));
 	}
 	strcat(filespec, ")");
@@ -1978,79 +2014,85 @@ int restore(int argc, char **argv)
 	srcdir = config.vault;
 
     sha1filepath = malloc(strlen(srcdir) + 48);
-#if 0
-    x = sqlite3_prepare_v2(bkcatalog,
-        (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
-            "where name = '%q' and serial = '%q'",
-            bkname, datestamp)), -1, &sqlres, 0);
-    if (x != 0)
-	printf("Error %d\n", x);
-    if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
-        bkid = sqlite3_column_int(sqlres, 0);
-    }
-    else {
-        fprintf(stderr, "bkid not found 2: %s\n", sqlstmt);
-	return(1);
-    }
-    sqlite3_finalize(sqlres);
-    sqlite3_free(sqlstmt);
-#endif
 
     // Zero out tar header
     for (i = 0; i < sizeof(tarhead); i++) {
 	(((unsigned char *) (&tarhead)))[i] = 0;
     }
 
-//  
-   	range = strchr(datestamp, '-');
-	if (range != NULL) {
-	    *range = '\0';
-	    if (*datestamp != '\0')
-		bdatestamp = atoi(datestamp);
-	    else
-		bdatestamp = 0;
-	    if (*(range + 1) != '\0')
-		edatestamp = atoi(range + 1);
-	    else
-		edatestamp = INT32_MAX;
-	}
-	else {
+    range = strchr(datestamp, '-');
+    if (range != NULL) {
+	*range = '\0';
+	if (*datestamp != '\0')
 	    bdatestamp = atoi(datestamp);
-	    edatestamp = atoi(datestamp);
+	else
+	    bdatestamp = 0;
+	if (*(range + 1) != '\0')
+	    edatestamp = atoi(range + 1);
+	else
+	    edatestamp = INT32_MAX;
+    }
+    else {
+	bdatestamp = atoi(datestamp);
+	edatestamp = atoi(datestamp);
+    }
+
+    if (FILES_FROM != NULL) {
+	sqlite3_exec(bkcatalog, sqlstmt =
+	    "create temporary table if not exists files_from ( "
+	    "filename char, "
+	    "constraint files_existc1 unique ( "
+	    "    filename))", 0, 0, 0);
+	while ((files_from_0 == 0 ?
+	    getline(&files_from_fname, &files_from_fname_len, FILES_FROM) :
+	    getdelim(&files_from_fname, &files_from_fname_len, 0, FILES_FROM)) > -1) {
+	    if (files_from_fname[strlen(files_from_fname) - 1] == '\n')
+		files_from_fname[strlen(files_from_fname) - 1] = '\0';
+	    sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
+		"insert or ignore into files_from "
+		"(filename) values ('%q')", files_from_0 != 0 ? files_from_fname :
+		strunesc(files_from_fname, &files_from_fnameu)), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n\n\n",sqlerr);
+		sqlite3_free(sqlerr);
+	    }
 	}
-	sqlite3_exec(bkcatalog, sqlstmt = "  "
-	"create temporary table if not exists restore_file_entities (  \n"
-    	    "file_id       integer primary key,  \n"
-       	    "ftype         char,  \n"
-	    "permission    char,  \n"
-    	    "device_id     char,  \n"
-       	    "inode         char,  \n"
-	    "user_name     char,  \n"
-	    "user_id       integer,  \n"
-	    "group_name    char,  \n"
-	    "group_id      integer,  \n"
-	    "size          integer,  \n"
-	    "sha1           char,  \n"
-	    "datestamp     integer,  \n"
-	    "filename      char,  \n"
-	    "extdata       char default '',  \n"
-	    "xheader       blob default '',  \n"
-	    "serial        char, \n"
-	"constraint restore_file_entitiesc1 unique (  \n"
-	    "ftype,  \n"
-	    "permission,  \n"
-	    "device_id,  \n"
-	    "inode,  \n"
-	    "user_name,  \n"
-	    "user_id,  \n"
-	    "group_name,  \n"
-	    "group_id,  \n"
-	    "size,  \n"
-	    "sha1,  \n"
-	    "datestamp,  \n"
-	    "filename,  \n"
-	    "extdata,  \n"
-	    "xheader ))", 0, 0, 0);
+	join_files_from_sql = "join files_from r on f.filename = r.filename";
+
+    }
+    sqlite3_exec(bkcatalog, sqlstmt = "  "
+    "create temporary table if not exists restore_file_entities (  \n"
+	"file_id       integer primary key,  \n"
+	"ftype         char,  \n"
+	"permission    char,  \n"
+	"device_id     char,  \n"
+	"inode         char,  \n"
+	"user_name     char,  \n"
+	"user_id       integer,  \n"
+	"group_name    char,  \n"
+	"group_id      integer,  \n"
+	"size          integer,  \n"
+	"sha1           char,  \n"
+	"datestamp     integer,  \n"
+	"filename      char,  \n"
+	"extdata       char default '',  \n"
+	"xheader       blob default '',  \n"
+	"serial        char, \n"
+    "constraint restore_file_entitiesc1 unique (  \n"
+	"ftype,  \n"
+	"permission,  \n"
+	"device_id,  \n"
+	"inode,  \n"
+	"user_name,  \n"
+	"user_id,  \n"
+	"group_name,  \n"
+	"group_id,  \n"
+	"size,  \n"
+	"sha1,  \n"
+	"datestamp,  \n"
+	"filename,  \n"
+	"extdata,  \n"
+	"xheader ))", 0, 0, 0);
 	
 
     sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
@@ -2058,9 +2100,10 @@ int restore(int argc, char **argv)
 	"(ftype, permission, device_id, inode, user_name, user_id,  "
 	"group_name, group_id, size, sha1, datestamp, filename, extdata, xheader, serial)  "
 	"select ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata, xheader, "
-	"MAX(serial) from file_entities_bd where name = '%q' and serial >= %d "
-	"and serial <= %d%s group by filename order by filename, serial",
+	"group_name, group_id, size, sha1, datestamp, f.filename, extdata, xheader, "
+	"MAX(serial) from file_entities_bd f %s where name = '%q' and serial >= %d "
+	"and serial <= %d%s group by f.filename order by f.filename, serial",
+	join_files_from_sql != NULL ? join_files_from_sql : "",
 	bkname, bdatestamp, edatestamp, filespec != 0 ?  filespec : ""), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n\n\n",sqlerr);
@@ -2480,7 +2523,7 @@ int restore(int argc, char **argv)
 void getconfig(char *configpatharg)
 {
     char *configline = 0;
-    size_t configlinesz;
+    size_t configlinesz = 0;
     struct stat tmpfstat;
     char configpath[256];
     FILE *configfile;
@@ -2570,11 +2613,15 @@ int listbackups(int argc, char **argv)
     struct option longopts[] = {
 	{ "name", required_argument, NULL, 'n' },
 	{ "datestamp", required_argument, NULL, 'd' },
+	{ "long", no_argument, NULL, 'l' },
+	{ "long0", no_argument, NULL, '0' },
 	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
+    int longoutput = 0;
+    int long0output = 0;
 
-    while ((optc = getopt_long(argc, argv, "n:d:", longopts, &longoptidx)) >= 0) {
+    while ((optc = getopt_long(argc, argv, "n:d:l0", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -2586,12 +2633,21 @@ int listbackups(int argc, char **argv)
 		datestamp[127] = 0;
 		foundopts |= 2;
 		break;
+	    case 'l':
+		longoutput = 1;
+		foundopts |= 4;
+		break;
+	    case '0':
+		long0output = 1;
+		foundopts |= 8;
+		break;
 	    default:
 		usage();
 		return(1);
 	}
     }
-    if (foundopts != 0 && foundopts != 1 && foundopts != 3) {
+    if (foundopts != 0 && foundopts != 1 && foundopts != 3 && foundopts != 7 && foundopts != 15) {
+	printf("foundopts = %d\n", foundopts);
         usage();
         return(1);
     }
@@ -2733,6 +2789,159 @@ int listbackups(int argc, char **argv)
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
+    else if (foundopts == 7) {
+	range = strchr(datestamp, '-');
+	if (range != NULL) {
+	    *range = '\0';
+	    if (*datestamp != '\0')
+		bdatestamp = atoi(datestamp);
+	    else
+		bdatestamp = 0;
+	    if (*(range + 1) != '\0')
+		edatestamp = atoi(range + 1);
+	    else
+		edatestamp = INT32_MAX;
+	}
+	else {
+	    bdatestamp = atoi(datestamp);
+	    edatestamp = atoi(datestamp);
+	}
+	sqlite3_prepare_v2(bkcatalog,
+	    (sqlstmt = sqlite3_mprintf("select distinct serial, ftype, \n"
+		"permission, device_id, inode, user_name, user_id, \n"
+		"group_name, group_id, size, sha1, cdatestamp, datestamp, \n"
+		"filename, extdata \n"
+		"from file_entities_bd where name = '%q' and serial >= %d "
+		"and serial <= %d%s", bkname, bdatestamp, edatestamp, filespec != 0 ? filespec : "")),
+		-1, &sqlres, 0);
+
+	if (bdatestamp == edatestamp)
+	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
+		printf("%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s\t%s\n",
+
+		strcmp(sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
+		    strcmp(sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
+		    strcmp(sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
+		    strcmp(sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
+		sqlite3_column_text(sqlres, 2),
+		sqlite3_column_text(sqlres, 3),
+		sqlite3_column_text(sqlres, 4),
+		sqlite3_column_text(sqlres, 5),
+		sqlite3_column_int(sqlres, 6),
+		sqlite3_column_text(sqlres, 7),
+		sqlite3_column_int(sqlres, 8),
+		sqlite3_column_int64(sqlres, 9),
+		sqlite3_column_text(sqlres, 10),
+		sqlite3_column_int(sqlres, 11),
+		sqlite3_column_int(sqlres, 12),
+		sqlite3_column_text(sqlres, 13),
+		sqlite3_column_text(sqlres, 14));
+	    }
+	else
+	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
+		printf("%10d %s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s\t%s\n",
+		sqlite3_column_int(sqlres, 0),
+		strcmp(sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
+		    strcmp(sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
+		    strcmp(sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
+		    strcmp(sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
+		sqlite3_column_text(sqlres, 2),
+		sqlite3_column_text(sqlres, 3),
+		sqlite3_column_text(sqlres, 4),
+		sqlite3_column_text(sqlres, 5),
+		sqlite3_column_int(sqlres, 6),
+		sqlite3_column_text(sqlres, 7),
+		sqlite3_column_int(sqlres, 8),
+		sqlite3_column_int64(sqlres, 9),
+		sqlite3_column_text(sqlres, 10),
+		sqlite3_column_int(sqlres, 11),
+		sqlite3_column_int(sqlres, 12),
+		sqlite3_column_text(sqlres, 13),
+		sqlite3_column_text(sqlres, 14));
+	    }
+	sqlite3_finalize(sqlres);
+	sqlite3_free(sqlstmt);
+    }
+    else if (foundopts == 15) {
+	range = strchr(datestamp, '-');
+	if (range != NULL) {
+	    *range = '\0';
+	    if (*datestamp != '\0')
+		bdatestamp = atoi(datestamp);
+	    else
+		bdatestamp = 0;
+	    if (*(range + 1) != '\0')
+		edatestamp = atoi(range + 1);
+	    else
+		edatestamp = INT32_MAX;
+	}
+	else {
+	    bdatestamp = atoi(datestamp);
+	    edatestamp = atoi(datestamp);
+	}
+	sqlite3_prepare_v2(bkcatalog,
+	    (sqlstmt = sqlite3_mprintf("select distinct serial, ftype, \n"
+		"permission, device_id, inode, user_name, user_id, \n"
+		"group_name, group_id, size, sha1, cdatestamp, datestamp, \n"
+		"filename, extdata \n"
+		"from file_entities_bd where name = '%q' and serial >= %d "
+		"and serial <= %d%s", bkname, bdatestamp, edatestamp, filespec != 0 ? filespec : "")),
+		-1, &sqlres, 0);
+
+	if (bdatestamp == edatestamp) {
+	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
+		printf("%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s%c",
+
+		strcmp(sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
+		    strcmp(sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
+		    strcmp(sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
+		    strcmp(sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
+		sqlite3_column_text(sqlres, 2),
+		sqlite3_column_text(sqlres, 3),
+		sqlite3_column_text(sqlres, 4),
+		sqlite3_column_text(sqlres, 5),
+		sqlite3_column_int(sqlres, 6),
+		sqlite3_column_text(sqlres, 7),
+		sqlite3_column_int(sqlres, 8),
+		sqlite3_column_int64(sqlres, 9),
+		sqlite3_column_text(sqlres, 10),
+		sqlite3_column_int(sqlres, 11),
+		sqlite3_column_int(sqlres, 12),
+		sqlite3_column_text(sqlres, 13),
+		'\0');
+		if (strcmp(sqlite3_column_text(sqlres, 1), "2") == 0)
+		    printf("%s%c", sqlite3_column_text(sqlres, 14), '\0');
+	    }
+	}
+	else {
+	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
+		printf("%10d %s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s%c",
+		sqlite3_column_int(sqlres, 0),
+		strcmp(sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
+		    strcmp(sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
+		    strcmp(sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
+		    strcmp(sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
+		sqlite3_column_text(sqlres, 2),
+		sqlite3_column_text(sqlres, 3),
+		sqlite3_column_text(sqlres, 4),
+		sqlite3_column_text(sqlres, 5),
+		sqlite3_column_int(sqlres, 6),
+		sqlite3_column_text(sqlres, 7),
+		sqlite3_column_int(sqlres, 8),
+		sqlite3_column_int64(sqlres, 9),
+		sqlite3_column_text(sqlres, 10),
+		sqlite3_column_int(sqlres, 11),
+		sqlite3_column_int(sqlres, 12),
+		sqlite3_column_text(sqlres, 13),
+		'\0');
+		if (strcmp(sqlite3_column_text(sqlres, 1), "2") == 0)
+		    printf("%s%c", sqlite3_column_text(sqlres, 14), '\0');
+	    }
+	}
+	sqlite3_finalize(sqlres);
+	sqlite3_free(sqlstmt);
+    }
+    
     return(0);
 }
 
