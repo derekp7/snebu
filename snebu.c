@@ -1904,7 +1904,7 @@ int restore(int argc, char **argv)
     char *files_from_fname = malloc(4097);
     char *files_from_fnameu = malloc(4097);
     char files_from_0 = 0;
-    int files_from_fname_len = 4096;
+    size_t files_from_fname_len = 4096;
     char *join_files_from_sql = NULL;
 
     lendian = (unsigned int) (((unsigned char *)(&lendian))[0]); // little endian test
@@ -1985,7 +1985,7 @@ int restore(int argc, char **argv)
     if (argc > optind) {
 	filespeclen = 4;
 	for (i = optind; i < argc; i++)
-    	    filespeclen += strlen(argv[i]) + 20;
+    	    filespeclen += strlen(argv[i]) + 22;
        	filespec = malloc(filespeclen);
 	filespec[0] = 0;
 	for (i = optind; i < argc; i++) {
@@ -2618,8 +2618,10 @@ int listbackups(int argc, char **argv)
 	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
-    int longoutput = 0;
-    int long0output = 0;
+/* Future functionality */
+//    int longoutput = 0;
+//    int long0output = 0;
+
 
     while ((optc = getopt_long(argc, argv, "n:d:l0", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
@@ -2633,6 +2635,7 @@ int listbackups(int argc, char **argv)
 		datestamp[127] = 0;
 		foundopts |= 2;
 		break;
+/*
 	    case 'l':
 		longoutput = 1;
 		foundopts |= 4;
@@ -2641,12 +2644,13 @@ int listbackups(int argc, char **argv)
 		long0output = 1;
 		foundopts |= 8;
 		break;
+*/
 	    default:
 		usage();
 		return(1);
 	}
     }
-    if (foundopts != 0 && foundopts != 1 && foundopts != 3 && foundopts != 7 && foundopts != 15) {
+    if (foundopts != 0 && foundopts != 1 && foundopts != 3 /* && foundopts != 7 && foundopts != 15 */) {
 	printf("foundopts = %d\n", foundopts);
         usage();
         return(1);
@@ -2819,10 +2823,10 @@ int listbackups(int argc, char **argv)
 	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
 		printf("%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s\t%s\n",
 
-		strcmp(sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
-		    strcmp(sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
-		    strcmp(sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
-		    strcmp(sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
+		strcmp((char *)sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
 		sqlite3_column_text(sqlres, 2),
 		sqlite3_column_text(sqlres, 3),
 		sqlite3_column_text(sqlres, 4),
@@ -2841,10 +2845,10 @@ int listbackups(int argc, char **argv)
 	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
 		printf("%10d %s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s\t%s\n",
 		sqlite3_column_int(sqlres, 0),
-		strcmp(sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
-		    strcmp(sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
-		    strcmp(sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
-		    strcmp(sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
+		strcmp((char *)sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
 		sqlite3_column_text(sqlres, 2),
 		sqlite3_column_text(sqlres, 3),
 		sqlite3_column_text(sqlres, 4),
@@ -2892,10 +2896,10 @@ int listbackups(int argc, char **argv)
 	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
 		printf("%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s%c",
 
-		strcmp(sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
-		    strcmp(sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
-		    strcmp(sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
-		    strcmp(sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
+		strcmp((char *)sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
 		sqlite3_column_text(sqlres, 2),
 		sqlite3_column_text(sqlres, 3),
 		sqlite3_column_text(sqlres, 4),
@@ -2909,7 +2913,7 @@ int listbackups(int argc, char **argv)
 		sqlite3_column_int(sqlres, 12),
 		sqlite3_column_text(sqlres, 13),
 		'\0');
-		if (strcmp(sqlite3_column_text(sqlres, 1), "2") == 0)
+		if (strcmp((char *)sqlite3_column_text(sqlres, 1), "2") == 0)
 		    printf("%s%c", sqlite3_column_text(sqlres, 14), '\0');
 	    }
 	}
@@ -2917,10 +2921,10 @@ int listbackups(int argc, char **argv)
 	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
 		printf("%10d %s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s%c",
 		sqlite3_column_int(sqlres, 0),
-		strcmp(sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
-		    strcmp(sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
-		    strcmp(sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
-		    strcmp(sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
+		strcmp((char *)sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "5") == 0 ? "d" :
+		    strcmp((char *)sqlite3_column_text(sqlres, 1), "S") == 0 ? "f" : "u",
 		sqlite3_column_text(sqlres, 2),
 		sqlite3_column_text(sqlres, 3),
 		sqlite3_column_text(sqlres, 4),
@@ -2934,7 +2938,7 @@ int listbackups(int argc, char **argv)
 		sqlite3_column_int(sqlres, 12),
 		sqlite3_column_text(sqlres, 13),
 		'\0');
-		if (strcmp(sqlite3_column_text(sqlres, 1), "2") == 0)
+		if (strcmp((char *)sqlite3_column_text(sqlres, 1), "2") == 0)
 		    printf("%s%c", sqlite3_column_text(sqlres, 14), '\0');
 	    }
 	}
@@ -3940,6 +3944,9 @@ int cread(void *buf, size_t sz, size_t count, struct cfile *cfile)
 	    else {
 		memcpy(cfile->buf, cfile->cbuf, cblocksz);
 	    }
+	    if (chksum != lzo_adler32(1, (unsigned char *) cfile->buf, ucblocksz)) {
+		fprintf(stderr, "Checksum error reading compressed lzo file\n");
+	    }
 	    cfile->bufp = cfile->buf;
 	    cfile->bufsize = ucblocksz;
 	}
@@ -3993,6 +4000,9 @@ int cgetline(char **buf, size_t *sz, struct cfile *cfile)
             else {
                 memcpy(cfile->buf, cfile->cbuf, cblocksz);
             }
+	    if (chksum != lzo_adler32(1, (unsigned char *) cfile->buf, ucblocksz)) {
+		fprintf(stderr, "Checksum error reading compressed lzo file\n");
+	    }
             cfile->bufp = cfile->buf;
             cfile->bufsize = ucblocksz;
         }
