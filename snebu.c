@@ -30,11 +30,12 @@ struct {
 int initdb(sqlite3 *bkcatalog);
 int sqlbusy(void *x, int y);
 char *stresc(char *src, char **target);
+char *strescb(char *src, char **target, int len);
 char *strunesc(char *src, char **target);
 long int strtoln(char *nptr, char **endptr, int base, int len);
 int parsex(char *instr, char p, char ***b, int max);
 int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
-    unsigned long long est_size,  unsigned long long bytes_read, unsigned long long bytes_readp);
+    unsigned long long est_size,  unsigned long long *bytes_read, unsigned long long bytes_readp);
 
 int logaction(sqlite3 *bkcatalog, int backupset_id, int action, char *message);
 int my_sqlite3_exec(sqlite3 *db, const char *sql, int (*callback)(void *, int, char **, char **), void *carg1, char **errmsg);
@@ -391,7 +392,7 @@ int newbackup(int argc, char **argv)
 	fprintf(stderr, "Receiving input file list\n");
     while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
 	int pathskip = 0;
-	char pathsub[4096];
+	char pathsub[4097];
 	parsex(filespecs, '\t', &filespecsl, 13);
 
 	fs.ftype = *(filespecsl[0]);
@@ -484,6 +485,8 @@ int newbackup(int argc, char **argv)
 	sqlite3_free(sqlstmt);
     }
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+
+// Note, the following is disabled by default, as extended attributes may be missed
 #ifdef PRELOAD_DIRS_AND_SYMLINKS
 // This code will create entries for any directories / symlinks in input
 // file list, so they don't have to be submitted by submitfiles() tar
@@ -1153,9 +1156,9 @@ int submitfiles(int argc, char **argv)
         unsigned long long int offset;
         unsigned long long int size;
     } *sparsedata;
-    unsigned long long int s_realsize;
+    unsigned long long int s_realsize = 0;
     char s_isextended;
-    int n_sparsedata;
+    int n_sparsedata = 0;
     int n_esparsedata;
     int m_sparsedata = 20;
     struct option longopts[] = {
@@ -1187,9 +1190,14 @@ int submitfiles(int argc, char **argv)
     int paxsparsenseg = 0;
     int paxsparsehdrsz = 0;
     int blocksize;
-    char *mp1;
-    char *mp2;
     char *sparsefilep = NULL;
+    int tpipea[2];
+    int tpipeb[2];
+    FILE *tpipe0;
+    FILE *tpipe1;
+    char *escfname = NULL;
+    char *esclname = NULL;
+    char *escxheader = NULL;
 
     fs.filename = 0;
     fs.linktarget = 0;
@@ -1332,446 +1340,628 @@ int submitfiles(int argc, char **argv)
 
     logaction(bkcatalog, bkid, 4, "Begin receiving files");
 
-    // Read TAR file from std input
-    while (1) {
-        // Read tar 512 byte header into tarhead structure
-        count = fread(&tarhead, 1, 512, stdin);
-        if (count < 512) {
-                fprintf(stderr, "tar short read\n");
-		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
-                return (1);
-        }
-        if (tarhead.filename[0] == 0) {	// End of TAR archive
-
-//	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
-	    logaction(bkcatalog, bkid, 5, "End receiving files");
-	    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
-
-	    logaction(bkcatalog, bkid, 7, "End post processing received files");
-
-            sqlite3_close(bkcatalog);
-
-            return(0);
-        }
-
-        // A file type of "L" means a long (> 100 character) filename.  File name begins in next block.
-        if (*(tarhead.ftype) == 'L') {
-            bytestoread=strtoull(tarhead.size, 0, 8);
-	    blockpad = 512 - ((bytestoread - 1) % 512 + 1);
-            fs.filename = malloc(bytestoread + 1);
-            count = fread(fs.filename, 1, bytestoread, stdin);
-            if (count < bytestoread) {
-                printf("tar short read\n");
-		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
-                return(1);
-            }
-            count = fread(junk, 1, blockpad, stdin);
-            if (count < blockpad) {
-                printf("tar short read\n");
-		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
-                return(1);
-            }
-            fs.filename[bytestoread] = 0;
-            continue;
-        }
-        // A file type of "K" means a long (> 100 character) link target.
-        if (*(tarhead.ftype) == 'K') {
-            bytestoread=strtoull(tarhead.size, 0, 8);
-	    blockpad = 512 - ((bytestoread - 1) % 512 + 1);
-            fs.linktarget = malloc(bytestoread + 1);
-            tcount = 0;
-            while (bytestoread - tcount > 0) {
-                count = fread(fs.linktarget + tcount, 1, bytestoread - tcount, stdin);
-                tcount += count;
-            }
-            tcount = 0;
-            while (blockpad - tcount > 0) {
-                count = fread(junk, 1, blockpad - tcount, stdin);
-                tcount += count;
-            }
-            fs.linktarget[bytestoread] = 0;
-            continue;
-        }
-	// File type "x" is an extended header for the following file
-	if (*(tarhead.ftype) == 'x') {
-            bytestoread=strtoull(tarhead.size, 0, 8);
-	    fs.xheaderlen = bytestoread;
-	    blockpad = 512 - ((bytestoread - 1) % 512 + 1);
-//            fs.xheader = malloc(bytestoread + 1);
-            fs.xheader = malloc(bytestoread);
-            tcount = 0;
-            while (bytestoread - tcount > 0) {
-                count = fread(fs.xheader + tcount, 1, bytestoread - tcount, stdin);
-                tcount += count;
-            }
-            tcount = 0;
-            while (blockpad - tcount > 0) {
-                count = fread(junk, 1, blockpad - tcount, stdin);
-                tcount += count;
-            }
-//	    fs.xheader[bytestoread] = 0;
-	    if (getpaxvar(fs.xheader, fs.xheaderlen, "path", &paxpath, &paxpathlen) == 0) {
-		fs.filename = malloc(paxpathlen);
-		strncpy(fs.filename, paxpath, paxpathlen);
-		fs.filename[paxpathlen - 1] = '\0';
-		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "path");
-	    }
-	    if (getpaxvar(fs.xheader, fs.xheaderlen, "linkpath", &paxlinkpath, &paxlinkpathlen) == 0) {
-		fs.linktarget = malloc(paxlinkpathlen);
-		strncpy(fs.linktarget, paxlinkpath, paxlinkpathlen);
-		fs.linktarget[paxlinkpathlen - 1] = '\0';
-		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "linkpath");
-	    }
-	    if (getpaxvar(fs.xheader, fs.xheaderlen, "size", &paxsize, &paxsizelen) == 0) {
-		fs.filesize = strtoull(paxsize, 0, 10);
-		usepaxsize = 1;
-		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "size");
-	    }
-	    if (cmpspaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.major", "1") == 0 &&
-		cmpspaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.minor", "0") == 0) {
-		paxsparse=1;
-		getpaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.name", &paxsparsename, &paxsparsenamelen); //TODO handle error status
-		getpaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.realsize", &paxsparsesize, &paxsparsesizelen); //TODO handle error status
-		s_realsize = strtoull(paxsparsesize, 0, 10);
-		fs.filename = malloc(paxsparsenamelen);
-		strncpy(fs.filename, paxsparsename, paxsparsenamelen - 1);
-		fs.filename[paxsparsenamelen - 1] = '\0';
-		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.major");
-		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.minor");
-		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.name");
-		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.realsize");
-
-	    }
-//	    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "mtime");
-//	    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "ctime");
-
-            continue;
-	}
-	// Process TAR header
-	if (usepaxsize == 0) {
-	    fs.filesize = 0;
-	    if ((unsigned char) tarhead.size[0] == 128)
-		for (i = 0; i < 8; i++)
-		    fs.filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
-	    else
-		fs.filesize=strtoull(tarhead.size, 0, 8);
-	}
-	else {
-	    usepaxsize = 0;
-	}
-	if (paxsparse == 1)
-	    fs.ftype = 'S';
-	else
-	    fs.ftype = *tarhead.ftype;
-
-        fs.nuid=strtol(tarhead.nuid, 0, 8);
-        fs.ngid=strtol(tarhead.ngid, 0, 8);
-        fs.modtime=strtol(tarhead.modtime, 0, 8);
-        fs.mode=strtol(tarhead.mode + 2, 0, 8);
-        fullblocks = (fs.filesize / 512);
-        partialblock = fs.filesize % 512;
-	blockstoread = fullblocks + (partialblock > 0 ? 1 : 0);
-	blocksize = 512;
-
-        if (strlen(tarhead.auid) == 0)
-            sprintf(tarhead.auid, "%d", fs.nuid);
-        if (strlen(tarhead.agid) == 0)
-            sprintf(tarhead.agid, "%d", fs.ngid);
-	strncpy(fs.auid, tarhead.auid, 32);
-	fs.auid[32] = 0;
-	strncpy(fs.agid, tarhead.agid, 32);
-	fs.agid[32] = 0;
-
-        if (fs.filename == 0) {
-            strncpy((fs.filename = malloc(101)), tarhead.filename, 100);
-            fs.filename[100] = 0;
-        }
-        if (fs.linktarget == 0) {
-            strncpy((fs.linktarget = malloc(101)), tarhead.linktarget, 100);
-            fs.linktarget[100] = 0;
-        }
-	    // Commit transaction if in the middle of a large file
-	if (fs.filesize > 200000000) {
-//	    fprintf(stderr, "submitfiles: large file, suspending transaction\n");
-//	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
-	    in_a_transaction = 0;
-	}
-        // If this is a regular file (type 0)
-        if (*(tarhead.ftype) == '0' || *(tarhead.ftype) == 'S') {
-
-            // Handle sparse files
-            if (*(tarhead.ftype) == 'S') {
-                s_isextended = tarhead.u.sph.isextended;
-                n_sparsedata = 0;
-                if ((unsigned char) tarhead.u.sph.realsize[0] == 128)
-                    for (i = 0; i < 8; i++)
-                        s_realsize  += (( ((unsigned long long) ((unsigned char) (tarhead.u.sph.realsize[11 - i]))) << (i * 8)));
-                else
-                    s_realsize = strtoull(tarhead.u.sph.realsize, 0, 8);
-
-                for (n_sparsedata = 0; n_sparsedata < 4 && tarhead.u.sph.sd[n_sparsedata].offset[0] != 0; n_sparsedata++) {
-                    sparsedata[n_sparsedata].offset = 0;
-                    sparsedata[n_sparsedata].size = 0;
-                    if (n_sparsedata >= m_sparsedata - 1) {
-                        sparsedata = realloc(sparsedata, sizeof(*sparsedata) * (m_sparsedata += 20));
-                    }
-                    if ((unsigned char) tarhead.u.sph.sd[n_sparsedata].offset[0] == 128)
-                        for (i = 0; i < 8; i++) {
-                            sparsedata[n_sparsedata].offset  += (( ((unsigned long long) ((unsigned char) (tarhead.u.sph.sd[n_sparsedata].offset[11 - i]))) << (i * 8)));
-			}
-                    else
-                        sparsedata[n_sparsedata].offset = strtoull(tarhead.u.sph.sd[n_sparsedata].offset, 0, 8);
-                    if ((unsigned char) tarhead.u.sph.sd[n_sparsedata].size[0] == 128)
-                        for (i = 0; i < 8; i++) {
-                            sparsedata[n_sparsedata].size += (( ((unsigned long long) ((unsigned char) (tarhead.u.sph.sd[n_sparsedata].size[11 - i]))) << (i * 8)));
-			}
-                    else
-                        sparsedata[n_sparsedata].size = strtoull(tarhead.u.sph.sd[n_sparsedata].size, 0, 8);
-                }
-                while (s_isextended == 1) {
-                    count = fread(&speh, 1, 512, stdin);
-                    if (count < 512) {
-                        printf("tar short read\n");
-			flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
-                        return(1);
-                    }
-                    s_isextended = speh.isextended;
-
-                    for (n_esparsedata = 0; n_esparsedata < 21 && speh.sd[n_esparsedata].offset[0] != 0; n_esparsedata++, n_sparsedata++) {
-                        if (n_sparsedata >= m_sparsedata - 1) {
-                            sparsedata = realloc(sparsedata, sizeof(*sparsedata) * (m_sparsedata += 20));
-                        }
-                        sparsedata[n_sparsedata].offset = 0;
-                        sparsedata[n_sparsedata].size = 0;
-                        if ((unsigned char) speh.sd[n_esparsedata].offset[0] == 128)
-                            for (i = 0; i < 8; i++)
-                                sparsedata[n_sparsedata].offset  += (( ((unsigned long long) ((unsigned char) (speh.sd[n_esparsedata].offset[11 - i]))) << (i * 8)));
-                        else
-                            sparsedata[n_sparsedata].offset = strtoull(speh.sd[n_esparsedata].offset, 0, 8);
-                        if ((unsigned char) speh.sd[n_esparsedata].size[0] == 128)
-                            for (i = 0; i < 8; i++)
-                                sparsedata[n_sparsedata].size += (( ((unsigned long long) ((unsigned char) (speh.sd[n_esparsedata].size[11 - i]))) << (i * 8)));
-                        else
-                            sparsedata[n_sparsedata].size = strtoull(speh.sd[n_esparsedata].size, 0, 8);
-                    }
-                }
-            } //  End sparse file handling
-
-	    if (paxsparse == 1 && *(tarhead.ftype) == '0') {
-		paxsparsehdrsz = 0;
-		paxsparsehdrsz += getline(&paxsparsesegt, &paxsparsesegtn, stdin);
-		paxsparsenseg = atoi(paxsparsesegt);
-		n_sparsedata = 0;
-		while (paxsparsenseg-- > 0) {
-		    if (n_sparsedata >= m_sparsedata - 1)
-			sparsedata = realloc(sparsedata, sizeof(*sparsedata) * (m_sparsedata += 20));
-		    paxsparsehdrsz += getline(&paxsparsesegt, &paxsparsesegtn, stdin);
-		    sparsedata[n_sparsedata].offset = strtoull(paxsparsesegt, 0, 10);
-		    paxsparsehdrsz += getline(&paxsparsesegt, &paxsparsesegtn, stdin);
-		    sparsedata[n_sparsedata].size = strtoull(paxsparsesegt, 0, 10);
-		    n_sparsedata++;
-		}
-		paxsparsehdrsz += fread(junk, 1, 512 - paxsparsehdrsz % 512, stdin);
-		fullblocks = (fs.filesize / 512) - (int) (paxsparsehdrsz / 512);
-		fs.filesize -= paxsparsehdrsz;
-		blockstoread -= (int) paxsparsehdrsz / 512;
-		blocksize = 512 - paxsparsehdrsz % 512;
-	    }
+    // Set up a pipe, associate file descriptors, and fork to run tar
+    // processing in background.
+    if (pipe(tpipea) == -1) {
+	perror("Pipe: ");
+	exit(1);
+    }
+    if (pipe(tpipeb) == -1) {
+	perror("Pipe: ");
+	exit(1);
+    }
 
 
-	    // Set up temporary file to write out to.
-            tmpfilepath = malloc(strlen(tmpfiledir) + 10);
-            sprintf(tmpfilepath, "%s/tbXXXXXX", tmpfiledir);
-            curtmpfile = mkstemp(tmpfilepath);
-            if (curtmpfile == -1) {
-                fprintf(stderr, "Error opening temp file %s\n", tmpfilepath);
-		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
-                return(1);
-            }
-	    curfile = cfinit(fdopen(curtmpfile, "w"));
-            SHA1_Init(&cfsha1ctl);
+    if (fork() == 0) {
+	ssize_t s;
+	close(tpipea[0]);
+	close(tpipeb[1]);
 
-            if (*(tarhead.ftype) == 'S' || paxsparse == 1) {
-		for (i = 0; i < n_sparsedata; i++) {
-		    if (i == 0) {
-			if (asprintf(&sparsefilep, "%llu:%llu:%llu", fs.filesize, sparsedata[i].offset, sparsedata[i].size) < 0) {
-			    fprintf(stderr, "Memory allocation error\n");
-			    exit(0);
-			}
-			cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
-			SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
-		    }
-		    else {
-			if (asprintf(&sparsefilep, ":%llu:%llu", sparsedata[i].offset, sparsedata[i].size) < 0) {
-			    fprintf(stderr, "Memory allocation failure\n");
-			    exit(1);
-			}
-			cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
-			SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
-		    }
-		}
-		if (asprintf(&sparsefilep, "\n") < 0) {
-		    fprintf(stderr, "Memory allocation failure\n");
-		    exit(1);
-		}
-                cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
-                SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
-	    }
+	const int pbufsize = 1024 * 1024 * 10;
+	char *pbuf = malloc(pbufsize);
+	int pbufstart = 0;
+	int pbufused = 0;
+	int input_done = 0;
+	fd_set p_in_s;
+	fd_set p_out_s;
 
-            for (i = 1; i <= blockstoread; i++) {
-                count = fread(curblock, 1, blocksize, stdin);
-                if (count < blocksize) {
-                    printf("tar short read\n");
-		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
-                    return(1);
-                }
+	fcntl(tpipea[1], F_SETFL, fcntl(tpipea[1], F_GETFL) | O_NONBLOCK);
+	while (1) {
+	    if (pbufused < pbufsize && input_done == 0) {
+		FD_ZERO(&p_in_s);
+		FD_ZERO(&p_out_s);
 
-                if (i == blockstoread) {
-                    if (partialblock > 0) {
-                        cwrite(curblock, 1, partialblock, curfile);
-                        SHA1_Update(&cfsha1ctl, curblock, partialblock);
-                        break;
-                    }
-                }
-                cwrite(curblock, blocksize, 1, curfile);
-                SHA1_Update(&cfsha1ctl, curblock, blocksize);
-		blocksize=512;
-            }
-
-	    cclose(curfile);
-	    if (in_a_transaction == 0) {
-//		sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
-		in_a_transaction = 1;
-	    }
-            SHA1_Final(cfsha1, &cfsha1ctl);
-            for (i = 0; i < SHA_DIGEST_LENGTH; i++)
-                sprintf(cfsha1a + i * 2, "%2.2x", (unsigned int) cfsha1[i]);
-            cfsha1a[i * 2] = 0;
-            for (i = 0; i < 1; i++)
-                sprintf(cfsha1d + i * 2, "%2.2x", (unsigned int) cfsha1[i]);
-            cfsha1d[i * 2] = 0;
-            for (i = 1; i < SHA_DIGEST_LENGTH; i++)
-                sprintf(cfsha1f + (i - 1) * 2, "%2.2x", (unsigned int) cfsha1[i]);
-            cfsha1f[(i - 1) * 2] = 0;
-	    strcpy(fs.sha1, cfsha1a);
-
-            sprintf((destfilepath = malloc(strlen(destdir) + strlen(cfsha1a) + 7)), "%s/%s/%s.lzo", destdir, cfsha1d, cfsha1f);
-            sprintf((destfilepathm = malloc(strlen(destdir) + 4)), "%s/%s", destdir, cfsha1d);
-
-//	    Will need this when tape library support is added.  For now
-//	    it is more efficient to leave it out.
-
-#ifdef commented_out
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into storagefiles (sha1, volume, segment, location)  "
-		"values ('%s', 0, 0, '%q/%q.lzo')", cfsha1a, cfsha1d, cfsha1f)), 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s\n", sqlerr);
-		sqlite3_free(sqlerr);
-	    }
-#endif
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into diskfiles_t (sha1)  "
-		"values ('%s')", cfsha1a)), 0, 0, &sqlerr);
-	    if (sqlerr != 0) {
-		fprintf(stderr, "%s\n", sqlerr);
-		sqlite3_free(sqlerr);
-	    }
-
-
-	    if (stat(destfilepathm, &tmpfstat) == 0) // If the directory exists
-		rename(tmpfilepath, destfilepath);   // move temp file to directory
-	    else {
-		if (mkdir(destfilepathm, 0770) == 0) { // else make the directory first
-		    rename(tmpfilepath, destfilepath);
-		}
-		else if (stat(destfilepathm, &tmpfstat) == 0) {
-		    rename(tmpfilepath, destfilepath);   // move temp file to directory
+		if (pbufused > 0) {
+		    FD_SET(tpipeb[0], &p_in_s);
+		    FD_SET(tpipea[1], &p_out_s);
+		    select(1024, &p_in_s, &p_out_s, NULL, NULL);
 		}
 		else {
-		    fprintf(stderr, "Error creating directory %s\n", destfilepath);
-		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
-		    return(1);
+		    FD_SET(tpipeb[0], &p_in_s);
+		    select(1024, &p_in_s, NULL, NULL, NULL);
+		}
+
+		if (FD_ISSET(tpipeb[0], &p_in_s)) { // is in ready?
+		    if (pbufstart + pbufused < pbufsize) {
+			s = read(tpipeb[0], pbuf + pbufstart + pbufused, pbufsize - pbufstart - pbufused);
+			if (s == 0) {
+			    input_done = 1;
+			}
+			if (s < 0) {
+			    perror("Something went wrong: ");
+			    exit(1);
+			}
+			pbufused += s;
+		    }
+		    else {
+			s = read(tpipeb[0], pbuf + (pbufstart - pbufsize + pbufused), pbufsize - pbufused);
+			pbufused += s;
+		    }
+		}
+		if (FD_ISSET(tpipea[1], &p_out_s) && pbufused > 0) { // is out ready?
+		    s = write(tpipea[1], pbuf + pbufstart, pbufstart + pbufused <= pbufsize ? pbufused : pbufsize - pbufstart);
+		    pbufused -= s;
+		    pbufstart = (pbufstart + s < pbufsize ? pbufstart + s : 0);
 		}
 	    }
-
-	    sqlite3_bind_int(inbfrec, 1, bkid);
-	    sqlite3_bind_text(inbfrec, 2, (mp1 = sqlite3_mprintf("%c", fs.ftype)), -1, SQLITE_STATIC);
-	    sqlite3_bind_text(inbfrec, 3, (mp2 = sqlite3_mprintf("%4.4o", fs.mode)), -1, SQLITE_STATIC);
-	    sqlite3_bind_text(inbfrec, 4, fs.auid, -1, SQLITE_STATIC);
-	    sqlite3_bind_int(inbfrec, 5, fs.nuid);
-	    sqlite3_bind_text(inbfrec, 6, fs.agid, -1, SQLITE_STATIC);
-	    sqlite3_bind_int(inbfrec, 7, fs.ngid);
-	    sqlite3_bind_int64(inbfrec, 8, fs.ftype == 'S' || paxsparse == 1 ? s_realsize : fs.filesize);
-	    sqlite3_bind_text(inbfrec, 9, fs.sha1, -1, SQLITE_STATIC);
-	    sqlite3_bind_int(inbfrec, 10, fs.modtime);
-	    sqlite3_bind_text(inbfrec, 11, fs.filename, -1, SQLITE_STATIC);
-	    sqlite3_bind_text(inbfrec, 12, fs.extdata == 0 ? "" : fs.extdata, -1, SQLITE_STATIC);
-	    sqlite3_bind_blob(inbfrec, 13, fs.xheaderlen == 0 ? "" : fs.xheader, fs.xheaderlen, SQLITE_STATIC);
-	    if ( ! sqlite3_step(inbfrec)) {
-		fprintf(stderr, "sqlite3_step error\n");
-		exit(1);
+	    else { // buffer full, wait for write to be ready
+		FD_ZERO(&p_out_s);
+		FD_SET(tpipea[1], &p_out_s);
+		select(1024, NULL, &p_out_s, NULL, NULL);
+		if (FD_ISSET(tpipea[1], &p_out_s) && pbufused > 0) { // is out ready?
+		    s = write(tpipea[1], pbuf + pbufstart, pbufstart + pbufused <= pbufsize ? pbufused : pbufsize - pbufstart);
+		    pbufused -= s;
+		    pbufstart = (pbufstart + s < pbufsize ? pbufstart + s : 0);
+		}
 	    }
-	    sqlite3_reset(inbfrec);
-	    sqlite3_free(mp1);
-	    sqlite3_free(mp2);
-	    paxsparse = 0;
-	
-            free(tmpfilepath);
-            free(destfilepath);
-            free(destfilepathm);
-        }
-
-        // Hard link (type 1) or sym link (type 2)
-	else if (*(tarhead.ftype) == '1' || *(tarhead.ftype) == '2' || *(tarhead.ftype) == '5') {
-
-	    if (*(tarhead.ftype) == '5')
-		if (fs.filename[strlen(fs.filename) - 1] == '/')
-		    fs.filename[strlen(fs.filename) - 1] = 0;
-
-	    sqlite3_bind_int(inbfrec, 1, bkid);
-	    sqlite3_bind_text(inbfrec, 2, (mp1 = sqlite3_mprintf("%c", fs.ftype)), -1, SQLITE_STATIC);
-	    sqlite3_bind_text(inbfrec, 3, (mp2 = sqlite3_mprintf("%4.4o", fs.mode)), -1, SQLITE_STATIC);
-	    sqlite3_bind_text(inbfrec, 4, fs.auid, -1, SQLITE_STATIC);
-	    sqlite3_bind_int(inbfrec, 5, fs.nuid);
-	    sqlite3_bind_text(inbfrec, 6, fs.agid, -1, SQLITE_STATIC);
-	    sqlite3_bind_int(inbfrec, 7, fs.ngid);
-	    sqlite3_bind_int64(inbfrec, 8, fs.filesize);
-	    sqlite3_bind_text(inbfrec, 9, "0", -1, SQLITE_STATIC);
-	    sqlite3_bind_int(inbfrec, 10, fs.modtime);
-	    sqlite3_bind_text(inbfrec, 11, fs.filename, -1, SQLITE_STATIC);
-	    sqlite3_bind_text(inbfrec, 12, fs.linktarget == 0 ? "" : fs.linktarget, -1, SQLITE_STATIC);
-	    sqlite3_bind_blob(inbfrec, 13, fs.xheaderlen == 0 ? "" : fs.xheader, fs.xheaderlen, SQLITE_STATIC);
-	    if (! sqlite3_step(inbfrec)) {
-	        fprintf(stderr, "sqlite3_step error\n"); ;
-		exit(1);
+	    if (pbufused <= 0 && input_done == 1) {
+		break;
 	    }
-	    sqlite3_reset(inbfrec);
-	    sqlite3_free(mp1);
-	    sqlite3_free(mp2);
 
 	}
-	bytes_read += fs.filesize;
-	if (verbose >= 1) {
+	exit(0);
+
+    }
+    if (fork() == 0) {
+	close(tpipea[0]);
+	close(tpipea[1]);
+	close(tpipeb[0]);
+        tpipe1 = fdopen(tpipeb[1], "w");
+	// Read TAR file from std input
+	while (1) {
+	    // Read tar 512 byte header into tarhead structure
+	    count = fread(&tarhead, 1, 512, stdin);
+	    if (count < 512) {
+		    fprintf(stderr, "tar short read\n");
+		    fclose(tpipe1);
+//		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
+		    return (1);
+	    }
+	    if (tarhead.filename[0] == 0) {	// End of TAR archive
+
+		fclose(tpipe1);
+		close(tpipeb[1]);
+/*
+		logaction(bkcatalog, bkid, 5, "End receiving files");
+		flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
+
+		logaction(bkcatalog, bkid, 7, "End post processing received files");
+
+		sqlite3_close(bkcatalog);
+*/
+
+		exit(0);
+	    }
+
+	    // A file type of "L" means a long (> 100 character) filename.  File name begins in next block.
+	    if (*(tarhead.ftype) == 'L') {
+		bytestoread=strtoull(tarhead.size, 0, 8);
+		blockpad = 512 - ((bytestoread - 1) % 512 + 1);
+		fs.filename = malloc(bytestoread + 1);
+		count = fread(fs.filename, 1, bytestoread, stdin);
+		if (count < bytestoread) {
+		    fprintf(stderr, "tar short read\n");
+		    fclose(tpipe1);
+//		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
+		    exit(1);
+		}
+		count = fread(junk, 1, blockpad, stdin);
+		if (count < blockpad) {
+		    fprintf(stderr, "tar short read\n");
+		    fclose(tpipe1);
+//		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
+		    exit(1);
+		}
+		fs.filename[bytestoread] = 0;
+		continue;
+	    }
+	    // A file type of "K" means a long (> 100 character) link target.
+	    if (*(tarhead.ftype) == 'K') {
+		bytestoread=strtoull(tarhead.size, 0, 8);
+		blockpad = 512 - ((bytestoread - 1) % 512 + 1);
+		fs.linktarget = malloc(bytestoread + 1);
+		tcount = 0;
+		while (bytestoread - tcount > 0) {
+		    count = fread(fs.linktarget + tcount, 1, bytestoread - tcount, stdin);
+		    tcount += count;
+		}
+		tcount = 0;
+		while (blockpad - tcount > 0) {
+		    count = fread(junk, 1, blockpad - tcount, stdin);
+		    tcount += count;
+		}
+		fs.linktarget[bytestoread] = 0;
+		continue;
+	    }
+	    // File type "x" is an extended header for the following file
+	    if (*(tarhead.ftype) == 'x') {
+		bytestoread=strtoull(tarhead.size, 0, 8);
+		fs.xheaderlen = bytestoread;
+		blockpad = 512 - ((bytestoread - 1) % 512 + 1);
+    //            fs.xheader = malloc(bytestoread + 1);
+		fs.xheader = malloc(bytestoread);
+		tcount = 0;
+		while (bytestoread - tcount > 0) {
+		    count = fread(fs.xheader + tcount, 1, bytestoread - tcount, stdin);
+		    tcount += count;
+		}
+		tcount = 0;
+		while (blockpad - tcount > 0) {
+		    count = fread(junk, 1, blockpad - tcount, stdin);
+		    tcount += count;
+		}
+    //	    fs.xheader[bytestoread] = 0;
+		if (getpaxvar(fs.xheader, fs.xheaderlen, "path", &paxpath, &paxpathlen) == 0) {
+		    fs.filename = malloc(paxpathlen);
+		    strncpy(fs.filename, paxpath, paxpathlen);
+		    fs.filename[paxpathlen - 1] = '\0';
+		    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "path");
+		}
+		if (getpaxvar(fs.xheader, fs.xheaderlen, "linkpath", &paxlinkpath, &paxlinkpathlen) == 0) {
+		    fs.linktarget = malloc(paxlinkpathlen);
+		    strncpy(fs.linktarget, paxlinkpath, paxlinkpathlen);
+		    fs.linktarget[paxlinkpathlen - 1] = '\0';
+		    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "linkpath");
+		}
+		if (getpaxvar(fs.xheader, fs.xheaderlen, "size", &paxsize, &paxsizelen) == 0) {
+		    fs.filesize = strtoull(paxsize, 0, 10);
+		    usepaxsize = 1;
+		    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "size");
+		}
+		if (cmpspaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.major", "1") == 0 &&
+		    cmpspaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.minor", "0") == 0) {
+		    paxsparse=1;
+		    getpaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.name", &paxsparsename, &paxsparsenamelen); //TODO handle error status
+		    getpaxvar(fs.xheader, fs.xheaderlen, "GNU.sparse.realsize", &paxsparsesize, &paxsparsesizelen); //TODO handle error status
+		    s_realsize = strtoull(paxsparsesize, 0, 10);
+		    fs.filename = malloc(paxsparsenamelen);
+		    strncpy(fs.filename, paxsparsename, paxsparsenamelen - 1);
+		    fs.filename[paxsparsenamelen - 1] = '\0';
+		    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.major");
+		    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.minor");
+		    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.name");
+		    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "GNU.sparse.realsize");
+
+		}
+    //	    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "mtime");
+    //	    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "ctime");
+
+		continue;
+	    }
+	    // Process TAR header
+	    if (usepaxsize == 0) {
+		fs.filesize = 0;
+		if ((unsigned char) tarhead.size[0] == 128)
+		    for (i = 0; i < 8; i++)
+			fs.filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
+		else
+		    fs.filesize=strtoull(tarhead.size, 0, 8);
+	    }
+	    else {
+		usepaxsize = 0;
+	    }
+	    if (paxsparse == 1)
+		fs.ftype = 'S';
+	    else
+		fs.ftype = *tarhead.ftype;
+
+	    fs.nuid=strtol(tarhead.nuid, 0, 8);
+	    fs.ngid=strtol(tarhead.ngid, 0, 8);
+	    fs.modtime=strtol(tarhead.modtime, 0, 8);
+	    fs.mode=strtol(tarhead.mode + 2, 0, 8);
+	    fullblocks = (fs.filesize / 512);
+	    partialblock = fs.filesize % 512;
+	    blockstoread = fullblocks + (partialblock > 0 ? 1 : 0);
+	    blocksize = 512;
+
+	    if (strlen(tarhead.auid) == 0)
+		sprintf(tarhead.auid, "%d", fs.nuid);
+	    if (strlen(tarhead.agid) == 0)
+		sprintf(tarhead.agid, "%d", fs.ngid);
+	    strncpy(fs.auid, tarhead.auid, 32);
+	    fs.auid[32] = 0;
+	    strncpy(fs.agid, tarhead.agid, 32);
+	    fs.agid[32] = 0;
+
+	    if (fs.filename == 0) {
+		strncpy((fs.filename = malloc(101)), tarhead.filename, 100);
+		fs.filename[100] = 0;
+	    }
+	    if (fs.linktarget == 0) {
+		strncpy((fs.linktarget = malloc(101)), tarhead.linktarget, 100);
+		fs.linktarget[100] = 0;
+	    }
+		// Commit transaction if in the middle of a large file
+	    if (fs.filesize > 200000000) {
+    //	    fprintf(stderr, "submitfiles: large file, suspending transaction\n");
+    //	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+		in_a_transaction = 0;
+	    }
+	    // If this is a regular file (type 0)
+	    if (*(tarhead.ftype) == '0' || *(tarhead.ftype) == 'S') {
+
+		// Handle sparse files
+		if (*(tarhead.ftype) == 'S') {
+		    s_isextended = tarhead.u.sph.isextended;
+		    n_sparsedata = 0;
+		    if ((unsigned char) tarhead.u.sph.realsize[0] == 128)
+			for (i = 0; i < 8; i++)
+			    s_realsize  += (( ((unsigned long long) ((unsigned char) (tarhead.u.sph.realsize[11 - i]))) << (i * 8)));
+		    else
+			s_realsize = strtoull(tarhead.u.sph.realsize, 0, 8);
+
+		    for (n_sparsedata = 0; n_sparsedata < 4 && tarhead.u.sph.sd[n_sparsedata].offset[0] != 0; n_sparsedata++) {
+			sparsedata[n_sparsedata].offset = 0;
+			sparsedata[n_sparsedata].size = 0;
+			if (n_sparsedata >= m_sparsedata - 1) {
+			    sparsedata = realloc(sparsedata, sizeof(*sparsedata) * (m_sparsedata += 20));
+			}
+			if ((unsigned char) tarhead.u.sph.sd[n_sparsedata].offset[0] == 128)
+			    for (i = 0; i < 8; i++) {
+				sparsedata[n_sparsedata].offset  += (( ((unsigned long long) ((unsigned char) (tarhead.u.sph.sd[n_sparsedata].offset[11 - i]))) << (i * 8)));
+			    }
+			else
+			    sparsedata[n_sparsedata].offset = strtoull(tarhead.u.sph.sd[n_sparsedata].offset, 0, 8);
+			if ((unsigned char) tarhead.u.sph.sd[n_sparsedata].size[0] == 128)
+			    for (i = 0; i < 8; i++) {
+				sparsedata[n_sparsedata].size += (( ((unsigned long long) ((unsigned char) (tarhead.u.sph.sd[n_sparsedata].size[11 - i]))) << (i * 8)));
+			    }
+			else
+			    sparsedata[n_sparsedata].size = strtoull(tarhead.u.sph.sd[n_sparsedata].size, 0, 8);
+		    }
+		    while (s_isextended == 1) {
+			count = fread(&speh, 1, 512, stdin);
+			if (count < 512) {
+			    printf("tar short read\n");
+			    fclose(tpipe1);
+//			    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
+			    exit(1);
+			}
+			s_isextended = speh.isextended;
+
+			for (n_esparsedata = 0; n_esparsedata < 21 && speh.sd[n_esparsedata].offset[0] != 0; n_esparsedata++, n_sparsedata++) {
+			    if (n_sparsedata >= m_sparsedata - 1) {
+				sparsedata = realloc(sparsedata, sizeof(*sparsedata) * (m_sparsedata += 20));
+			    }
+			    sparsedata[n_sparsedata].offset = 0;
+			    sparsedata[n_sparsedata].size = 0;
+			    if ((unsigned char) speh.sd[n_esparsedata].offset[0] == 128)
+				for (i = 0; i < 8; i++)
+				    sparsedata[n_sparsedata].offset  += (( ((unsigned long long) ((unsigned char) (speh.sd[n_esparsedata].offset[11 - i]))) << (i * 8)));
+			    else
+				sparsedata[n_sparsedata].offset = strtoull(speh.sd[n_esparsedata].offset, 0, 8);
+			    if ((unsigned char) speh.sd[n_esparsedata].size[0] == 128)
+				for (i = 0; i < 8; i++)
+				    sparsedata[n_sparsedata].size += (( ((unsigned long long) ((unsigned char) (speh.sd[n_esparsedata].size[11 - i]))) << (i * 8)));
+			    else
+				sparsedata[n_sparsedata].size = strtoull(speh.sd[n_esparsedata].size, 0, 8);
+			}
+		    }
+		} //  End sparse file handling
+
+		if (paxsparse == 1 && *(tarhead.ftype) == '0') {
+		    paxsparsehdrsz = 0;
+		    paxsparsehdrsz += getline(&paxsparsesegt, &paxsparsesegtn, stdin);
+		    paxsparsenseg = atoi(paxsparsesegt);
+		    n_sparsedata = 0;
+		    while (paxsparsenseg-- > 0) {
+			if (n_sparsedata >= m_sparsedata - 1)
+			    sparsedata = realloc(sparsedata, sizeof(*sparsedata) * (m_sparsedata += 20));
+			paxsparsehdrsz += getline(&paxsparsesegt, &paxsparsesegtn, stdin);
+			sparsedata[n_sparsedata].offset = strtoull(paxsparsesegt, 0, 10);
+			paxsparsehdrsz += getline(&paxsparsesegt, &paxsparsesegtn, stdin);
+			sparsedata[n_sparsedata].size = strtoull(paxsparsesegt, 0, 10);
+			n_sparsedata++;
+		    }
+		    paxsparsehdrsz += fread(junk, 1, 512 - paxsparsehdrsz % 512, stdin);
+		    fullblocks = (fs.filesize / 512) - (int) (paxsparsehdrsz / 512);
+		    fs.filesize -= paxsparsehdrsz;
+		    blockstoread -= (int) paxsparsehdrsz / 512;
+		    blocksize = 512 - paxsparsehdrsz % 512;
+		}
+
+
+		// Set up temporary file to write out to.
+		tmpfilepath = malloc(strlen(tmpfiledir) + 10);
+		sprintf(tmpfilepath, "%s/tbXXXXXX", tmpfiledir);
+		curtmpfile = mkstemp(tmpfilepath);
+		if (curtmpfile == -1) {
+		    fprintf(stderr, "Error opening temp file %s\n", tmpfilepath);
+		    fclose(tpipe1);
+//		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
+		    exit(1);
+		}
+		curfile = cfinit(fdopen(curtmpfile, "w"));
+		SHA1_Init(&cfsha1ctl);
+
+		if (*(tarhead.ftype) == 'S' || paxsparse == 1) {
+		    for (i = 0; i < n_sparsedata; i++) {
+			if (i == 0) {
+			    if (asprintf(&sparsefilep, "%llu:%llu:%llu", fs.filesize, sparsedata[i].offset, sparsedata[i].size) < 0) {
+				fprintf(stderr, "Memory allocation error\n");
+				exit(0);
+			    }
+			    cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
+			    SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
+			}
+			else {
+			    if (asprintf(&sparsefilep, ":%llu:%llu", sparsedata[i].offset, sparsedata[i].size) < 0) {
+				fprintf(stderr, "Memory allocation failure\n");
+				exit(1);
+			    }
+			    cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
+			    SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
+			}
+		    }
+		    if (asprintf(&sparsefilep, "\n") < 0) {
+			fprintf(stderr, "Memory allocation failure\n");
+			exit(1);
+		    }
+		    cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
+		    SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
+		}
+
+		for (i = 1; i <= blockstoread; i++) {
+		    count = fread(curblock, 1, blocksize, stdin);
+		    if (count < blocksize) {
+			printf("tar short read\n");
+			fclose(tpipe1);
+//			flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
+			exit(1);
+		    }
+
+		    if (i == blockstoread) {
+			if (partialblock > 0) {
+			    cwrite(curblock, 1, partialblock, curfile);
+			    SHA1_Update(&cfsha1ctl, curblock, partialblock);
+			    break;
+			}
+		    }
+		    cwrite(curblock, blocksize, 1, curfile);
+		    SHA1_Update(&cfsha1ctl, curblock, blocksize);
+		    blocksize=512;
+		}
+
+		cclose(curfile);
+		if (in_a_transaction == 0) {
+    //		sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
+		    in_a_transaction = 1;
+		}
+		SHA1_Final(cfsha1, &cfsha1ctl);
+		for (i = 0; i < SHA_DIGEST_LENGTH; i++)
+		    sprintf(cfsha1a + i * 2, "%2.2x", (unsigned int) cfsha1[i]);
+		cfsha1a[i * 2] = 0;
+		for (i = 0; i < 1; i++)
+		    sprintf(cfsha1d + i * 2, "%2.2x", (unsigned int) cfsha1[i]);
+		cfsha1d[i * 2] = 0;
+		for (i = 1; i < SHA_DIGEST_LENGTH; i++)
+		    sprintf(cfsha1f + (i - 1) * 2, "%2.2x", (unsigned int) cfsha1[i]);
+		cfsha1f[(i - 1) * 2] = 0;
+		strcpy(fs.sha1, cfsha1a);
+
+		sprintf((destfilepath = malloc(strlen(destdir) + strlen(cfsha1a) + 7)), "%s/%s/%s.lzo", destdir, cfsha1d, cfsha1f);
+		sprintf((destfilepathm = malloc(strlen(destdir) + 4)), "%s/%s", destdir, cfsha1d);
+
+    //	    Will need this when tape library support is added.  For now
+    //	    it is more efficient to leave it out.
+
+    #ifdef commented_out
+		sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		    "insert or ignore into storagefiles (sha1, volume, segment, location)  "
+		    "values ('%s', 0, 0, '%q/%q.lzo')", cfsha1a, cfsha1d, cfsha1f)), 0, 0, &sqlerr);
+		if (sqlerr != 0) {
+		    fprintf(stderr, "%s\n", sqlerr);
+		    sqlite3_free(sqlerr);
+		}
+    #endif
+/*
+		sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		    "insert or ignore into diskfiles_t (sha1)  "
+		    "values ('%s')", cfsha1a)), 0, 0, &sqlerr);
+		if (sqlerr != 0) {
+		    fprintf(stderr, "%s\n", sqlerr);
+		    sqlite3_free(sqlerr);
+		}
+*/
+
+		if (stat(destfilepathm, &tmpfstat) == 0) // If the directory exists
+		    rename(tmpfilepath, destfilepath);   // move temp file to directory
+		else {
+		    if (mkdir(destfilepathm, 0770) == 0) { // else make the directory first
+			rename(tmpfilepath, destfilepath);
+		    }
+		    else if (stat(destfilepathm, &tmpfstat) == 0) {
+			rename(tmpfilepath, destfilepath);   // move temp file to directory
+		    }
+		    else {
+			fprintf(stderr, "Error creating directory %s\n", destfilepath);
+			fclose(tpipe1);
+//			flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
+			exit(1);
+		    }
+		}
+		fprintf(tpipe1, "%d\t%c\t%4.4o\t%s\t%d\t%s\t%d\t%lld\t%s\t%d\t%s\t%s\t%d\t%s\t\n",
+		    bkid, fs.ftype, fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid,
+		    fs.ftype == 'S' || paxsparse == 1 ? s_realsize : fs.filesize,
+		    fs.sha1, fs.modtime, stresc(fs.filename, &escfname),
+		    stresc(fs.extdata == 0 ? "" : fs.extdata, &esclname), fs.xheaderlen,
+		    fs.xheaderlen == 0 ? "" : strescb(fs.xheader, &escxheader, fs.xheaderlen)
+		);
+		bytes_read += fs.filesize;
+/*
+		sqlite3_bind_int(inbfrec, 1, bkid);
+		sqlite3_bind_text(inbfrec, 2, (mp1 = sqlite3_mprintf("%c", fs.ftype)), -1, SQLITE_STATIC);
+		sqlite3_bind_text(inbfrec, 3, (mp2 = sqlite3_mprintf("%4.4o", fs.mode)), -1, SQLITE_STATIC);
+		sqlite3_bind_text(inbfrec, 4, fs.auid, -1, SQLITE_STATIC);
+		sqlite3_bind_int(inbfrec, 5, fs.nuid);
+		sqlite3_bind_text(inbfrec, 6, fs.agid, -1, SQLITE_STATIC);
+		sqlite3_bind_int(inbfrec, 7, fs.ngid);
+		sqlite3_bind_int64(inbfrec, 8, fs.ftype == 'S' || paxsparse == 1 ? s_realsize : fs.filesize);
+		sqlite3_bind_text(inbfrec, 9, fs.sha1, -1, SQLITE_STATIC);
+		sqlite3_bind_int(inbfrec, 10, fs.modtime);
+		sqlite3_bind_text(inbfrec, 11, fs.filename, -1, SQLITE_STATIC);
+		sqlite3_bind_text(inbfrec, 12, fs.extdata == 0 ? "" : fs.extdata, -1, SQLITE_STATIC);
+		sqlite3_bind_blob(inbfrec, 13, fs.xheaderlen == 0 ? "" : fs.xheader, fs.xheaderlen, SQLITE_STATIC);
+		if ( ! sqlite3_step(inbfrec)) {
+		    fprintf(stderr, "sqlite3_step error\n");
+		    exit(1);
+		}
+		sqlite3_reset(inbfrec);
+		sqlite3_free(mp1);
+		sqlite3_free(mp2);
+*/
+		paxsparse = 0;
+	    
+		free(tmpfilepath);
+		free(destfilepath);
+		free(destfilepathm);
+	    }
+
+	    // Hard link (type 1) or sym link (type 2)
+	    else if (*(tarhead.ftype) == '1' || *(tarhead.ftype) == '2' || *(tarhead.ftype) == '5') {
+
+		if (*(tarhead.ftype) == '5')
+		    if (fs.filename[strlen(fs.filename) - 1] == '/')
+			fs.filename[strlen(fs.filename) - 1] = 0;
+
+		fprintf(tpipe1, "%d\t%c\t%4.4o\t%s\t%d\t%s\t%d\t%lld\t%s\t%d\t%s\t%s\t%d\t%s\t\n",
+		    bkid, fs.ftype, fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid,
+		    fs.filesize, "0", fs.modtime, stresc(fs.filename, &escfname),
+		    stresc(fs.linktarget == 0 ? "" : fs.linktarget, &esclname), fs.xheaderlen,
+		    fs.xheaderlen == 0 ? "" : strescb(fs.xheader, &escxheader, fs.xheaderlen)
+		);
+		bytes_read += fs.filesize;
+/*
+		sqlite3_bind_int(inbfrec, 1, bkid);
+		sqlite3_bind_text(inbfrec, 2, (mp1 = sqlite3_mprintf("%c", fs.ftype)), -1, SQLITE_STATIC);
+		sqlite3_bind_text(inbfrec, 3, (mp2 = sqlite3_mprintf("%4.4o", fs.mode)), -1, SQLITE_STATIC);
+		sqlite3_bind_text(inbfrec, 4, fs.auid, -1, SQLITE_STATIC);
+		sqlite3_bind_int(inbfrec, 5, fs.nuid);
+		sqlite3_bind_text(inbfrec, 6, fs.agid, -1, SQLITE_STATIC);
+		sqlite3_bind_int(inbfrec, 7, fs.ngid);
+		sqlite3_bind_int64(inbfrec, 8, fs.filesize);
+		sqlite3_bind_text(inbfrec, 9, "0", -1, SQLITE_STATIC);
+		sqlite3_bind_int(inbfrec, 10, fs.modtime);
+		sqlite3_bind_text(inbfrec, 11, fs.filename, -1, SQLITE_STATIC);
+		sqlite3_bind_text(inbfrec, 12, fs.linktarget == 0 ? "" : fs.linktarget, -1, SQLITE_STATIC);
+		sqlite3_bind_blob(inbfrec, 13, fs.xheaderlen == 0 ? "" : fs.xheader, fs.xheaderlen, SQLITE_STATIC);
+		if (! sqlite3_step(inbfrec)) {
+		    fprintf(stderr, "sqlite3_step error\n"); ;
+		    exit(1);
+		}
+		sqlite3_reset(inbfrec);
+		sqlite3_free(mp1);
+		sqlite3_free(mp2);
+*/
+
+	    }
+/*	if (verbose >= 1) {
 	    sprintf(statusline, "%llu/%llu bytes, %.0f %%", (bytes_read + bytes_readp), est_size, est_size != 0 ? ((double) (bytes_read + bytes_readp) / (double) est_size * 100) : 0) ;
 	    fprintf(stderr, "\r%45s", statusline);
 	}
+*/
 
-	if (fs.filename != 0)
-	    free(fs.filename);
-	fs.filename = 0;
-	if (fs.linktarget != 0)
-	    free(fs.linktarget);
-	fs.linktarget = 0;
-	if (fs.extdata != 0)
-	    free(fs.extdata);
-	fs.extdata = 0;
-	if (fs.xheader != 0)
-	    free(fs.xheader);
-	fs.xheader = 0;
-	fs.xheaderlen = 0;
+	    if (fs.filename != 0)
+		free(fs.filename);
+	    fs.filename = 0;
+	    if (fs.linktarget != 0)
+		free(fs.linktarget);
+	    fs.linktarget = 0;
+	    if (fs.extdata != 0)
+		free(fs.extdata);
+	    fs.extdata = 0;
+	    if (fs.xheader != 0)
+		free(fs.xheader);
+	    fs.xheader = 0;
+	    fs.xheaderlen = 0;
+	}
+	fprintf(stderr, "\n child exiting\n"); fflush(stderr);
+	exit(0);
     }
+    else {
+	close(tpipea[1]);
+	close(tpipeb[0]);
+	close(tpipeb[1]);
+	tpipe0 = fdopen(tpipea[0], "r");
+        char *filespecs;
+	size_t filespeclen = 0;
+	char *filenameu = malloc(4097);
+	char *linknameu = malloc(4097);
+	char *xattru = malloc(4097);
+	char **filespecsl = malloc(4097);
+	ssize_t len;
+	unsigned long long last_flushed = 0;
+	int files_read = 0;
 
+	while ((len = getline(&filespecs, &filespeclen, tpipe0)) > 0) {
+
+	    files_read++;
+	    parsex(filespecs, '\t', &filespecsl, 15);
+	    bytes_read += atoll(filespecsl[7]);
+	    if (verbose >= 1) {
+		sprintf(statusline, "%llu/%llu bytes, %.0f %%", (bytes_read + bytes_readp), est_size, est_size != 0 ? ((double) (bytes_read + bytes_readp) / (double) est_size * 100) : 0) ;
+		fprintf(stderr, "\r%45s", statusline);
+	    }
+//	    fprintf(stderr, "File: %s\n", filespecsl[10]); fflush(stdout);
+
+	    filespecs[len - 1] = '\0';
+	    sqlite3_bind_int(inbfrec, 1, atoi(filespecsl[0]));
+	    sqlite3_bind_text(inbfrec, 2, filespecsl[1], -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 3, filespecsl[2], -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 4, filespecsl[3], -1, SQLITE_STATIC);
+	    sqlite3_bind_int(inbfrec, 5, atoi(filespecsl[4]));
+	    sqlite3_bind_text(inbfrec, 6, filespecsl[5], -1, SQLITE_STATIC);
+	    sqlite3_bind_int(inbfrec, 7, atoi(filespecsl[6]));
+	    sqlite3_bind_int64(inbfrec, 8, atoll(filespecsl[7]));
+	    sqlite3_bind_text(inbfrec, 9, filespecsl[8], -1, SQLITE_STATIC);
+	    sqlite3_bind_int(inbfrec, 10, atoi(filespecsl[9]));
+	    sqlite3_bind_text(inbfrec, 11, strunesc(filespecsl[10], &filenameu), -1, SQLITE_STATIC);
+	    sqlite3_bind_text(inbfrec, 12, strunesc(filespecsl[11], &linknameu), -1, SQLITE_STATIC);
+	    sqlite3_bind_blob(inbfrec, 13, strunesc(filespecsl[13], &xattru), atoi(filespecsl[12]), SQLITE_STATIC);
+	    if (! sqlite3_step(inbfrec)) {
+		fprintf(stderr, "sqlite3_step error\n"); ;
+		exit(1);
+	    }
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"insert or ignore into diskfiles_t (sha1)  "
+		"values ('%s')", filespecsl[8])), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n", sqlerr);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_reset(inbfrec);
+	    if (files_read > last_flushed + 10000) { // flush every 10000 files
+		last_flushed = files_read;
+		flush_received_files(bkcatalog, verbose, bkid, est_size, &bytes_read, bytes_readp);
+	    }
+	}
+	flush_received_files(bkcatalog, verbose, bkid, est_size, &bytes_read, bytes_readp);
+	if (verbose >= 1) {
+	    sprintf(statusline, "%llu/%llu bytes, %.0f %%\n", (bytes_read + bytes_readp), est_size, est_size != 0 ? ((double) (bytes_read + bytes_readp) / (double) est_size * 100) : 0) ;
+	    fprintf(stderr, "\r%45s", statusline);
+	}
+    }
+    return(0);
 }
 
 struct tarhead {
@@ -1830,7 +2020,7 @@ int restore(int argc, char **argv)
 
     char *srcdir = 0;
 //    FILE *curfile;
-    struct cfile *curfile;
+    struct cfile *curfile = NULL;
     const unsigned char *sha1;
     const char *sfilename = 0;
     char *filename;
@@ -1861,7 +2051,7 @@ int restore(int argc, char **argv)
 	int modtime;
         unsigned long long int filesize;
     } t;
-    long long int tblocks;
+    long long int tblocks = 0;
     unsigned int lendian = 1;	// Little endian?
     int blocksize;
 
@@ -1869,7 +2059,7 @@ int restore(int argc, char **argv)
     size_t ssparseinfosz;
     long long int *sparseinfo;
     char *sparsefilepath = 0;
-    int nsi;
+    int nsi = 0;
     int msi;
     char *sqlstmt = 0;
     sqlite3_stmt *sqlres;
@@ -1880,7 +2070,7 @@ int restore(int argc, char **argv)
     char *sqlerr;
     int use_pax_header = 0;
     int no_use_pax_header = 0;
-    int verbose = 0;
+//    int verbose = 0;
     char *(*graft)[2] = 0;
     int numgrafts = 0;
     int maxgrafts = 0;
@@ -1929,7 +2119,7 @@ int restore(int argc, char **argv)
 		foundopts |= 4;
 		break;
 	    case 'v':
-		verbose = 1;
+//		verbose = 1;
 		foundopts |= 4;
 		break;
 	    case 0:
@@ -2014,11 +2204,6 @@ int restore(int argc, char **argv)
 	srcdir = config.vault;
 
     sha1filepath = malloc(strlen(srcdir) + 48);
-
-    // Zero out tar header
-    for (i = 0; i < sizeof(tarhead); i++) {
-	(((unsigned char *) (&tarhead)))[i] = 0;
-    }
 
     range = strchr(datestamp, '-');
     if (range != NULL) {
@@ -2109,17 +2294,6 @@ int restore(int argc, char **argv)
 	    fprintf(stderr, "%s\n\n\n",sqlerr);
 	    sqlite3_free(sqlerr);
 	}
-#if 0
-    sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
-	"insert or ignore into restore_file_entities  "
-	"(ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata, xheader)  "
-	"select ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata, xheader  "
-	"from file_entities f join backupset_detail d  "
-	"on f.file_id = d.file_id where backupset_id = '%d'%s order by filename, datestamp",
-	bkid, filespec != 0 ?  filespec : ""), 0, 0, 0);
-#endif
     sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
 	"create temporary view hardlink_file_entities  "
 	"as select min(file_id) as file_id, ftype, permission, device_id,  "
@@ -2147,6 +2321,8 @@ int restore(int argc, char **argv)
 	"and a.extdata = b.extdata and a.xheader = b.xheader")), 2000, &sqlres, 0);
 
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
+	// Zero out tar header
+	memset(&tarhead, 0, sizeof(tarhead));
 	t.ftype = *sqlite3_column_text(sqlres, 0);
 	t.mode = strtol((char *) sqlite3_column_text(sqlres, 1), 0, 8);
 	strncpy(t.auid, (char *) sqlite3_column_text(sqlres, 4), 32); t.auid[32] = 0;
@@ -2223,7 +2399,7 @@ int restore(int argc, char **argv)
 		    strcpy(longtarhead.mode, "0000000");
 		    sprintf(longtarhead.size, "%11.11o", (unsigned int) strlen(linktarget));
 		    strcpy(longtarhead.modtime, "00000000000");
-		    strncpy(longtarhead.ustar, "ustar ", 6);
+		    memcpy(longtarhead.ustar, "ustar ", 6);
 		    strcpy(longtarhead.auid, "root");
 		    strcpy(longtarhead.agid, "root");
 		    memcpy(longtarhead.chksum, "        ", 8);
@@ -2258,7 +2434,7 @@ int restore(int argc, char **argv)
 		strcpy(longtarhead.mode, "0000000");
 		sprintf(longtarhead.size, "%11.11o", (unsigned int) strlen(filename));
 		strcpy(longtarhead.modtime, "00000000000");
-		strncpy(longtarhead.ustar, "ustar ", 6);
+		memcpy(longtarhead.ustar, "ustar ", 6);
 		strcpy(longtarhead.auid, "root");
 		strcpy(longtarhead.agid, "root");
 		memcpy(longtarhead.chksum, "        ", 8);
@@ -2329,7 +2505,7 @@ int restore(int argc, char **argv)
 	    sprintf(xtarhead.size, "%11.11o", xheaderlen);
 	    strcpy(xtarhead.modtime, "00000000000");
 	    sprintf(xtarhead.ustar, "ustar");
-	    strncpy(xtarhead.ustarver, "00", 2);
+	    memcpy(xtarhead.ustarver, "00", 2);
 	    strcpy(xtarhead.auid, "root");
 	    strcpy(xtarhead.agid, "root");
 	    memcpy(xtarhead.chksum, "        ", 8);
@@ -2349,23 +2525,23 @@ int restore(int argc, char **argv)
 	    }
 	}
 
-	strncpy(tarhead.filename, filename, 100);
+	memcpy(tarhead.filename, filename, strlen(filename) < 100 ? strlen(filename) : 100);
 	if (linktarget != 0)
-	    strncpy(tarhead.linktarget, linktarget, 100);
+	    memcpy(tarhead.linktarget, linktarget, strlen(linktarget) < 100 ? strlen(linktarget) : 100);
 
 	if (xheader == 0) {
-	    strncpy(tarhead.ustar, "ustar ", 6);
+	    memcpy(tarhead.ustar, "ustar ", 6);
 	    sprintf(tarhead.ustarver, " ");
 	}
 	else {
 	    sprintf(tarhead.ustar, "ustar");
-	    strncpy(tarhead.ustarver, "00", 2);
+	    memcpy(tarhead.ustarver, "00", 2);
 	}
 	*(tarhead.ftype) = t.ftype;
 	sprintf(tarhead.mode, "%7.7o", t.mode);
-	strncpy(tarhead.auid, t.auid, 32);
+	memcpy(tarhead.auid, t.auid, strlen(t.auid) < 32 ? strlen(t.auid) : 32);
 	sprintf(tarhead.nuid, "%7.7o", t.nuid);
-	strncpy(tarhead.agid, t.agid, 32);
+	memcpy(tarhead.agid, t.agid, strlen(t.agid) < 32 ? strlen(t.agid) : 32);
 	sprintf(tarhead.ngid, "%7.7o", t.ngid);
 	sprintf(tarhead.modtime, "%11.11o", t.modtime);
 
@@ -2402,12 +2578,12 @@ int restore(int argc, char **argv)
 		else {
 		    tarhead.u.sph.isextended = 0;
 		}
-		strncpy(tarhead.ustar, "ustar ", 6);
-		strncpy(tarhead.ustarver, " ", 2);
+		memcpy(tarhead.ustar, "ustar ", 6);
+		memcpy(tarhead.ustarver, " ", 2);
 	    }
 	    else {
 		*(tarhead.ftype) = '0';
-		strncpy(tarhead.ustarver, "00", 2);
+		memcpy(tarhead.ustarver, "00", 2);
 		paxsparsehdrsz = 0;
 		paxsparsehdrsz += ilog10(nsi) + 2;
 		for (i = 1; i < nsi; i++) {
@@ -2979,21 +3155,57 @@ char *stresc(char *src, char **target)
     }
     return(*target);
 }
+
+char *strescb(char *src, char **target, int len)
+{
+    int i;
+    int j;
+    int e = 0;
+    static int tlen = 16384;
+
+    if (*target == 0)
+	*target = malloc(tlen);
+    for (i = 0; i < len; i++)
+	if (src[i] <= 32 || src[i] >= 127 || src[i] == 92)
+	    e++;
+//    *target = realloc(*target, len  + e * 4 + 1);
+    (*target)[0] = 0;
+    i = 0;
+    char *p = *target;
+    while (i < len) {
+	for (j = i; i < len && src[i] > 32 &&
+	    src[i] < 127 && src[i] != 92; i++)
+	    ;
+	strncat(p, src + j, i - j);
+	if (i < len) {
+	    p += strlen(p);
+	    sprintf((p), "\\%3.3o",
+		(unsigned char) src[i]);
+	    p += 4;
+	    i++;
+	}
+    }
+    return(*target);
+}
+
 char *strunesc(char *src, char **target)
 {
     int i;
     int j;
+    char *p;
 
     *target = realloc(*target, strlen(src) + 1);
     (*target)[0] = 0;
     memset(*target, 0, (size_t) strlen(src) + 1);
     i = 0;
+    p = *target;
     while (i < strlen(src)) {
 	for (j = i; i < strlen(src) && src[i] != 92; i++)
 	    ;
-	strncat(*target, src + j, i - j);
+	strncat(p, src + j, i - j);
 	if (i < strlen(src)) {
-	    (*target)[strlen(*target)] = (char) strtoln(src + ++i, NULL, 8, 3);
+	    p += strlen(p);
+	    *p++ = (char) strtoln(src + ++i, NULL, 8, 3);
 	    i += 3;
 	}
     }
@@ -3022,7 +3234,7 @@ int import(int argc, char **argv)
     char *bkcatalogp;
     char *sqlstmt = 0;
     char *sqlerr;
-    int bkid;
+    int bkid = 0;
     int i;
     char catalogpath[512];
     FILE *catalog;
@@ -3446,7 +3658,7 @@ int expire(int argc, char **argv)
     char retention[128];
     char bkname[128];
     char datestamp[128];
-    int age;
+    int age = 0;
     int bkid;
     int min = 3;
     int foundopts = 0;
@@ -4237,13 +4449,13 @@ unsigned int ilog10(unsigned int n) {
 
 
 int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
-    unsigned long long est_size,  unsigned long long bytes_read, unsigned long long bytes_readp)
+    unsigned long long est_size,  unsigned long long *bytes_read, unsigned long long bytes_readp)
 {
     char *sqlerr;
     sqlite3_stmt *sqlres;
     char *sqlstmt = 0;
     int x;
-    char statusline[80];
+    static unsigned long long bytes_read_l = 0;
 
 	    in_a_transaction = 0;
 	    if (verbose > 1)
@@ -4262,6 +4474,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		sqlite3_free(sqlerr);
 	    }
 
+/*
 	    logaction(bkcatalog, bkid, 5, "Copying entries to needed_file_entities_current");
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert into needed_file_entities_current "
@@ -4269,6 +4482,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		"    from needed_file_entities "
 		"    where backupset_id = %d; ", bkid
 	    )), 0, 0, &sqlerr);
+*/
     
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
@@ -4287,9 +4501,10 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		"  from received_file_entities_t rr "
 		"    join received_file_entities_t rl "
 		"    on rl.extdata = rr.filename "
-		"    join needed_file_entities_current n "
+		"    join needed_file_entities n "
 		"    on rl.filename = n.infilename "
 		"    where rl.ftype = 1"
+		"    and n.backupset_id = %d ", bkid
 	    )), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
@@ -4306,9 +4521,10 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		"    r.user_name, r.user_id, r.group_name, r.group_id, r.size, "
 		"    r.sha1, n.cdatestamp, r.datestamp, n.filename, r.extdata, r.xheader "
 		" from received_file_entities_t r "
-		"    join needed_file_entities_current n "
+		"    join needed_file_entities n "
 		"    on r.filename = n.infilename "
 		"    where r.ftype != 1"
+		"    and n.backupset_id = %d ", bkid
 	    )), 0, 0, &sqlerr);
 
 	    if (sqlerr != 0) {
@@ -4320,11 +4536,12 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		x = sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		    "select sum(size) from received_file_entities_ldi_t")), -1, &sqlres, 0);
 		if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
-		    bytes_read = sqlite3_column_int64(sqlres, 0);
-		    sprintf(statusline, "%llu/%llu bytes, %.0f %%", bytes_read + bytes_readp, est_size, est_size != 0 ? ((double) (bytes_read + bytes_readp) / (double) est_size * 100) : 0) ;
-		    if (verbose == 1)
-			fprintf(stderr, "\r");
-		    fprintf(stderr, "%45s\n", statusline);
+		    bytes_read_l += sqlite3_column_int64(sqlres, 0);
+		    *bytes_read = bytes_read_l;
+//		    sprintf(statusline, "%llu/%llu bytes, %.0f %%", bytes_read + bytes_readp, est_size, est_size != 0 ? ((double) (bytes_read + bytes_readp) / (double) est_size * 100) : 0) ;
+//		    if (verbose == 1)
+//			fprintf(stderr, "\r");
+//		    fprintf(stderr, "%45s\n", statusline);
 		}
 		sqlite3_finalize(sqlres);
 		sqlite3_free(sqlstmt);
@@ -4362,6 +4579,16 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 		sqlite3_free(sqlerr);
 	    }
 	    sqlite3_free(sqlstmt);
+	    sqlite3_exec(bkcatalog, "delete from received_file_entities_t", 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_exec(bkcatalog, "delete from received_file_entities_ldi_t", 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
 	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 
 	    return(0);
@@ -4410,6 +4637,7 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 	sqlite3_free(sqlerr);
     }
 
+#if 0
     sqlite3_exec(bkcatalog,
 	"create temporary table if not exists received_file_entities_ldi_t1 (  \n"
 	"    ftype         char,  \n"
@@ -4442,6 +4670,7 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
+
     sqlite3_exec(bkcatalog,
 	"create index if not exists "
 	"received_file_entities_ldi_t1_i1 "
@@ -4460,6 +4689,7 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
+#endif
 
     sqlite3_exec(bkcatalog,
 	"create temporary table if not exists needed_file_entities_current ( "
