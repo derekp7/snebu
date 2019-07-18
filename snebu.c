@@ -308,11 +308,11 @@ int newbackup(int argc, char **argv)
 
     x = sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into backupsets (name, retention, serial)  "
-	"values ('%s', '%s', '%s')", bkname, retention, datestamp)), 0, 0, &sqlerr);
+	"values ('%q', '%q', '%q')", bkname, retention, datestamp)), 0, 0, &sqlerr);
     sqlite3_free(sqlstmt);
     x = sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select backupset_id, retention from backupsets  "
-	    "where name = '%s' and serial = '%s'",
+	    "where name = '%q' and serial = '%q'",
 	    bkname, datestamp)), -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
@@ -473,7 +473,7 @@ int newbackup(int argc, char **argv)
 	    "insert or ignore into inbound_file_entities "
 	    "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
 	    "group_id, size, sha1, cdatestamp, datestamp, filename, extdata, infilename)  "
-	    "values ('%d', '%c', '%4.4o', '%s', '%s', '%s', '%d', '%s', '%d', '%llu', '%s', '%d', '%d', '%q%q', '%q', '%q')",
+	    "values ('%d', '%c', '%4.4o', '%q', '%q', '%q', '%d', '%q', '%d', '%llu', '%q', '%d', '%d', '%q%q', '%q', '%q')",
 	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 	    fs.filesize, fs.sha1, fs.cmodtime, fs.modtime, pathsub, fs.filename + pathskip, fs.linktarget, fs.filename)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
@@ -1768,7 +1768,7 @@ int submitfiles(int argc, char **argv)
     #ifdef commented_out
 		sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		    "insert or ignore into storagefiles (sha1, volume, segment, location)  "
-		    "values ('%s', 0, 0, '%q/%q.lzo')", cfsha1a, cfsha1d, cfsha1f)), 0, 0, &sqlerr);
+		    "values ('%q', 0, 0, '%q/%q.lzo')", cfsha1a, cfsha1d, cfsha1f)), 0, 0, &sqlerr);
 		if (sqlerr != 0) {
 		    fprintf(stderr, "%s\n", sqlerr);
 		    sqlite3_free(sqlerr);
@@ -1944,7 +1944,7 @@ int submitfiles(int argc, char **argv)
 	    }
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into diskfiles_t (sha1)  "
-		"values ('%s')", filespecsl[8])), 0, 0, &sqlerr);
+		"values ('%q')", filespecsl[8])), 0, 0, &sqlerr);
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s\n", sqlerr);
 		sqlite3_free(sqlerr);
@@ -2064,7 +2064,7 @@ int restore(int argc, char **argv)
     char *sqlstmt = 0;
     sqlite3_stmt *sqlres;
     sqlite3 *bkcatalog;
-    char *bkcatalogp;
+    char *bkcatalogp = NULL;
     char *filespec = 0;
     int filespeclen;
     char *sqlerr;
@@ -3336,11 +3336,11 @@ int import(int argc, char **argv)
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into backupsets (name, retention, serial)  "
-	"values ('%s', '%s', '%s')", bkname, retention, datestamp)), 0, 0, 0);
+	"values ('%q', '%q', '%q')", bkname, retention, datestamp)), 0, 0, 0);
     sqlite3_free(sqlstmt);
     sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
-	    "where name = '%s' and retention = '%s' and serial = '%s'",
+	    "where name = '%q' and retention = '%q' and serial = '%q'",
 	    bkname, retention, datestamp)), -1, &sqlres, 0);
     if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
         bkid = sqlite3_column_int(sqlres, 0);
@@ -3731,7 +3731,7 @@ int expire(int argc, char **argv)
     if (*datestamp != 0) {
 	sqlite3_prepare_v2(bkcatalog,
 	    (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
-		"where name = '%s' and serial = '%s'",
+		"where name = '%q' and serial = '%q'",
 		bkname, datestamp)), -1, &sqlres, 0);
 	if ((sqlite3_step(sqlres)) == SQLITE_ROW) {
 	    bkid = sqlite3_column_int(sqlres, 0);
@@ -3967,7 +3967,7 @@ int purge(int argc, char **argv)
 		fprintf(stderr, "Removing %s\n", destfilepath);
 		remove(destfilepathd);
 		sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		    "delete from diskfiles where sha1 = '%s'", sha1)), 0, 0, &sqlerr);
+		    "delete from diskfiles where sha1 = '%q'", sha1)), 0, 0, &sqlerr);
 	    }
 	    else {
 		fprintf(stderr, "    Restoring %s\n", destfilepath);
@@ -3975,7 +3975,7 @@ int purge(int argc, char **argv)
 	    }
 	}
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	    "delete from purgelist where sha1 = '%s'", sha1)), 0, 0, &sqlerr);
+	    "delete from purgelist where sha1 = '%q'", sha1)), 0, 0, &sqlerr);
     }
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
     return(0);
