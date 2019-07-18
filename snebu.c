@@ -227,6 +227,7 @@ int newbackup(int argc, char **argv)
     };
     int longoptidx;
     int i;
+    int filecount = 0;
 
 
     while ((optc = getopt_long(argc, argv, "n:d:r:v", longopts, &longoptidx)) >= 0) {
@@ -394,6 +395,7 @@ int newbackup(int argc, char **argv)
 	int pathskip = 0;
 	char pathsub[4097];
 	parsex(filespecs, '\t', &filespecsl, 13);
+	filecount++;
 
 	fs.ftype = *(filespecsl[0]);
 	fs.mode = (int) strtol(filespecsl[1], NULL, 8);
@@ -483,6 +485,20 @@ int newbackup(int argc, char **argv)
 //	else
 //	    fprintf(stderr, "%s\n", fs.filename);
 	sqlite3_free(sqlstmt);
+    }
+    if (filecount == 0) {
+	x = sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from backupsets where name = '%q' and retention = '%q' and serial = '%q'",
+	    bkname, retention, datestamp)), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
+	fprintf(stderr, "Empty manifest submitted, aborting backup\n");
+	sqlite3_free(sqlstmt);
+        sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+        sqlite3_close(bkcatalog);
+	exit(1);
     }
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 
