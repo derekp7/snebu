@@ -21,6 +21,7 @@
 #include <getopt.h>
 #include <signal.h>
 #include <stdint.h>
+#include <pwd.h>
 
 struct {
     char *vault;
@@ -54,6 +55,8 @@ int expire(int argc, char **argv);
 int purge(int argc, char **argv);
 int gethelp(int argc, char **argv);
 int help(char *topic);
+int checkperm(sqlite3 *bkcatalog, char *action, char *backupname);
+int permissions(int argc, char **argv);
 
 void concurrency_request_signal();
 void concurrency_request();
@@ -111,6 +114,7 @@ int main(int argc, char **argv)
 	{ "export", &export },
 	{ "expire", &expire },
 	{ "purge", &purge },
+	{ "permissions", &permissions},
 	{ "help", &gethelp }
     };
     struct option longopts[] = {
@@ -305,6 +309,10 @@ int newbackup(int argc, char **argv)
 	exit(1);
     }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    if (checkperm(bkcatalog, "backup", bkname)) {
+	sqlite3_close(bkcatalog);
+	return(1);
+    }
     x = initdb(bkcatalog);
 
     x = sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
@@ -641,6 +649,7 @@ int newbackup(int argc, char **argv)
     sqlite3_close(bkcatalog);
     return(0);
 }
+
 int initdb(sqlite3 *bkcatalog)
 {
     int err = 0;
@@ -824,6 +833,20 @@ int initdb(sqlite3 *bkcatalog)
 	return(err);
 
     err = sqlite3_exec(bkcatalog,
+	"create table if not exists userpermissions ( \n"
+	"    username		char, \n"
+	"    command		char, \n"
+	"    backupname		char)", 0, 0, 0);
+    if (err != 0)
+	return(err);
+
+    err = sqlite3_exec(bkcatalog,
+	"create table if not exists grouppermissions ( \n"
+	"    groupname		char, \n"
+	"    action		char, \n"
+	"    backupname		char)", 0, 0, 0);
+
+    err = sqlite3_exec(bkcatalog,
 	    "create table if not exists backupset_detail (  \n"
 	    "backupset_id  integer,  \n"
 	    "file_id       integer,  \n"
@@ -909,9 +932,12 @@ void usage()
 	    "\n"
 	    "    listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]\n"
 	    "\n"
-	    "    expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]\n"
+	    "    expire [ -n hostname -d datestamp ] or [ -a days -r schedule\n"
+	    "      [ -n hostname ]]\n"
 	    "\n"
 	    "    purge\n"
+	    "\n"
+	    "    permissions [ -l | -a | -r ] -c command -n hostname -u user\n"
 	    "\n"
 	    "    help [ subcommand ]\n"
 	    "\n"
@@ -1033,7 +1059,8 @@ int help(char *topic)
 	);
     if (strcmp(topic, "expire") == 0)
 	printf(
-	    "Usage: snebu expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]\n"
+	    "Usage: snebu expire [ -n hostname -d datestamp ] or [ -a days -r schedule\n"
+	    "  [ -n hostname ]]\n"
 	    " Removes backup sessions from the snebu backup catalog database.  A\n"
 	    " specific backup session can be purged by providing the \"-n\" and \"-d\"\n"
 	    " options, or all backups that are part of a given retention schedule\n"
@@ -1063,6 +1090,41 @@ int help(char *topic)
 	    " Permanantly removes files from disk storage that are no longer\n"
 	    " referenced by any backups. Run this command after running \"snebu\n"
 	    " expire\".\n"
+	);
+    if (strcmp(topic, "permissions") == 0)
+	printf(
+            "Usage: snebu permissions [ -l | -a | -r ] -c command -n hostname -u user\n"
+            " The \"permissions\" command lists, adds, or removes user permissions.  These\n"
+            " permissions are applied when the \"snebu\" command is installed setuid, and run\n"
+            " by a OS different user.\n"
+            "\n"
+            "Options:\n"
+            " -l, --list                Lists all installed permissions.  If the -c, -n, or\n"
+            "                           -u options are given, this list is restricted to\n"
+            "                           those subcommands, hostnames, or users respectively.\n"
+            "\n"
+            " -a, --add                 Adds permissions for the specified subcommand [-c],\n"
+            "                           hostname [-n], and user [-u].\n"
+            "\n"
+            " -r, --remove              Removes permissions for the specified subcommand\n"
+            "                           [-c], hostname [-n], and user [-u].\n"
+            "\n"
+            " Available subcomands that work with permissions are:\n"
+            "  backup (covers both newbackup and submitfiles functions)\n"
+            "  restore\n"
+            "  listbackups\n"
+            "  expire\n"
+            "  purge\n"
+            "  permissions\n"
+            "\n"
+            "Note, that since the purge subcommand doesn't take a list of hostnames, along\n"
+	    "with the permissions subcommand, and the expire subcommand when run with the\n"
+	    "--age option, you must specify the hostname '*' to give access to a specific\n"
+	    "user.\n"
+	    "\n"
+	    "To grant permissions, a this command must be run as the user that snebu is\n"
+	    "installed under, or the user must be granted access to the permissions\n"
+	    "subcommand\n"
 	);
     if (strcmp(topic, "help") == 0)
 	printf(
@@ -1258,6 +1320,10 @@ int submitfiles(int argc, char **argv)
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
 //    x = initdb(bkcatalog);
 
+    if (checkperm(bkcatalog, "backup", bkname)) {
+	sqlite3_close(bkcatalog);
+	return(1);
+    }
     x = sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
 	    "where name = '%q' and serial = '%q'",
@@ -2214,6 +2280,10 @@ int restore(int argc, char **argv)
 	exit(1);
     }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    if (checkperm(bkcatalog, "restore", bkname)) {
+	sqlite3_close(bkcatalog);
+	return(1);
+    }
 //    x = initdb(bkcatalog);
 
     if (srcdir == 0)
@@ -2815,6 +2885,7 @@ int listbackups(int argc, char **argv)
 //    int long0output = 0;
 
 
+    *bkname = *datestamp = '\0';
     while ((optc = getopt_long(argc, argv, "n:d:l0", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'n':
@@ -2872,6 +2943,10 @@ int listbackups(int argc, char **argv)
 	exit(1);
     }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    if (checkperm(bkcatalog, "listbackups", bkname)) {
+        sqlite3_close(bkcatalog);
+        return(1);
+    }
 
     if (foundopts == 0) {
 
@@ -3695,7 +3770,7 @@ int expire(int argc, char **argv)
     };
     int longoptidx;
 
-    *datestamp = 0;
+    *datestamp = *bkname = *retention = '\0';
     while ((optc = getopt_long(argc, argv, "r:n:a:k:m:d:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'r':
@@ -3740,6 +3815,10 @@ int expire(int argc, char **argv)
 	exit(1);
     }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    if (checkperm(bkcatalog, "expire", bkname)) {
+	sqlite3_close(bkcatalog);
+	return(1);
+    }
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
     cutoffdate = time(0) - (age * 60 * 60 * 24);
@@ -3889,6 +3968,10 @@ int purge(int argc, char **argv)
 	exit(1);
     }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    if (checkperm(bkcatalog, "purge", NULL)) {
+	sqlite3_close(bkcatalog);
+	return(1);
+    }
 //    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
     purgedate = time(0);
@@ -4780,6 +4863,172 @@ int logaction(sqlite3 *bkcatalog, int backupset_id, int action, char *message)
 	"insert into log (backupset_id, logdate, action, message) "
 	"values ('%d', '%d', '%d', '%q')", backupset_id, time(0), action, message)), 0, 0, 0);
     sqlite3_free(sqlstmt);
+    return(0);
+}
+
+int checkperm(sqlite3 *bkcatalog, char *action, char *backupname)
+{
+    int num_matches = 0;
+    struct passwd *passwd;
+    char *sqlstmt = 0;
+    sqlite3_stmt *sqlres;
+    int x;
+
+    if (getuid() != geteuid()) {
+	passwd = getpwuid(getuid());
+
+	x = sqlite3_prepare_v2(bkcatalog,
+	    (sqlstmt = sqlite3_mprintf("select count(*)  "
+		"from userpermissions where "
+		"command = '%q' and username = '%q' and backupname = '%q'",
+		action, passwd->pw_name, backupname == NULL || strlen(backupname) == 0 ? "*" : backupname)),
+		-1, &sqlres, 0);
+	if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
+	    num_matches = sqlite3_column_int(sqlres, 0);
+	    if (num_matches > 0) {
+		sqlite3_finalize(sqlres);
+		sqlite3_free(sqlstmt);
+		return(0);
+	    }
+	}
+	sqlite3_finalize(sqlres);
+	sqlite3_free(sqlstmt);
+	fprintf(stderr, "User %s not permitted to run %s on %s\n", 
+	    passwd->pw_name, action, backupname == NULL || strlen(backupname) == 0 ? "*" : backupname);
+	return(1);
+    }
+    else
+	return(0);
+}
+int permissions(int argc, char **argv)
+{
+    int optc;
+    sqlite3 *bkcatalog;
+    char *bkcatalogp;
+    char *sqlerr;
+    sqlite3_stmt *sqlres;
+    char *sqlstmt = 0;
+    char *sqlstmt2 = 0;
+    char *sqlstmt3 = 0;
+    char *sqlstmt4 = 0;
+    int foundopts = 0;
+    char *action = NULL;
+    char user[128];
+    char bkname[128];
+    char command[128];
+    struct option longopts[] = {
+	{ "list", no_argument, NULL, 'l' },
+	{ "add", no_argument, NULL, 'a' },
+	{ "remove", no_argument, NULL, 'r' },
+        { "command", required_argument, NULL, 'c' },
+        { "name", required_argument, NULL, 'n' },
+	{ "user", required_argument, NULL, 'u' },
+        { NULL, no_argument, NULL, 0 }
+    };
+    int longoptidx;
+    int sargs = 0;
+
+    *command = *bkname = *user = '\0';
+    while ((optc = getopt_long(argc, argv, "larc:n:u:", longopts, &longoptidx)) >= 0) {
+        switch (optc) {
+	    case 'l':
+		action = "list";
+		foundopts |= 1;
+		break;
+	    case 'a':
+		action = "add";
+		foundopts |= 2;
+		break;
+	    case 'r':
+		action = "remove";
+		foundopts |= 4;
+		break;
+           case 'c':
+                strncpy(command, optarg, 127);
+                command[127] = 0;
+                foundopts |= 8;
+                break;
+           case 'n':
+                strncpy(bkname, optarg, 127);
+                bkname[127] = 0;
+                foundopts |= 16;
+                break;
+           case 'u':
+                strncpy(user, optarg, 127);
+                user[127] = 0;
+                foundopts |= 32;
+                break;
+            default:
+                usage();
+                exit(1);
+	}
+    }
+    if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
+        fprintf(stderr, "Memory allocation error\n");
+        exit(1);
+    }
+    if (sqlite3_open(bkcatalogp, &bkcatalog) != SQLITE_OK) {
+        fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
+        exit(1);
+    }
+    sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    if (checkperm(bkcatalog, "permissions", bkname)) {
+        sqlite3_close(bkcatalog);
+        return(1);
+    }
+    initdb(bkcatalog);
+    if (strcmp(action, "list") == 0) {
+	sqlstmt2 = strlen(user) > 0 ? sargs++, sqlite3_mprintf(" where username = '%q'", user) : sqlite3_mprintf("");
+	sqlstmt3 = strlen(command) > 0 ? sargs++, sqlite3_mprintf(" %s command = '%q'", (sargs < 2 ? "where" : "and"), command) : sqlite3_mprintf("");
+	sqlstmt4 = strlen(bkname) > 0 ? sargs++, sqlite3_mprintf(" %s backupname = '%q'", (sargs < 2 ? "where" : "and"), bkname) : sqlite3_mprintf("");
+	sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "select username, command, backupname from userpermissions%s%s%s",
+	    sqlstmt2, sqlstmt3, sqlstmt4)), -1, &sqlres, 0);
+	fprintf(stderr, "%s\n", sqlstmt);
+	while (sqlite3_step(sqlres) == SQLITE_ROW) {
+	printf("%s %s %s\n",
+	    sqlite3_column_text(sqlres, 0),
+	    sqlite3_column_text(sqlres, 1),
+	    sqlite3_column_text(sqlres, 2));
+	}
+	if (sqlstmt4 != NULL)
+	    sqlite3_free(sqlstmt4);
+	if (sqlstmt3 != NULL)
+	    sqlite3_free(sqlstmt3);
+	if (sqlstmt2 != NULL)
+	    sqlite3_free(sqlstmt2);
+	sqlite3_free(sqlstmt);
+    }
+    if (strcmp(action, "add") == 0) {
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "insert into userpermissions (username, command, backupname) "
+	    "values ('%q', '%q', '%q')", user, command, bkname)), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n", sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
+	else {
+	    sqlite3_free(sqlstmt);
+	    sqlite3_close(bkcatalog);
+	    return(0);
+	}
+    }
+    if (strcmp(action, "remove") == 0) {
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from userpermissions where username = '%q' and "
+	    "command = '%q' and backupname = '%q'",
+	     user, command, bkname)), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n", sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
+	else {
+	    sqlite3_free(sqlstmt);
+	    sqlite3_close(bkcatalog);
+	    return(0);
+	}
+        sqlite3_close(bkcatalog);
+    }
     return(0);
 }
 
