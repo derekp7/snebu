@@ -1715,9 +1715,13 @@ int submitfiles(int argc, char **argv)
 			if (i == 0) {
 			    if (asprintf(&sparsefilep, "%llu:%llu:%llu", fs.filesize, sparsedata[i].offset, sparsedata[i].size) < 0) {
 				fprintf(stderr, "Memory allocation error\n");
-				exit(0);
+				exit(1);
 			    }
-			    cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
+			    if (cwrite(sparsefilep, strlen(sparsefilep), 1, curfile) < strlen(sparsefilep)) {
+				fprintf(stderr, "Write error\n");
+				exit(2);
+			    }
+
 			    SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
 			}
 			else {
@@ -1725,7 +1729,10 @@ int submitfiles(int argc, char **argv)
 				fprintf(stderr, "Memory allocation failure\n");
 				exit(1);
 			    }
-			    cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
+			    if (cwrite(sparsefilep, strlen(sparsefilep), 1, curfile) < strlen(sparsefilep)) {
+				fprintf(stderr, "Write error\n");
+				exit(2);
+			    }
 			    SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
 			}
 		    }
@@ -1733,7 +1740,10 @@ int submitfiles(int argc, char **argv)
 			fprintf(stderr, "Memory allocation failure\n");
 			exit(1);
 		    }
-		    cwrite(sparsefilep, strlen(sparsefilep), 1, curfile);
+		    if (cwrite(sparsefilep, strlen(sparsefilep), 1, curfile) < strlen(sparsefilep)) {
+			fprintf(stderr, "Write error\n");
+			exit(2);
+		    }
 		    SHA1_Update(&cfsha1ctl, sparsefilep, strlen(sparsefilep));
 		}
 
@@ -1748,12 +1758,18 @@ int submitfiles(int argc, char **argv)
 
 		    if (i == blockstoread) {
 			if (partialblock > 0) {
-			    cwrite(curblock, 1, partialblock, curfile);
+			    if (cwrite(curblock, 1, partialblock, curfile) < partialblock) {
+				fprintf(stderr, "Write error\n");
+				exit(2);
+			    }
 			    SHA1_Update(&cfsha1ctl, curblock, partialblock);
 			    break;
 			}
 		    }
-		    cwrite(curblock, blocksize, 1, curfile);
+		    if (cwrite(curblock, blocksize, 1, curfile) < blocksize) {
+			fprintf(stderr, "Write error\n");
+			exit(2);
+		    }
 		    SHA1_Update(&cfsha1ctl, curblock, blocksize);
 		    blocksize=512;
 		}
@@ -2810,9 +2826,8 @@ int listbackups(int argc, char **argv)
 	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
-/* Future functionality */
-//    int longoutput = 0;
-//    int long0output = 0;
+    int longoutput = 0;
+    int long0output = 0;
 
 
     while ((optc = getopt_long(argc, argv, "n:d:l0", longopts, &longoptidx)) >= 0) {
@@ -2842,7 +2857,7 @@ int listbackups(int argc, char **argv)
 		return(1);
 	}
     }
-    if (foundopts != 0 && foundopts != 1 && foundopts != 3 /* && foundopts != 7 && foundopts != 15 */) {
+    if (foundopts != 0 && foundopts != 1 && foundopts != 3 && foundopts != 7 && foundopts != 15) {
 	printf("foundopts = %d\n", foundopts);
         usage();
         return(1);
@@ -2985,7 +3000,7 @@ int listbackups(int argc, char **argv)
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
-    else if (foundopts == 7) {
+    else if (longoutput == 7) {
 	range = strchr(datestamp, '-');
 	if (range != NULL) {
 	    *range = '\0';
@@ -3058,7 +3073,7 @@ int listbackups(int argc, char **argv)
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
-    else if (foundopts == 15) {
+    else if (long0output == 15) {
 	range = strchr(datestamp, '-');
 	if (range != NULL) {
 	    *range = '\0';
@@ -4115,25 +4130,33 @@ int cwrite(void *buf, size_t sz, size_t count, struct cfile *cfile)
 	    // compress cfile->buf, write out
 
 	    // write uncompressed block size
-	    fwrite(htonlp(cfile->bufsize), 1, 4, cfile->handle);
+	    if (fwrite(htonlp(cfile->bufsize), 1, 4, cfile->handle) < 4)
+		return(0);
 	    chksum = lzo_adler32(1, (unsigned char *) cfile->buf, cfile->bufsize);
 	    lzo1x_1_compress((unsigned char *) cfile->buf, cfile->bufsize, (unsigned char *) cfile->cbuf, &(cfile->cbufsize), cfile->working_memory);
 	    // write compressed block size
-	    if (cfile->cbufsize < cfile->bufsize)
-		fwrite(htonlp(cfile->cbufsize), 1, 4, cfile->handle);
+	    if (cfile->cbufsize < cfile->bufsize) {
+		if (fwrite(htonlp(cfile->cbufsize), 1, 4, cfile->handle) < 4)
+		    return(0);
+	    }
 	    else
-		fwrite(htonlp(cfile->bufsize), 1, 4, cfile->handle);
+		if (fwrite(htonlp(cfile->bufsize), 1, 4, cfile->handle) < 4)
+		    return(0);
 	    // write checksum
-	    fwrite(htonlp(chksum), 1, 4, cfile->handle);
+	    if (fwrite(htonlp(chksum), 1, 4, cfile->handle) < 4)
+		return(0);
 	    //write compressed data
-	    if (cfile->cbufsize < cfile->bufsize)
-		fwrite(cfile->cbuf, 1, cfile->cbufsize, cfile->handle);
+	    if (cfile->cbufsize < cfile->bufsize) {
+		if (fwrite(cfile->cbuf, 1, cfile->cbufsize, cfile->handle) < cfile->cbufsize)
+		    return(0);
+	    }
 	    else
-		fwrite(cfile->buf, 1, cfile->bufsize, cfile->handle);
+		if (fwrite(cfile->buf, 1, cfile->bufsize, cfile->handle) < cfile->bufsize)
+		    return(0);
 	    cfile->bufp = cfile->buf;
 	}
     } while (bytesin > 0);
-    return(0);
+    return(sz * count);
 }
 
 int cread(void *buf, size_t sz, size_t count, struct cfile *cfile)
@@ -4243,21 +4266,31 @@ int cclose(struct cfile *cfile)
     uint32_t chksum;
 
     if (cfile->bufp - cfile->buf > 0) {
-	fwrite(htonlp(cfile->bufp - cfile->buf), 1, 4, cfile->handle);
+	if (fwrite(htonlp(cfile->bufp - cfile->buf), 1, 4, cfile->handle) < 4)
+	    return(EOF);
 	chksum = lzo_adler32(1, (unsigned char *) cfile->buf, cfile->bufp - cfile->buf);
 	lzo1x_1_compress((unsigned char *) cfile->buf, cfile->bufp - cfile->buf, (unsigned char *) cfile->cbuf, &(cfile->cbufsize), cfile->working_memory);
-	if (cfile->cbufsize < (cfile->bufp - cfile->buf))
-	    fwrite(htonlp(cfile->cbufsize), 1, 4, cfile->handle);
+	if (cfile->cbufsize < (cfile->bufp - cfile->buf)) {
+	    if (fwrite(htonlp(cfile->cbufsize), 1, 4, cfile->handle) < 4)
+		return(EOF);
+	}
 	else
-	    fwrite(htonlp(cfile->bufp - cfile->buf), 1, 4, cfile->handle);
-	fwrite(htonlp(chksum), 1, 4, cfile->handle);
-	if (cfile->cbufsize < (cfile->bufp - cfile->buf))
-	    fwrite(cfile->cbuf, 1, cfile->cbufsize, cfile->handle);
+	    if (fwrite(htonlp(cfile->bufp - cfile->buf), 1, 4, cfile->handle) < 4)
+		return(EOF);
+	if (fwrite(htonlp(chksum), 1, 4, cfile->handle) < 4)
+	    return(EOF);
+	if (cfile->cbufsize < (cfile->bufp - cfile->buf)) {
+	    if (fwrite(cfile->cbuf, 1, cfile->cbufsize, cfile->handle) < cfile->bufsize)
+		return(EOF);
+	}
 	else
-	    fwrite(cfile->buf, 1, (cfile->bufp - cfile->buf), cfile->handle);
+	    if (fwrite(cfile->buf, 1, (cfile->bufp - cfile->buf), cfile->handle) < cfile->bufp - cfile->buf)
+		return(EOF);
     }
-    fwrite(htonlp(0), 1, 4, cfile->handle);
-    fclose(cfile->handle);
+    if (fwrite(htonlp(0), 1, 4, cfile->handle) < 4)
+	return(EOF);
+    if (fclose(cfile->handle) != 0)
+	return(EOF);
     free(cfile->buf);
     free(cfile->cbuf);
     free(cfile->working_memory);
