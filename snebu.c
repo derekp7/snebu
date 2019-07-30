@@ -1768,6 +1768,7 @@ int submitfiles(int argc, char **argv)
 		sprintf(tmpfilepath, "%s/tbXXXXXX", tmpfiledir);
 		curtmpfile = mkstemp(tmpfilepath);
 		if (curtmpfile == -1) {
+		    perror(NULL);
 		    fprintf(stderr, "Error opening temp file %s\n", tmpfilepath);
 		    fclose(tpipe1);
 //		    flush_received_files(bkcatalog, verbose, bkid, est_size, bytes_read, bytes_readp);
@@ -1840,7 +1841,10 @@ int submitfiles(int argc, char **argv)
 		    blocksize=512;
 		}
 
-		cclose(curfile);
+		if (cclose(curfile) != 0) {
+		    fprintf(stderr, "Error closing file\n");
+		    exit(2);
+		}
 		if (in_a_transaction == 0) {
     //		sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
 		    in_a_transaction = 1;
@@ -4363,7 +4367,7 @@ int cclose(struct cfile *cfile)
 	if (fwrite(htonlp(chksum), 1, 4, cfile->handle) < 4)
 	    return(EOF);
 	if (cfile->cbufsize < (cfile->bufp - cfile->buf)) {
-	    if (fwrite(cfile->cbuf, 1, cfile->cbufsize, cfile->handle) < cfile->bufsize)
+	    if (fwrite(cfile->cbuf, 1, cfile->cbufsize, cfile->handle) < cfile->cbufsize)
 		return(EOF);
 	}
 	else
@@ -5017,7 +5021,6 @@ int permissions(int argc, char **argv)
 	sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "select username, command, backupname from userpermissions%s%s%s",
 	    sqlstmt2, sqlstmt3, sqlstmt4)), -1, &sqlres, 0);
-	fprintf(stderr, "%s\n", sqlstmt);
 	while (sqlite3_step(sqlres) == SQLITE_ROW) {
 	printf("%s %s %s\n",
 	    sqlite3_column_text(sqlres, 0),
