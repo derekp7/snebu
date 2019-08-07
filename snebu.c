@@ -318,7 +318,13 @@ int newbackup(int argc, char **argv)
     x = sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into backupsets (name, retention, serial)  "
 	"values ('%q', '%q', '%q')", bkname, retention, datestamp)), 0, 0, &sqlerr);
-    sqlite3_free(sqlstmt);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n", sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    else {
+	sqlite3_free(sqlstmt);
+    }
     x = sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select backupset_id, retention from backupsets  "
 	    "where name = '%q' and serial = '%q'",
@@ -1640,7 +1646,7 @@ int submitfiles(int argc, char **argv)
 	    if (usepaxsize == 0) {
 		fs.filesize = 0;
 		if ((unsigned char) tarhead.size[0] == 128)
-		    for (i = 0; i < 8; i++)
+		    for (i = 0; i < 10; i++)
 			fs.filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
 		else
 		    fs.filesize=strtoull(tarhead.size, 0, 8);
@@ -1692,9 +1698,11 @@ int submitfiles(int argc, char **argv)
 		if (*(tarhead.ftype) == 'S') {
 		    s_isextended = tarhead.u.sph.isextended;
 		    n_sparsedata = 0;
-		    if ((unsigned char) tarhead.u.sph.realsize[0] == 128)
-			for (i = 0; i < 8; i++)
+		    if ((unsigned char) tarhead.u.sph.realsize[0] == 128) {
+			s_realsize = 0;
+			for (i = 0; i < 10; i++)
 			    s_realsize  += (( ((unsigned long long) ((unsigned char) (tarhead.u.sph.realsize[11 - i]))) << (i * 8)));
+		    }
 		    else
 			s_realsize = strtoull(tarhead.u.sph.realsize, 0, 8);
 
@@ -2026,7 +2034,7 @@ int submitfiles(int argc, char **argv)
 	    bytes_read += atoll(filespecsl[7]);
 	    if (verbose >= 1) {
 		sprintf(statusline, "%llu/%llu bytes, %.0f %%", (bytes_read + bytes_readp), est_size, est_size != 0 ? ((double) (bytes_read + bytes_readp) / (double) est_size * 100) : 0) ;
-		fprintf(stderr, "\r%45s", statusline);
+		fprintf(stderr, "\r %45s", statusline);
 	    }
 //	    fprintf(stderr, "File: %s\n", filespecsl[10]); fflush(stdout);
 
@@ -2057,6 +2065,7 @@ int submitfiles(int argc, char **argv)
 	    }
 	    sqlite3_reset(inbfrec);
 	    if (files_read > last_flushed + 10000) { // flush every 10000 files
+		fprintf(stderr, "\r*%45s", statusline);
 		last_flushed = files_read;
 		flush_received_files(bkcatalog, verbose, bkid, est_size, &bytes_read, bytes_readp);
 	    }
@@ -2064,7 +2073,7 @@ int submitfiles(int argc, char **argv)
 	flush_received_files(bkcatalog, verbose, bkid, est_size, &bytes_read, bytes_readp);
 	if (verbose >= 1) {
 	    sprintf(statusline, "%llu/%llu bytes, %.0f %%", (bytes_read + bytes_readp), est_size, est_size != 0 ? ((double) (bytes_read + bytes_readp) / (double) est_size * 100) : 0) ;
-	    fprintf(stderr, "\r%45s\n", statusline);
+	    fprintf(stderr, "\r %45s\n", statusline);
 	}
     }
     logaction(bkcatalog, bkid, 7, "End post processing received files");
@@ -2662,7 +2671,7 @@ int restore(int argc, char **argv)
 	    if (use_pax_header == 0) {
 
 		if (sparseinfo[0] <= 077777777777LL)
-		    sprintf(tarhead.u.sph.realsize, "%11.11o", (unsigned int) sparseinfo[0]);
+		    sprintf(tarhead.u.sph.realsize, "%11.11llo", (unsigned long long int) sparseinfo[0]);
 		else {
 		    tarhead.u.sph.realsize[0] = 0x80;
 		    for (i = 0; i < sizeof(sparseinfo[0]); i++)
@@ -2735,7 +2744,7 @@ int restore(int argc, char **argv)
 		((unsigned char *) &speh)[i] = 0;
 	    for (i = 9; i < nsi; i++) {
 		if (sparseinfo[i] <= 077777777777LL)
-		    sprintf(speh.item[(i - 9) % 42], "%11.11o", (unsigned int) sparseinfo[i]);
+		    sprintf(speh.item[(i - 9) % 42], "%11.11llo", (unsigned long long int) sparseinfo[i]);
 		else {
 		    speh.item[(i - 9) % 42][0] = 0x80;
 		    for (j = 0; i < sizeof(sparseinfo[i]); j++)
@@ -2923,7 +2932,6 @@ int listbackups(int argc, char **argv)
 		datestamp[127] = 0;
 		foundopts |= 2;
 		break;
-/*
 	    case 'l':
 		longoutput = 1;
 		foundopts |= 4;
@@ -2932,7 +2940,6 @@ int listbackups(int argc, char **argv)
 		long0output = 1;
 		foundopts |= 8;
 		break;
-*/
 	    default:
 		usage();
 		return(1);
@@ -3085,7 +3092,7 @@ int listbackups(int argc, char **argv)
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
-    else if (longoutput == 7) {
+    else if (longoutput == 1 && long0output == 0) {
 	range = strchr(datestamp, '-');
 	if (range != NULL) {
 	    *range = '\0';
@@ -3158,7 +3165,7 @@ int listbackups(int argc, char **argv)
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
-    else if (long0output == 15) {
+    else if (long0output == 1) {
 	range = strchr(datestamp, '-');
 	if (range != NULL) {
 	    *range = '\0';
