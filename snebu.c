@@ -1361,7 +1361,8 @@ int submitfiles(int argc, char **argv)
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
 
-
+// code no longer needed
+#if 0
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"create temporary table if not exists current_backup_set_submitted_files_t "
 	"as select filename, size from file_entities_bd where "
@@ -1409,6 +1410,7 @@ int submitfiles(int argc, char **argv)
     }
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
+#endif
 
     if (verbose >= 1)
 	fprintf(stderr, "Receiving files\n");
@@ -2065,6 +2067,8 @@ int submitfiles(int argc, char **argv)
 	    fprintf(stderr, "\r%45s\n", statusline);
 	}
     }
+    logaction(bkcatalog, bkid, 7, "End post processing received files");
+    sqlite3_close(bkcatalog);
     return(0);
 }
 
