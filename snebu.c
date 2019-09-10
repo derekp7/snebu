@@ -1646,7 +1646,7 @@ int submitfiles(int argc, char **argv)
 	    if (usepaxsize == 0) {
 		fs.filesize = 0;
 		if ((unsigned char) tarhead.size[0] == 128)
-		    for (i = 0; i < 10; i++)
+		    for (i = 0; i < 8; i++)
 			fs.filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
 		else
 		    fs.filesize=strtoull(tarhead.size, 0, 8);
@@ -1700,7 +1700,7 @@ int submitfiles(int argc, char **argv)
 		    n_sparsedata = 0;
 		    if ((unsigned char) tarhead.u.sph.realsize[0] == 128) {
 			s_realsize = 0;
-			for (i = 0; i < 10; i++)
+			for (i = 0; i < 8; i++)
 			    s_realsize  += (( ((unsigned long long) ((unsigned char) (tarhead.u.sph.realsize[11 - i]))) << (i * 8)));
 		    }
 		    else
