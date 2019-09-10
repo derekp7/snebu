@@ -28,14 +28,14 @@ make %{?_smp_mflags}
 
 %install
 mkdir -p %{buildroot}/usr/bin
-make install PREFIX=/ DESTDIR=%{buildroot}
+make install PREFIX=/usr DESTDIR=%{buildroot}
 
 
 %files
 /usr/bin/snebu-client
 %config /etc/snebu.conf
 %attr(4550, snebu, snebu) /usr/bin/snebu
-%doc readme.md readme-snebu-client.txt COPYING.txt
+%doc readme.md COPYING.txt
 
 %pre
 grep '^snebu:' /etc/passwd || useradd --system snebu
