@@ -27,7 +27,7 @@ process_cmdline()
     fi
 
     verbose=0
-    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help,sudo:" -o "c:n:r:d:fvC:h" -- "$@")")
+    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help,sudo:" -o "c:n:r:d:fvC:h" -- "$@")")
     then
         usage target
         exit 1
@@ -40,6 +40,7 @@ process_cmdline()
 	    -n|--name) backupname=$2; shift; shift;;
 	    --remote-client) clientname=$2; shift; shift;;
 	    --backup-server) bksvrname=$2; shift; shift;;
+	    --backup-user) bkuser=$2; shift; shift;;
 	    -r|--retention) retention=$2; shift; shift;;
 	    -d|--date) datestamp=$2; shift; shift;;
 	    -f|--force-full) force_full=1; shift;;
@@ -194,6 +195,9 @@ usage()
 	                            Host name / IP address of backup server.  Used to
 	                            backup to a remote server.
 	
+	     --backup-user userid
+	                            User ID for remote backup-server.
+
 	 -f, --force-full           Force a full backup
 	
 	 -C, --changedir path       Changes to the given directory path before
