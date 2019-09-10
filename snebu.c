@@ -309,6 +309,7 @@ int newbackup(int argc, char **argv)
 	exit(1);
     }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = WAL", 0, 0, 0);
     if (checkperm(bkcatalog, "backup", bkname)) {
 	sqlite3_close(bkcatalog);
 	return(1);
@@ -1328,6 +1329,7 @@ int submitfiles(int argc, char **argv)
 	exit(1);
     }
     sqlite3_exec(bkcatalog, "PRAGMA foreign_keys = ON", 0, 0, 0);
+    sqlite3_exec(bkcatalog, "PRAGMA journal_mode = WAL", 0, 0, 0);
 //    x = initdb(bkcatalog);
 
     if (checkperm(bkcatalog, "backup", bkname)) {
