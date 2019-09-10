@@ -7,7 +7,6 @@ Group:		Applications/System
 License:	GPLv3
 URL:		http://www.snebu.com
 Source0:	snebu-%{version}.tar.gz
-Patch1:		Makefile-Fedora.patch
 Requires:	lzop
 
 
@@ -21,7 +20,6 @@ a backup catalog stored in an SQLite datbase file.
 
 %prep
 %setup -q
-%patch1 -p1 -b .Makefile
 
 
 %build
@@ -30,13 +28,18 @@ make %{?_smp_mflags}
 
 %install
 mkdir -p %{buildroot}/usr/bin
-make install DESTDIR=%{buildroot}
+make install PREFIX=/ DESTDIR=%{buildroot}
 
 
 %files
-/usr/bin/snebu
 /usr/bin/snebu-client
+%config /etc/snebu.conf
+%attr(4550, snebu, snebu) /usr/bin/snebu
 %doc readme.md readme-snebu-client.txt COPYING.txt
 
-%changelog
+%pre
+grep '^snebu:' /etc/passwd || useradd --system snebu
 
+%changelog
+* Mon Sep 9 2019 Derek Pressnall <dspgh@needcaffeine.net>
+- Updated to release 1.04
