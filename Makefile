@@ -11,6 +11,7 @@ snebu: snebu.c
 install: $(PROGS) $(SCRIPTS) $(CONFIGS)
 	mkdir -p $(DESTDIR)$(BINDIR)
 	mkdir -p $(DESTDIR)$(ETCDIR)
+	grep '^snebu:' /etc/passwd || useradd --system snebu
 	cp -f $(PROGS) $(SCRIPTS) $(DESTDIR)$(BINDIR)/
 	cp -f $(CONFIGS) $(DESTDIR)$(ETCDIR)/
 

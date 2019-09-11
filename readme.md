@@ -19,7 +19,7 @@ Features
 
 * Client-server -- Hosts can either push backups to a central backup server, or the server can pull backups from individual clients.
 
-* Simple -- System consists of a single compiled binary, `snebu`, plus a front-end client, `snebu-client` written in Bash shell script.  If used with multiple hosts, communications all happen over ssh, and there are no agent programs that need to be put on remote hosts.  Backed up files are stored in a "vault" directory, with the metadata in a light weight SQLite database file.  (SQLite requires no database server processes, all functionality is built into the SQLite library linked against the main `snebu` binary).
+* Simple -- System consists of a single compiled binary, `snebu`, plus a front-end client, `snebu-client` written in Bash shell script.  If used with multiple hosts, communications all happen over ssh, and there are no agent programs that need to be installed on remote hosts.  Backed up files are stored in a "vault" directory, with the metadata in a light weight SQLite database file.  (SQLite requires no database server processes, all functionality is built into the SQLite library linked against the main `snebu` binary).
 
 * Secure -- Backup server can pull backups from hosts, or clients can push backups to the central backup server using minimal permission accounts (i.e., you can configure an account to be able to submit, but not delete backups, or restrict restores to only specific backup sets).
 
@@ -75,83 +75,84 @@ This procedure assumes that both `snebu` and `snebu-client` are installed, and y
 
 2) Install the `snebu` package, or run `make; make install` from the source directory to install the system.
 
-This should install `snebu` in `/usr/bin`, or `/usr/local/bin`, with it owned by user:group `snebu:snebu`, and with file mode 4550.
+    This should install `snebu` in `/usr/bin`, or `/usr/local/bin`, with it owned by user:group `snebu:snebu`, and with file mode 4550.
 
 3) Mount a drive under /media/snebu
 
 4) Verify or create the configuration file `/etc/snebu.conf` with the following:
 
-    meta=/media/snebu/catalog
-    vault=/media/snebu/vault
+        meta=/media/snebu/catalog
+        vault=/media/snebu/vault
 
-The meta directory is where the backup catalog is stored (in an SQLite DB).  The vault directory contains all the backup file contents.
+    The meta directory is where the backup catalog is stored (in an SQLite DB).  The vault directory contains all the backup file contents.
 
-Note: During operation, the backup catalog database receives a large number of random I/O operations.  Therefore, if it is residing on a slower device, such as a 2.5" low-powered USB drive, the performance may be unacceptably slow.  For this situation, better performance can be achieved by mounting an SSD on the catalog directory.
+    Note: During operation, the backup catalog database receives a large number of random I/O operations.  Therefore, if it is residing on a slower device, such as a 2.5" low-powered USB drive, the performance may be unacceptably slow.  For this situation, better performance can be achieved by mounting an SSD on the catalog directory.
 
 4) Create the directories from the `snebu.conf` file, and give ownership to the snebu user and group.
 
-    mkdir -p /media/snebu/meta
-    mkdir -p /media/snebu/vault
-    chown -R snebu:snebu /media/snebu/
+        mkdir -p /media/snebu/meta
+        mkdir -p /media/snebu/vault
+        chown -R snebu:snebu /media/snebu/
 
 5) Create a file `/etc/snebu-client.conf` with the following:
 
-    EXCLUDE=( /tmp /var/tmp /mnt /media/snebu )
+        EXCLUDE=( /tmp /var/tmp /mnt /media/snebu )
 
-By default, the files to be backed up included all mounted Linux filesystems of the types ext2, ext3, ext4, btrfs, xfs.  This is the same as specifying the following line in the `snebu-client.conf` file:
+    By default, the files to be backed up included all mounted Linux filesystems of the types ext2, ext3, ext4, btrfs, xfs.  This is the same as specifying the following line in the `snebu-client.conf` file:
 
-    INCLUDE=( $(mount |egrep "ext[234]|btrfs" |awk '{print $3}') )
+        INCLUDE=( $(mount |egrep "ext[234]|btrfs" |awk '{print $3}') )
 
-If you want to list specific directories to backup, list them in an INCLUDE line in the `/etc/snebu-client.conf` file:
+    If you want to list specific directories to backup, list them in an INCLUDE line in the `/etc/snebu-client.conf` file:
 
-    INCLUDE=( /dir1 /dir2 /dir3 )
+        INCLUDE=( /dir1 /dir2 /dir3 )
 
-Or, if you want to add to the default include:
+    Or, if you want to add to the default include:
 
-    INCLUDE=( "${INCLUDE[@]}" /dir1 /dir2 /dir3 )
+        INCLUDE=( "${INCLUDE[@]}" /dir1 /dir2 /dir3 )
 
 6) Change user to `snebu`, and set up user permissions for root
 
-    snebu permissions -a -c '*' -n '*' -u root
+        snebu permissions -a -c '*' -n '*' -u root
 
 7) Run a test backup:
 
-    snebu-client backup -v
+        snebu-client backup -v
 
-You should see some status messages.  The first will indicate that the system is gathering a file manifest, followed by a line indicating the current number of bytes transferred along with percentage completed.
+    You should see some status messages.  The first will indicate that the system is gathering a file manifest, followed by a line indicating the current number of bytes transferred along with percentage completed.
 
-If you see any error messages related to being unable to open the backup catalog file, check to make sure the `snebu` user has read/write permissions to the file / directory.
+    If you see any error messages related to being unable to open the backup catalog file, check to make sure the `snebu` user has read/write permissions to the file / directory.
 
-Note, you can also override the default INCLUDE list on the `snebu-client` command line:
+    Note, you can also override the default INCLUDE list on the `snebu-client` command line:
 
     snebu-client backup -v /dir1 /dir2
 
-See the `snebu-client` detailed documentation for the list of available parameters.  Specifically, look at the `-r` (retention schedule), and `-n` (backup name) parameters.
+    See the `snebu-client` detailed documentation for the list of available parameters.  Specifically, look at the `-r` (retention schedule), and `-n` (backup name) parameters.
 
 8) Once the backup is completed, you can use the following to list the backups:
 
-    snebu-client listbackups -v
+        snebu-client listbackups -v
 
-Which should output the names of the backups that are available:
+    Which should output the names of the backups that are available:
 
-    zeus
-        1389677695 / daily / Mon Jan 13 23:34:55 2014
+        zeus
+            1389677695 / daily / Mon Jan 13 23:34:55 2014
 
 9) To get a list of files that are included:
 
-    snebu-client listbackups --name zeus --datestamp 1389677695 |more
+        snebu-client listbackups --name zeus --datestamp 1389677695 |more
 
 10) To restore a given file, pick one from the list generated in the step above, and:
 
-    snebu-client restore --name zeus --datestamp 1389677695 '/path/to/file'
+        snebu-client restore --name zeus --datestamp 1389677695 '/path/to/file'
 
-Or, to restore a directory and all contents underneath,
+    Or, to restore a directory and all contents underneath,
 
-    snebu-client restore --name zeus --datestamp 1389677695 '/path/to/directory/*'
+        snebu-client restore --name zeus --datestamp 1389677695 '/path/to/directory/*'
 
-And, to specify a target directory to restore to, use the -C parameter
+    And, to specify a target directory to restore to, use the -C parameter
 
-    snebu-client restore --name zeus --datestamp 1389677695 -C /tmp '/path/to/directory/*'
+        snebu-client restore --name zeus --datestamp 1389677695 \
+	    -C /tmp '/path/to/directory/*'
 
 
 Backing up to a remote server
@@ -159,51 +160,50 @@ Backing up to a remote server
 
 This section will describe how to back up a client, in this case called `zeus`, to a remote backup server, called `jupiter`.
 
-1 - 5)  
-On the backup server, follow steps 1 thru 4 from above (Set up a `snebu` user, install the software, create the config file, and set up the backup target directories for the vault and backup catalog locations).  Then follow step 5, create a snebu-client.conf file in /etc, on the client system.
+1) On the backup server, follow steps 1 thru 4 from above (Set up a `snebu` user, install the software, create the config file, and set up the backup target directories for the vault and backup catalog locations).  Then follow step 5, create a snebu-client.conf file in /etc, on the client system.
 
-6) On the backup server `jupiter`, create a user for the client, `zeus`  
+2) On the backup server `jupiter`, create a user for the client, `zeus`  
 For greater security, we will only allow clients specific access to the server, by creating a dedicated account for each client host.
 
-    useradd zeus
+        useradd zeus
 
-7) Now add permissions this user in `snebu`
+3) Now add permissions this user in `snebu`
 
-    su - snebu
-    snebu permissions --add -u zeus -c backup -n zeus
-    snebu permissions --add -u zeus -c restore -n zeus
-    snebu permissions --add -u zeus -c listbackups -n zeus
+        su - snebu
+        snebu permissions --add -u zeus -c backup -n zeus
+        snebu permissions --add -u zeus -c restore -n zeus
+        snebu permissions --add -u zeus -c listbackups -n zeus
 
-This will give the user `zeus` permission to submit backups, request restores, and list backups for backups named `zeus`.
+    This will give the user `zeus` permission to submit backups, request restores, and list backups for backups named `zeus`.
 
-8) Add root's ssh public key from the client, to the target user on the backup server.  This involves generating a key pair as root on `zeus` if it doesn't already exist:
+4) Add root's ssh public key from the client, to the target user on the backup server.  This involves generating a key pair as root on `zeus` if it doesn't already exist:
 
-    ssh-keygen -t rsa
+        ssh-keygen -t rsa
 
-then adding the key to the `/home/zeus/.ssh/authorized_keys` file on `jupiter`.  Test this out by running ssh from root on `zeus`, to `zeus@jupiter`.  Consult your ssh documentation for any troubleshooting tips on using key-based authentication if you are having any issues.
+    then adding the key to the `/home/zeus/.ssh/authorized_keys` file on `jupiter`.  Test this out by running ssh from root on `zeus`, to `zeus@jupiter`.  Consult your ssh documentation for any troubleshooting tips on using key-based authentication if you are having any issues.
 
-9) Place a copy of ssh-client on the client, in a convenient location, such as /usr/local/bin.
+5) Place a copy of ssh-client on the client, in a convenient location, such as /usr/local/bin.
 
-10) On the client, run the command:
+6) On the client, run the command:
 
-    snebu-backup -n zeus --backup-server jupiter --backup-user zeus -v
+        snebu-backup -n zeus --backup-server jupiter --backup-user zeus -v
 
-Just as in the previous section, you should see output indicating the current status of the backup operation.
+    Just as in the previous section, you should see output indicating the current status of the backup operation.
 
-11) To list backups, run:
+7) To list backups, run:
 
-    snebu-client listbackups --backup-server jupiter \
-        --backup-user zeus --name zeus
+        snebu-client listbackups --backup-server jupiter \
+            --backup-user zeus --name zeus
 
-Which should output the names of the backups that are available:
+    Which should output the names of the backups that are available:
 
-    zeus
-        1389677695 / daily / Mon Jan 13 23:34:55 2014
+        zeus
+            1389677695 / daily / Mon Jan 13 23:34:55 2014
 
-12) To restore a given file to a given location (such as `/tmp/`:
+8) To restore a given file to a given location (such as `/tmp/`:
 
-    snebu-client restore --backup-server jupiter --backup-user zeus \
-        --name zeus --datestamp 1389677695 -C /tmp '/path/to/file'
+        snebu-client restore --backup-server jupiter --backup-user zeus \
+            --name zeus --datestamp 1389677695 -C /tmp '/path/to/file'
 
 
 Backing up remote clients from a backup server
@@ -215,34 +215,33 @@ Note, you can also specify a non-privileged account on the target clients, by al
 
 This section will describe how to back up a remote host, in this case called `zeus`, initiated from the backup server, called `jupiter`.  Access from `snebu` on `jupiter` will be via the account `backup` on `zeus`, which is listed in /etc/sudoers on `zeus`
 
-1 - 5)  
-Follow steps 1 thru 5 from the section `Setting up a local backup`, on the backup server `jupiter`.  (Set up a `snebu` user, install the software, create the config file, and set up the backup target directories for the vault and backup catalog locations, and create a `snebu-client.conf` file in `/etc`, on the backup server).
+1)  Follow steps 1 thru 5 from the section `Setting up a local backup`, on the backup server `jupiter`.  (Set up a `snebu` user, install the software, create the config file, and set up the backup target directories for the vault and backup catalog locations, and create a `snebu-client.conf` file in `/etc`, on the backup server).
 
 2) As the user `snebu` on the backup server `jupiter`, create an SSH key pair if it doesn't already exist
 
-    ssh-keygen -t rsa -N ""
+        ssh-keygen -t rsa -N ""
 
 3) Create a user `backup` on the remote host `zeus`
 
-    useradd backup
+        useradd backup
 
 4) Add the contents of the public key file belonging `snebu` on `jupiter` (`/home/snebu/.ssh/id_rsa.pub`), to the `authorized_keys` file belonging to `backup` on `zeus` (`/home/backup/.ssh/authorized_keys`).  Make sure the `authorized_keys` file, and `.ssh` directory is owned by `backup`, and has the appropriate permissions (consult your local `ssh` documentation if needed).
 
 5) On `zeus`, add `backup` to /etc/sudoers giving it access to root, with a line similar to below:
 
-    backup  ALL=(ALL)       NOPASSWD: ALL
+        backup  ALL=(ALL)       NOPASSWD: ALL
 
 6) Test that this works.  From the `snebu` user on `jupiter`, run the following:
 
-    ssh backup@zeus
+        ssh backup@zeus
 
-Then, assuming the logon to `zeus` worked, run the following from `backup` on `zeus` to see if it can access root:
+    Then, assuming the logon to `zeus` worked, run the following from `backup` on `zeus` to see if it can access root:
 
-    sudo id
+        sudo id
 
 7) Initiate a test backup from the `backup` user on `jupiter`:
 
-    snebu-client backup --remote-client zeus --sudo backup -v
+        snebu-client backup --remote-client zeus --sudo backup -v
 
 
 Daily and periodic maintenance tasks
