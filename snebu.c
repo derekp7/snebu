@@ -4834,7 +4834,7 @@ int checkperm(sqlite3 *bkcatalog, char *action, char *backupname)
 	x = sqlite3_prepare_v2(bkcatalog,
 	    (sqlstmt = sqlite3_mprintf("select count(*)  "
 		"from userpermissions where "
-		"command = '%q' and username = '%q' and (backupname = '%q' or backupname = '*')",
+		"(command = '%q' or command = '*') and username = '%q' and (backupname = '%q' or backupname = '*')",
 		action, passwd->pw_name, backupname == NULL || strlen(backupname) == 0 ? "*" : backupname)),
 		-1, &sqlres, 0);
 	if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
