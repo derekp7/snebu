@@ -41,6 +41,7 @@ process_cmdline()
 	    --remote-client) clientname=$2; shift; shift;;
 	    --backup-server) bksvrname=$2; shift; shift;;
 	    --backup-user) bkuser=$2; shift; shift;;
+	    --remote-user) rmtuser=$2; shift; shift;;
 	    -r|--retention) retention=$2; shift; shift;;
 	    -d|--date) datestamp=$2; shift; shift;;
 	    -f|--force-full) force_full=1; shift;;
@@ -187,9 +188,27 @@ usage()
 	 -r, --retention schedule   Retention schedule for this backup set.  Typical
 	                            values are "daily", "weekly", "monthly", "yearly".
 	
+	 -C, --changedir path       Changes to the given directory path before
+	                            backing up or restoring.
+	
+	     --graft /path/name/=/new/name/
+	                            Re-write path names beginning with "/path/name/"
+	                            to "/new/name/"
+	
+	 -f, --force-full           Force a full backup
+	
 	     --remote-client hostname
-	                            Host name / IP address of remote server.  Used to
-	                            backup a remote server to local host.
+	                            Host name / IP address of remote host.  Used to
+	                            backup a remote host to local backup server.
+
+	     --remote-user userid
+	                            User ID for remote remote-client.  Defaults to
+	                            root.
+
+	     --sudo userid
+	                            Initial login User ID for remote remote-client.
+	                            This ID uses sudo to switch to remote-user once
+	                            logged in.
 	
 	     --backup-server hostname
 	                            Host name / IP address of backup server.  Used to
@@ -198,15 +217,6 @@ usage()
 	     --backup-user userid
 	                            User ID for remote backup-server.
 
-	 -f, --force-full           Force a full backup
-	
-	 -C, --changedir path       Changes to the given directory path before
-	                            backing up or restoring.
-	
-	     --graft /path/name/=/new/name/
-	                            Re-write path names beginning with "/path/name/"
-	                            to "/new/name/"
-	
 	     --plugin scriptname    Specifies an optional plug in script.  Usually
 	                            used to perform database-specific operations
 	                            (such as enabling hot backup mode) for systems
@@ -235,13 +245,29 @@ usage()
 	 -C, --changedir path       Changes to the given directory path before
 	                            backing up or restoring.
 
+	     --graft /path/name/=/new/name/
+	                            Re-write path names beginning with "/path/name/"
+	                            to "/new/name/"
+
 	     --remote-client hostname
-	                            Host name / IP address of remote server.  Used to
-	                            backup a remote server to local host.
+	                            Host name / IP address of remote host.  Used to
+	                            backup a remote host to local backup server.
+
+	     --remote-user userid
+	                            User ID for remote remote-client.  Defaults to
+				    root.
+
+	     --sudo userid
+	                            Initial login User ID for remote remote-client.
+	                            This ID uses sudo to switch to remote-user once
+	                            logged in.
 	
 	     --backup-server hostname
 	                            Host name / IP address of backup server.  Used to
 	                            backup to a remote server.
+	
+	     --backup-user userid
+	                            User ID for remote backup-server.
 
 	 [ file-list ]              List of files to restore.  Defaults to all.
 	EOT
@@ -266,35 +292,47 @@ usage()
 	
 	 -C, --changedir path       Changes to the given directory path before
 	                            validating
-
+	
 	     --remote-client hostname
-	                            Host name / IP address of remote server.  Used to
-	                            backup a remote server to local host.
+	                            Host name / IP address of remote host.  Used to
+	                            backup a remote host to local backup server.
+
+	     --remote-user userid
+	                            User ID for remote remote-client.  Defaults to
+	                            root.
+
+	     --sudo userid
+	                            Initial login User ID for remote remote-client.
+	                            This ID uses sudo to switch to remote-user once
+	                            logged in.
 	
 	     --backup-server hostname
 	                            Host name / IP address of backup server.  Used to
 	                            backup to a remote server.
+	
+	     --backup-user userid
+	                            User ID for remote backup-server.
 
 	 [ file-list ]              List of files to validate.  Defaults to all.
 	EOT
     elif [ "$1" = "listbackups" ]; then
 	cat <<-EOT
-Usage: snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
- With no arguments specified, "listbackups" will return a list of all
- systems that are contained in the backup catalog.  Otherwise, when
- specifying the -n parameter, a list of backup sets for that host is
- returned.
+	Usage: snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
+	 With no arguments specified, "listbackups" will return a list of all
+	 systems that are contained in the backup catalog.  Otherwise, when
+	 specifying the -n parameter, a list of backup sets for that host is
+	 returned.
 
-Options:
- -c, --config config_file   Name of the configuration file.  Default is
-                            /etc/snebu-client.conf.
+	Options:
+	 -c, --config config_file   Name of the configuration file.  Default is
+	                            /etc/snebu-client.conf.
 
- -n, --name backupname      Name of the backup.  Usually set to the server
-                            name that you are backing up.
+	 -n, --name backupname      Name of the backup.  Usually set to the server
+	                            name that you are backing up.
 
- -d, --date datestamp       Date stamp for this backup set.  The format is in
-                            time_t format, sames as the output of the "date
-                            +%s" command.
+	 -d, --date datestamp       Date stamp for this backup set.  The format is in
+	                            time_t format, sames as the output of the "date
+	                            +%s" command.
 	EOT
     fi
     exit
