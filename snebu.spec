@@ -38,7 +38,7 @@ make install PREFIX=/usr DESTDIR=%{buildroot}
 %doc readme.md COPYING.txt
 
 %pre
-grep '^snebu:' /etc/passwd || useradd --system snebu
+grep '^snebu:' /etc/passwd || useradd --system -m snebu
 
 %changelog
 * Mon Sep 9 2019 Derek Pressnall <dspgh@needcaffeine.net>
