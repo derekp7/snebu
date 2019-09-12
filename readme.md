@@ -162,10 +162,10 @@ This section will describe how to back up a client, in this case called `zeus`, 
 
 1) On the backup server, follow steps 1 thru 4 from above (Set up a `snebu` user, install the software, create the config file, and set up the backup target directories for the vault and backup catalog locations).  Then follow step 5, create a snebu-client.conf file in /etc, on the client system.
 
-2) On the backup server `jupiter`, create a user for the client, `zeus`  
-For greater security, we will only allow clients specific access to the server, by creating a dedicated account for each client host.
+2) On the backup server `jupiter`, create a user for the client, `zeus`, adding it to the snebu user group.
+For security purposes, we will only allow clients specific access to the server, by creating a dedicated account for each client host.
 
-        useradd zeus
+        useradd zeus -G snebu
 
 3) Now add permissions this user in `snebu`
 
