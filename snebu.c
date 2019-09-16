@@ -543,9 +543,20 @@ int newbackup(int argc, char **argv)
 	if (verbose >= 1)
 	    fprintf(stderr, "Forced full backup\n");
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from needed_file_entities where backupset_id = '%d' ",
+	    bkid)), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
 	    "(backupset_id, device_id, inode, filename, infilename, size, cdatestamp)  "
 	    "select backupset_id, device_id, inode, filename, infilename, size, cdatestamp from inbound_file_entities")), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
     }
     else {
 
@@ -586,6 +597,14 @@ int newbackup(int argc, char **argv)
 	}
         sqlite3_free(sqlstmt);
 
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from needed_file_entities where backupset_id = '%d' ",
+	    bkid)), 0, 0, &sqlerr);
+	if (sqlerr != 0) {
+	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	    sqlite3_free(sqlerr);
+	}
+	sqlite3_free(sqlstmt);
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into needed_file_entities  "
 	    "(backupset_id, device_id, inode, filename, infilename, size, cdatestamp)  "
@@ -4866,7 +4885,7 @@ int permissions(int argc, char **argv)
     char *sqlstmt3 = 0;
     char *sqlstmt4 = 0;
     int foundopts = 0;
-    char *action = NULL;
+    char *action = "";
     char user[128];
     char bkname[128];
     char command[128];
