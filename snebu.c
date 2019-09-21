@@ -86,7 +86,7 @@ int getpaxvar(char *paxdata, int paxlen, char *name, char **rvalue, int *rvaluel
 int cmpspaxvar(char *paxdata, int paxlen, char *name, char *invalue);
 int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int invaluelen);
 int delpaxvar(char **paxdata, int *paxlen, char *inname);
-unsigned int ilog10(unsigned int n);
+unsigned int ilog10(unsigned long long int n);
 
 struct cfile {
     char *buf;
@@ -1790,11 +1790,12 @@ int submitfiles(int argc, char **argv)
 			sparsedata[n_sparsedata].size = strtoull(paxsparsesegt, 0, 10);
 			n_sparsedata++;
 		    }
-		    paxsparsehdrsz += fread(junk, 1, 512 - paxsparsehdrsz % 512, stdin);
+		    if ((paxsparsehdrsz % 512) > 0) {
+			paxsparsehdrsz += fread(junk, 1, 512 - paxsparsehdrsz % 512, stdin);
+		    }
 		    fullblocks = (fs.filesize / 512) - (int) (paxsparsehdrsz / 512);
 		    fs.filesize -= paxsparsehdrsz;
 		    blockstoread -= (int) paxsparsehdrsz / 512;
-		    blocksize = 512 - paxsparsehdrsz % 512;
 		}
 
 
@@ -2729,9 +2730,16 @@ int restore(int argc, char **argv)
 		paxsparsehdrsz = 0;
 		paxsparsehdrsz += ilog10(nsi) + 2;
 		for (i = 1; i < nsi; i++) {
-		    paxsparsehdrsz += ilog10(sparseinfo[i]) + 2;
+		    if (sparseinfo[i] != 0)
+			paxsparsehdrsz += ilog10(sparseinfo[i]) + 1;
+		    else
+			paxsparsehdrsz += 1;
+		    if (i < nsi - 1)
+			paxsparsehdrsz += 1;
 		}
-		t.filesize += 512 * ((int) paxsparsehdrsz / 512 + (paxsparsehdrsz % 512 == 0 ? 0 : 1));
+		t.filesize += paxsparsehdrsz;
+		if ((paxsparsehdrsz % 512) != 0)
+		    t.filesize += paxsparsehdrsz % 512;
 	    }
 	}
 
@@ -2800,7 +2808,8 @@ int restore(int argc, char **argv)
 		    paxsparsehdrsz += (fprintf(stdout, "%llu\n", sparseinfo[i]));
 		}
 		memset(curblock, '\0', 512);
-		paxsparsehdrsz += fwrite(curblock, 1, 512 - paxsparsehdrsz % 512, stdout);
+		if ((paxsparsehdrsz % 512) > 0)
+		    paxsparsehdrsz += fwrite(curblock, 1, 512 - paxsparsehdrsz % 512, stdout);
 
 	    }
 	    tblocks += (int) ((t.filesize - bytestoread) / 512);
@@ -4594,29 +4603,42 @@ int delpaxvar(char **paxdata, int *paxlen, char *inname) {
     }
     return(0);
 }
-unsigned int ilog10(unsigned int n) {
-    static int lt[] = { 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000, 0xffffffff };
+
+unsigned int ilog10(unsigned long long int n) {
+    static unsigned long long int lt[20];
+    static int s = 0;
 
     int min = 0;
     int max = sizeof(lt) / sizeof(*lt) - 1;
     int mid;
+    int i;
+    unsigned long long int j = 1;
+
+    if (s == 0) {
+        for (i = 1; i <= 19; i++) {
+            lt[i - 1] = j;
+            j *= 10;
+        }
+        lt[19] = 0xffffffffffffffff;
+    }
+    s = 1;
 
     if (n == 0)
-	return(0);
+        return(0);
     while (max >= min) {
-	mid = (int) (((min + max) / 2));
-	if (n >= lt[min]  && n < lt[mid]) {
-	    if (min + 1 == mid)
-		return(min);
-	    else
-		max = mid;
-	}
-	else if (n >= lt[mid] && (n < 0xffffffff ? n < lt[max] : n <= lt[max])) {
-	    if (mid + 1 == max)
-		return(mid);
-	    else
-		min = mid;
-	}
+        mid = (int) (((min + max) / 2));
+        if (n >= lt[min]  && n < lt[mid]) {
+            if (min + 1 == mid)
+                return(min);
+            else
+                max = mid;
+        }
+        else if (n >= lt[mid] && (n < 0xffffffffffffffff ? n < lt[max] : n <= lt[max])) {
+            if (mid + 1 == max)
+                return(mid);
+            else
+                min = mid;
+        }
     }
     return(0);
 }
