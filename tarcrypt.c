@@ -37,8 +37,8 @@ int main(int argc, char **argv)
 int tarencrypt(int argc, char **argv)
 {
     struct option longopts[] = {
-        { "keyfile", required_argument, NULL, 'k' },
-        { NULL, no_argument, NULL, 0 }
+	{ "keyfile", required_argument, NULL, 'k' },
+	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
     int optc;
@@ -69,18 +69,18 @@ int tarencrypt(int argc, char **argv)
 
     memset(hmac, 0, EVP_MAX_MD_SIZE);
     while ((optc = getopt_long(argc, argv, "k:", longopts, &longoptidx)) >= 0) {
-        switch (optc) {
-            case 'k':
-                strncpy(keyfilename, optarg, 127);
-                keyfilename[127] = 0;
-                foundopts |= opt_keyfilename;
-                break;
-        }
+	switch (optc) {
+	    case 'k':
+		strncpy(keyfilename, optarg, 127);
+		keyfilename[127] = 0;
+		foundopts |= opt_keyfilename;
+		break;
+	}
     }
     if (! (foundopts & opt_keyfilename)) {
-        printf("Need a key file name\n");
+	printf("Need a key file name\n");
 	printf("Specify wity -k filepath option\n");
-        exit(1);
+	exit(1);
     }
 
     fsinit(&fs, fread, fwrite, stdin, stdout);

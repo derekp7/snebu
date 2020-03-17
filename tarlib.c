@@ -175,13 +175,13 @@ int tar_get_next_hdr(struct filespec *fs)
 	    fs->nuid=strtol(tarhead.nuid, 0, 8);
 	    fs->ngid=strtol(tarhead.ngid, 0, 8);
 	    if (usepaxsize == 0) {
-                fs->filesize = 0;
-                if ((unsigned char) tarhead.size[0] == 128)
-                    for (int i = 0; i < 8; i++)
-                        fs->filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
-                else
-                    fs->filesize=strtoull(tarhead.size, 0, 8);
-            }
+		fs->filesize = 0;
+		if ((unsigned char) tarhead.size[0] == 128)
+		    for (int i = 0; i < 8; i++)
+			fs->filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
+		else
+		    fs->filesize=strtoull(tarhead.size, 0, 8);
+	    }
 	    fs->modtime=strtol(tarhead.modtime, 0, 8);
 	    if (longlinktarget == 0)
 		strncpya0(&(fs->linktarget), tarhead.linktarget, 100);
@@ -251,13 +251,13 @@ int tar_get_next_hdr(struct filespec *fs)
 	    fs->nuid=strtol(tarhead.nuid, 0, 8);
 	    fs->ngid=strtol(tarhead.ngid, 0, 8);
 	    if (usepaxsize == 0) {
-                fs->filesize = 0;
-                if ((unsigned char) tarhead.size[0] == 128)
-                    for (int i = 0; i < 8; i++)
-                        fs->filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
-                else
-                    fs->filesize=strtoull(tarhead.size, 0, 8);
-            }
+		fs->filesize = 0;
+		if ((unsigned char) tarhead.size[0] == 128)
+		    for (int i = 0; i < 8; i++)
+			fs->filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
+		else
+		    fs->filesize=strtoull(tarhead.size, 0, 8);
+	    }
 	    fs->modtime=strtol(tarhead.modtime, 0, 8);
 	    if (longlinktarget == 0)
 		strncpya0(&(fs->linktarget), tarhead.linktarget, 100);
@@ -528,18 +528,18 @@ int getpaxvar(char *paxdata, int paxlen, char *name, char **rvalue, int *rvaluel
     int valuelen;
 
     while (nvp < paxdata + paxlen) {
-        nvplen = strtol(nvp, &cname, 10);
-        cname++;
-        value = strchr(cname, '=');
-        cnamelen = value - cname;
-        value++;
-        valuelen = nvp + nvplen - value;
-        if (cnamelen >= strlen(name) && strncmp(name, cname, cnamelen) == 0) {
-            *rvalue = value;
-            *rvaluelen = valuelen;
-            return(0);
-        }
-        nvp += nvplen;
+	nvplen = strtol(nvp, &cname, 10);
+	cname++;
+	value = strchr(cname, '=');
+	cnamelen = value - cname;
+	value++;
+	valuelen = nvp + nvplen - value;
+	if (cnamelen >= strlen(name) && strncmp(name, cname, cnamelen) == 0) {
+	    *rvalue = value;
+	    *rvaluelen = valuelen;
+	    return(0);
+	}
+	nvp += nvplen;
     }
     return(1);
 }
@@ -553,16 +553,16 @@ int cmpspaxvar(char *paxdata, int paxlen, char *name, char *invalue) {
     int valuelen;
 
     while (nvp < paxdata + paxlen) {
-        nvplen = strtol(nvp, &cname, 10);
-        cname++;
-        value = strchr(cname, '=');
-        cnamelen = value - cname;
-        value++;
-        valuelen = nvp + nvplen - value;
-        if (cnamelen >= namelen && strncmp(name, cname, cnamelen) == 0) {
-            return(strncmp(value, invalue, valuelen - 1));
-        }
-        nvp += nvplen;
+	nvplen = strtol(nvp, &cname, 10);
+	cname++;
+	value = strchr(cname, '=');
+	cnamelen = value - cname;
+	value++;
+	valuelen = nvp + nvplen - value;
+	if (cnamelen >= namelen && strncmp(name, cname, cnamelen) == 0) {
+	    return(strncmp(value, invalue, valuelen - 1));
+	}
+	nvp += nvplen;
     }
     return(1);
 }
@@ -583,36 +583,36 @@ int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int inva
 
 
     while (cnvp < *paxdata + *paxlen) {
-        cnvplen = strtol(cnvp, &cname, 10);
-        cname++;
-        cvalue = strchr(cname, '=');
-        cnamelen = cvalue - cname;
-        cvalue++;
-        if (cnamelen >= innamelen && strncmp(inname, cname, cnamelen) == 0) {
-            if (innvplen > cnvplen) {
-                *paxlen = *paxlen + (innvplen - cnvplen);
-                *paxdata = drealloc(*paxdata, *paxlen);
-                memmove(cnvp + innvplen, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
-                memcpy(cnvp, nvpline, innvplen);
-            }
-            else if (innvplen < cnvplen) {
-                memmove(cnvp + innvplen, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
-                memcpy(cnvp, nvpline, innvplen);
-                *paxlen = *paxlen + (innvplen - cnvplen);
-                *paxdata = drealloc(*paxdata, *paxlen);
-            }
-            else {
-                memcpy(cnvp, nvpline, innvplen);
-            }
-            foundit = 1;
-            break;
-        }
-        cnvp += cnvplen;
+	cnvplen = strtol(cnvp, &cname, 10);
+	cname++;
+	cvalue = strchr(cname, '=');
+	cnamelen = cvalue - cname;
+	cvalue++;
+	if (cnamelen >= innamelen && strncmp(inname, cname, cnamelen) == 0) {
+	    if (innvplen > cnvplen) {
+		*paxlen = *paxlen + (innvplen - cnvplen);
+		*paxdata = drealloc(*paxdata, *paxlen);
+		memmove(cnvp + innvplen, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
+		memcpy(cnvp, nvpline, innvplen);
+	    }
+	    else if (innvplen < cnvplen) {
+		memmove(cnvp + innvplen, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
+		memcpy(cnvp, nvpline, innvplen);
+		*paxlen = *paxlen + (innvplen - cnvplen);
+		*paxdata = drealloc(*paxdata, *paxlen);
+	    }
+	    else {
+		memcpy(cnvp, nvpline, innvplen);
+	    }
+	    foundit = 1;
+	    break;
+	}
+	cnvp += cnvplen;
     }
     if (foundit == 0) {
-        *paxdata = drealloc(*paxdata, *paxlen + innvplen);
-        memcpy(*paxdata + *paxlen, nvpline, innvplen);
-        *paxlen = *paxlen + innvplen;
+	*paxdata = drealloc(*paxdata, *paxlen + innvplen);
+	memcpy(*paxdata + *paxlen, nvpline, innvplen);
+	*paxlen = *paxlen + innvplen;
     }
     return(0);
 }
@@ -624,18 +624,18 @@ int delpaxvar(char **paxdata, int *paxlen, char *inname) {
     char *cvalue;
 
     while (cnvp < *paxdata + *paxlen) {
-        cnvplen = strtol(cnvp, &cname, 10);
-        cname++;
-        cvalue = strchr(cname, '=');
-        cnamelen = cvalue - cname;
-        cvalue++;
-        if (cnamelen >= strlen(inname) && strncmp(inname, cname, cnamelen) == 0) {
-            memmove(cnvp, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
-            *paxlen = *paxlen - cnvplen;
-            *paxdata = drealloc(*paxdata, *paxlen);
-            break;
-        }
-        cnvp += cnvplen;
+	cnvplen = strtol(cnvp, &cname, 10);
+	cname++;
+	cvalue = strchr(cname, '=');
+	cnamelen = cvalue - cname;
+	cvalue++;
+	if (cnamelen >= strlen(inname) && strncmp(inname, cname, cnamelen) == 0) {
+	    memmove(cnvp, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
+	    *paxlen = *paxlen - cnvplen;
+	    *paxdata = drealloc(*paxdata, *paxlen);
+	    break;
+	}
+	cnvp += cnvplen;
     }
     return(0);
 }
@@ -652,30 +652,30 @@ unsigned int ilog10(unsigned long long int n) {
     unsigned long long int j = 1;
 
     if (s == 0) {
-        for (i = 1; i <= 19; i++) {
-            lt[i - 1] = j;
-            j *= 10;
-        }
-        lt[19] = 0xffffffffffffffff;
+	for (i = 1; i <= 19; i++) {
+	    lt[i - 1] = j;
+	    j *= 10;
+	}
+	lt[19] = 0xffffffffffffffff;
     }
     s = 1;
 
     if (n == 0)
-        return(0);
+	return(0);
     while (max >= min) {
-        mid = (int) (((min + max) / 2));
-        if (n >= lt[min]  && n < lt[mid]) {
-            if (min + 1 == mid)
-                return(min);
-            else
-                max = mid;
-        }
-        else if (n >= lt[mid] && (n < 0xffffffffffffffff ? n < lt[max] : n <= lt[max])) {
-            if (mid + 1 == max)
-                return(mid);
-            else
-                min = mid;
-        }
+	mid = (int) (((min + max) / 2));
+	if (n >= lt[min]  && n < lt[mid]) {
+	    if (min + 1 == mid)
+		return(min);
+	    else
+		max = mid;
+	}
+	else if (n >= lt[mid] && (n < 0xffffffffffffffff ? n < lt[max] : n <= lt[max])) {
+	    if (mid + 1 == max)
+		return(mid);
+	    else
+		min = mid;
+	}
     }
     return(0);
 }
@@ -693,7 +693,7 @@ void *dmalloc(size_t size)
 void dfree(void *b)
 {
     if (b != NULL)
-        free(b - sizeof(size_t));
+	free(b - sizeof(size_t));
 }
 
 // Matching realloc function for dmalloc
@@ -722,9 +722,9 @@ size_t dmalloc_size(void *b)
 char *strncpya0(char **dest, const char *src, size_t n)
 {
     if (*dest == NULL)
-        *dest = dmalloc(n + 1);
+	*dest = dmalloc(n + 1);
     if (dmalloc_size(*dest) < n + 1)
-        *dest = drealloc(*dest, n + 1);
+	*dest = drealloc(*dest, n + 1);
     strncpy(*dest, src, n);
     (*dest)[n] = '\0';
     return(*dest);
@@ -733,11 +733,11 @@ char *strncpya0(char **dest, const char *src, size_t n)
 char *strcata(char **dest, const char *src)
 {
     if (*dest == NULL) {
-        *dest = dmalloc(strlen(src) + 1);
+	*dest = dmalloc(strlen(src) + 1);
 	((char *)(*dest))[0] = 0;
     }
     if (dmalloc_size(*dest) < strlen(*dest) + strlen(src) + 1)
-        *dest = drealloc(*dest, strlen(*dest) + strlen(src) + 1);
+	*dest = drealloc(*dest, strlen(*dest) + strlen(src) + 1);
     strcat(*dest, src);
     return(*dest);
 }
@@ -748,9 +748,9 @@ char *strcata(char **dest, const char *src)
 void *memcpya(void **dest, void *src, size_t n)
 {
     if (*dest == NULL)
-        *dest = dmalloc(n);
+	*dest = dmalloc(n);
     if (dmalloc_size(*dest) < n)
-        *dest = drealloc(*dest, n);
+	*dest = drealloc(*dest, n);
     memcpy(*dest, src, n);
     return(*dest);
 }
@@ -893,18 +893,18 @@ struct lzop_file *lzop_init(size_t (*c_fwrite)(), void *c_handle)
     cfile->c_fwrite = c_fwrite;
     cfile->c_handle = c_handle;
     {
-        cfile->c_fwrite(magic, 1, sizeof(magic), cfile->c_handle);
-        fwritec(htonsp(0x1030), 1, 2, cfile->c_fwrite, cfile->c_handle, &chksum);
-        fwritec(htonsp(lzo_version()), 1, 2, cfile->c_fwrite, cfile->c_handle, &chksum);
-        fwritec(htonsp(0x0940), 1, 2, cfile->c_fwrite, cfile->c_handle, &chksum);
-        fwritec("\001", 1, 1, cfile->c_fwrite, cfile->c_handle, &chksum);
-        fwritec("\005", 1, 1, cfile->c_fwrite, cfile->c_handle, &chksum);
-        fwritec(htonlp(0x300000d), 1, 4, cfile->c_fwrite, cfile->c_handle, &chksum);
-        fwritec(htonlp(0x0), 1, 4, cfile->c_fwrite, cfile->c_handle, &chksum);
-        fwritec(htonlp(0x0), 1, 4, cfile->c_fwrite, cfile->c_handle, &chksum);
-        fwritec(htonlp(0x0), 1, 4, cfile->c_fwrite, cfile->c_handle, &chksum);
-        fwritec("\000", 1, 1, cfile->c_fwrite, cfile->c_handle, &chksum);
-        fwritec(htonlp(chksum), 1, 4, cfile->c_fwrite, cfile->c_handle, &chksum);
+	cfile->c_fwrite(magic, 1, sizeof(magic), cfile->c_handle);
+	fwritec(htonsp(0x1030), 1, 2, cfile->c_fwrite, cfile->c_handle, &chksum);
+	fwritec(htonsp(lzo_version()), 1, 2, cfile->c_fwrite, cfile->c_handle, &chksum);
+	fwritec(htonsp(0x0940), 1, 2, cfile->c_fwrite, cfile->c_handle, &chksum);
+	fwritec("\001", 1, 1, cfile->c_fwrite, cfile->c_handle, &chksum);
+	fwritec("\005", 1, 1, cfile->c_fwrite, cfile->c_handle, &chksum);
+	fwritec(htonlp(0x300000d), 1, 4, cfile->c_fwrite, cfile->c_handle, &chksum);
+	fwritec(htonlp(0x0), 1, 4, cfile->c_fwrite, cfile->c_handle, &chksum);
+	fwritec(htonlp(0x0), 1, 4, cfile->c_fwrite, cfile->c_handle, &chksum);
+	fwritec(htonlp(0x0), 1, 4, cfile->c_fwrite, cfile->c_handle, &chksum);
+	fwritec("\000", 1, 1, cfile->c_fwrite, cfile->c_handle, &chksum);
+	fwritec(htonlp(chksum), 1, 4, cfile->c_fwrite, cfile->c_handle, &chksum);
     }
     return(cfile);
 }
@@ -980,20 +980,20 @@ struct lzop_file *lzop_init_r(size_t (*c_fread)(), void *c_handle)
     uint16_t tmp16;
     uint32_t tmp32;
     struct {
-        char magic[sizeof(magic)];
-        uint16_t version;
-        uint16_t libversion;
-        uint16_t minversion;
-        unsigned char compmethod;
-        unsigned char level;
-        uint32_t flags;
-        uint32_t filter;
-        uint32_t mode;
-        uint32_t mtime_low;
-        uint32_t mtime_high;
-        unsigned char filename_len;
-        char filename[256];
-        uint32_t chksum;
+	char magic[sizeof(magic)];
+	uint16_t version;
+	uint16_t libversion;
+	uint16_t minversion;
+	unsigned char compmethod;
+	unsigned char level;
+	uint32_t flags;
+	uint32_t filter;
+	uint32_t mode;
+	uint32_t mtime_low;
+	uint32_t mtime_high;
+	unsigned char filename_len;
+	char filename[256];
+	uint32_t chksum;
     } lzop_header;
 
     cfile = malloc(sizeof(*cfile));
@@ -1011,17 +1011,17 @@ struct lzop_file *lzop_init_r(size_t (*c_fread)(), void *c_handle)
     cfile->c_fread(&tmp16, 1, 2, cfile->c_handle);
     lzop_header.libversion = ntohs(tmp16);
     if (lzop_header.version >= 0x0940) {
-        cfile->c_fread(&tmp16, 1, 2, cfile->c_handle);
-        lzop_header.minversion = ntohl(tmp16);
+	cfile->c_fread(&tmp16, 1, 2, cfile->c_handle);
+	lzop_header.minversion = ntohl(tmp16);
     }
     cfile->c_fread(&(lzop_header.compmethod), 1, 1, cfile->c_handle);
     if (lzop_header.version >= 0x0940)
-        cfile->c_fread(&(lzop_header.level), 1, 1, cfile->c_handle);
+	cfile->c_fread(&(lzop_header.level), 1, 1, cfile->c_handle);
     cfile->c_fread(&tmp32, 1, 4, cfile->c_handle);
     lzop_header.flags = ntohl(tmp32);
     if (lzop_header.flags & F_H_FILTER) {
-        cfile->c_fread(&tmp32, 1, 4, cfile->c_handle);
-        lzop_header.filter = ntohl(tmp32);
+	cfile->c_fread(&tmp32, 1, 4, cfile->c_handle);
+	lzop_header.filter = ntohl(tmp32);
     }
     cfile->c_fread(&tmp32, 1, 4, cfile->c_handle);
     lzop_header.mode = ntohl(tmp32);
@@ -1031,7 +1031,7 @@ struct lzop_file *lzop_init_r(size_t (*c_fread)(), void *c_handle)
     lzop_header.mtime_high = ntohl(tmp32);
     cfile->c_fread(&(lzop_header.filename_len), 1, 1, cfile->c_handle);
     if (lzop_header.filename_len > 0)
-        cfile->c_fread(&(lzop_header.filename), 1, lzop_header.filename_len, cfile->c_handle);
+	cfile->c_fread(&(lzop_header.filename), 1, lzop_header.filename_len, cfile->c_handle);
     cfile->c_fread(&tmp32, 1, 4, cfile->c_handle);
     lzop_header.chksum = ntohl(tmp32);
     return(cfile);
@@ -1058,39 +1058,39 @@ size_t lzop_read(void *buf, size_t sz, size_t count, struct lzop_file *cfile)
     size_t orig_bytesin = bytesin;
 
     do {
-        if (bytesin <= cfile->buf + cfile->bufsize - cfile->bufp) {
-            memcpy(buf, cfile->bufp, bytesin);
-            cfile->bufp += bytesin;
-            bytesin = 0;
-        }
-        else {
-            memcpy(buf, cfile->bufp, cfile->buf + cfile->bufsize - cfile->bufp);
-            bytesin -= (cfile->buf + cfile->bufsize - cfile->bufp);
-            buf += (cfile->buf + cfile->bufsize - cfile->bufp);
-            cfile->c_fread(&tucblocksz, 1, 4, cfile->c_handle);
-            ucblocksz = ntohl(tucblocksz);
-            if (ucblocksz == 0)
-                return(cfile->buf + cfile->bufsize - cfile->bufp);
-            cfile->c_fread(&tcblocksz, 1, 4, cfile->c_handle);
-            cblocksz = ntohl(tcblocksz);
-            cfile->c_fread(&tchksum, 1, 4, cfile->c_handle);
-            chksum = ntohl(tchksum);
+	if (bytesin <= cfile->buf + cfile->bufsize - cfile->bufp) {
+	    memcpy(buf, cfile->bufp, bytesin);
+	    cfile->bufp += bytesin;
+	    bytesin = 0;
+	}
+	else {
+	    memcpy(buf, cfile->bufp, cfile->buf + cfile->bufsize - cfile->bufp);
+	    bytesin -= (cfile->buf + cfile->bufsize - cfile->bufp);
+	    buf += (cfile->buf + cfile->bufsize - cfile->bufp);
+	    cfile->c_fread(&tucblocksz, 1, 4, cfile->c_handle);
+	    ucblocksz = ntohl(tucblocksz);
+	    if (ucblocksz == 0)
+		return(cfile->buf + cfile->bufsize - cfile->bufp);
+	    cfile->c_fread(&tcblocksz, 1, 4, cfile->c_handle);
+	    cblocksz = ntohl(tcblocksz);
+	    cfile->c_fread(&tchksum, 1, 4, cfile->c_handle);
+	    chksum = ntohl(tchksum);
 	    if (cfile->c_fread(cfile->cbuf, 1, cblocksz, cfile->c_handle) < cblocksz) {
-                fprintf(stderr, "lzop_read error: short read\n");
-                return(0);
-            }
-            if (cblocksz < ucblocksz) {
-                lzo1x_decompress((unsigned char *) cfile->cbuf, cblocksz, (unsigned char *) cfile->buf, &(cfile->bufsize), NULL);
-            }
-            else {
-                memcpy(cfile->buf, cfile->cbuf, cblocksz);
-            }
-            if (chksum != lzo_adler32(1, (unsigned char *) cfile->buf, ucblocksz)) {
-                fprintf(stderr, "Checksum error reading compressed lzo file\n");
-            }
-            cfile->bufp = cfile->buf;
-            cfile->bufsize = ucblocksz;
-        }
+		fprintf(stderr, "lzop_read error: short read\n");
+		return(0);
+	    }
+	    if (cblocksz < ucblocksz) {
+		lzo1x_decompress((unsigned char *) cfile->cbuf, cblocksz, (unsigned char *) cfile->buf, &(cfile->bufsize), NULL);
+	    }
+	    else {
+		memcpy(cfile->buf, cfile->cbuf, cblocksz);
+	    }
+	    if (chksum != lzo_adler32(1, (unsigned char *) cfile->buf, ucblocksz)) {
+		fprintf(stderr, "Checksum error reading compressed lzo file\n");
+	    }
+	    cfile->bufp = cfile->buf;
+	    cfile->bufsize = ucblocksz;
+	}
     } while (bytesin > 0);
     return(orig_bytesin);
 }
@@ -1278,7 +1278,7 @@ int tarsplit_finalize_r(struct tarsplit_file *tsf)
     memset(padding, 0, 512);
     if (tsf->segremaining == 0 && tsf->segsize > 0) {
 	tsf->c_fread(padding, 1, 512 - (( tsf->segsize - 1) % 512 + 1),
-    	    tsf->c_handle);
+	    tsf->c_handle);
     }
     free(tsf);
     return(0);
@@ -1354,9 +1354,9 @@ size_t tarsplit_read(void *buf, size_t sz, size_t count, struct tarsplit_file *t
 int genkey(int argc, char **argv)
 {
     struct option longopts[] = {
-        { "filename", required_argument, NULL, 'f' },
-        { "comment", required_argument, NULL, 'c' },
-        { NULL, no_argument, NULL, 0 }
+	{ "filename", required_argument, NULL, 'f' },
+	{ "comment", required_argument, NULL, 'c' },
+	{ NULL, no_argument, NULL, 0 }
     };
     int longoptidx;
     int optc;
@@ -1389,17 +1389,17 @@ int genkey(int argc, char **argv)
     comment[0] = '\0';
 
     while ((optc = getopt_long(argc, argv, "f:c:", longopts, &longoptidx)) >= 0) {
-        switch (optc) {
-            case 'f':
-                strncpy(filename, optarg, 127);
-                filename[127] = 0;
-                foundopts |= opt_filename;
+	switch (optc) {
+	    case 'f':
+		strncpy(filename, optarg, 127);
+		filename[127] = 0;
+		foundopts |= opt_filename;
 	       break;
-             case 'c':
-                strncpy(comment, optarg, 127);
-                comment[127] = 0;
-                foundopts |= opt_comment;
-                break;
+	     case 'c':
+		strncpy(comment, optarg, 127);
+		comment[127] = 0;
+		foundopts |= opt_comment;
+		break;
 	}
     }
     if (! (foundopts & opt_filename)) {
@@ -1483,23 +1483,23 @@ struct rsa_file *rsa_file_init(char mode, EVP_PKEY *evp_keypair, size_t (*c_ffun
 
     rcf->ctx = EVP_CIPHER_CTX_new();
     if (mode == 'w') {
-        rcf->c_fwrite = c_ffunc;
-        rcf->ek = malloc(EVP_PKEY_size(evp_keypair));
-        EVP_SealInit(rcf->ctx, EVP_aes_256_gcm(), &(rcf->ek), &(rcf->eklen), (rcf->iv), &evp_keypair, 1);
-        eklen_n = htonl(rcf->eklen);
-        c_ffunc(&eklen_n, 1, sizeof(rcf->eklen), c_handle);
-        c_ffunc(rcf->ek, 1, rcf->eklen, c_handle);
-        c_ffunc(rcf->iv, 1, EVP_CIPHER_iv_length(EVP_aes_256_gcm()), c_handle);
+	rcf->c_fwrite = c_ffunc;
+	rcf->ek = malloc(EVP_PKEY_size(evp_keypair));
+	EVP_SealInit(rcf->ctx, EVP_aes_256_gcm(), &(rcf->ek), &(rcf->eklen), (rcf->iv), &evp_keypair, 1);
+	eklen_n = htonl(rcf->eklen);
+	c_ffunc(&eklen_n, 1, sizeof(rcf->eklen), c_handle);
+	c_ffunc(rcf->ek, 1, rcf->eklen, c_handle);
+	c_ffunc(rcf->iv, 1, EVP_CIPHER_iv_length(EVP_aes_256_gcm()), c_handle);
     }
     if (mode == 'r') {
-        rcf->c_fread = c_ffunc;
+	rcf->c_fread = c_ffunc;
 
-        c_ffunc(&eklen_n, 1, sizeof(eklen_n), c_handle);
-        rcf->eklen = ntohl(eklen_n);
-        rcf->ek = malloc(EVP_PKEY_size(evp_keypair));
-        c_ffunc(rcf->ek, 1, rcf->eklen, c_handle);
-        c_ffunc(&(rcf->iv), 1, EVP_CIPHER_iv_length(EVP_aes_256_gcm()), c_handle);
-        EVP_OpenInit(rcf->ctx, EVP_aes_256_gcm(), rcf->ek, rcf->eklen, rcf->iv, evp_keypair);
+	c_ffunc(&eklen_n, 1, sizeof(eklen_n), c_handle);
+	rcf->eklen = ntohl(eklen_n);
+	rcf->ek = malloc(EVP_PKEY_size(evp_keypair));
+	c_ffunc(rcf->ek, 1, rcf->eklen, c_handle);
+	c_ffunc(&(rcf->iv), 1, EVP_CIPHER_iv_length(EVP_aes_256_gcm()), c_handle);
+	EVP_OpenInit(rcf->ctx, EVP_aes_256_gcm(), rcf->ek, rcf->eklen, rcf->iv, evp_keypair);
     }
     rcf->c_handle = c_handle;
 
@@ -1515,22 +1515,22 @@ size_t rsa_write(void *buf, size_t sz, size_t count, struct rsa_file *rcf)
 
     do {
 	bufroom = rcf->bufsize - (rcf->bufp - rcf->buf);
-        if (n <= bufroom) {
-            memcpy(rcf->bufp, buf, n);
-            rcf->bufp += n;
+	if (n <= bufroom) {
+	    memcpy(rcf->bufp, buf, n);
+	    rcf->bufp += n;
 	    t += n;
-            n = 0;
-        }
-        else {
-            memcpy(rcf->bufp, buf, bufroom);
+	    n = 0;
+	}
+	else {
+	    memcpy(rcf->bufp, buf, bufroom);
 	    rcf->bufp += bufroom;
 	    t += bufroom;
-            n -= bufroom;
+	    n -= bufroom;
 	    buf += bufroom;
-            EVP_SealUpdate(rcf->ctx, rcf->outbuf, &w, rcf->buf, rcf->bufsize);
-            rcf->c_fwrite(rcf->outbuf, 1, w, rcf->c_handle);
+	    EVP_SealUpdate(rcf->ctx, rcf->outbuf, &w, rcf->buf, rcf->bufsize);
+	    rcf->c_fwrite(rcf->outbuf, 1, w, rcf->c_handle);
 	    rcf->bufp = rcf->buf;
-        }
+	}
 
     } while (n > 0);
     return(t);
@@ -1566,32 +1566,32 @@ size_t rsa_read(void *buf, size_t sz, size_t count, struct rsa_file *rcf)
 
     memset(buf, 0, n);
     do {
-        if (rcf->buf + rcf->bufused - rcf->bufp == 0 && rcf->eof == 1) {
-            return(t);
-        }
-        if (rcf->buf + rcf->bufused - rcf->bufp == 0 && rcf->eof != 1) {
-            rcf->bufp = rcf->buf;
-            rcf->bufused = 0;
-            c = rcf->c_fread(rcf->inbuf, 1, rcf->bufsize, rcf->c_handle);
-            if (c > 0) {
-                EVP_OpenUpdate(rcf->ctx, rcf->buf, &d, rcf->inbuf, c);
-                rcf->bufused += d;
-            }
-            else {
-                EVP_OpenFinal(rcf->ctx, rcf->buf, &d);
-                rcf->bufused += d;
-                rcf->eof = 1;
-            }
-        }
-        c = (n <= (rcf->buf + rcf->bufused - rcf->bufp) ? n : rcf->buf + rcf->bufused - rcf->bufp);
-        if (c == 0 && rcf->eof == 1) {
-            return(t);
-        }
-        memcpy(buf, rcf->bufp, c);
-        rcf->bufp += c;
-        buf += c;
-        t += c;
-        n -= c;
+	if (rcf->buf + rcf->bufused - rcf->bufp == 0 && rcf->eof == 1) {
+	    return(t);
+	}
+	if (rcf->buf + rcf->bufused - rcf->bufp == 0 && rcf->eof != 1) {
+	    rcf->bufp = rcf->buf;
+	    rcf->bufused = 0;
+	    c = rcf->c_fread(rcf->inbuf, 1, rcf->bufsize, rcf->c_handle);
+	    if (c > 0) {
+		EVP_OpenUpdate(rcf->ctx, rcf->buf, &d, rcf->inbuf, c);
+		rcf->bufused += d;
+	    }
+	    else {
+		EVP_OpenFinal(rcf->ctx, rcf->buf, &d);
+		rcf->bufused += d;
+		rcf->eof = 1;
+	    }
+	}
+	c = (n <= (rcf->buf + rcf->bufused - rcf->bufp) ? n : rcf->buf + rcf->bufused - rcf->bufp);
+	if (c == 0 && rcf->eof == 1) {
+	    return(t);
+	}
+	memcpy(buf, rcf->bufp, c);
+	rcf->bufp += c;
+	buf += c;
+	t += c;
+	n -= c;
     } while (n > 0);
     return(t);
 }
@@ -1602,7 +1602,7 @@ void openssl_err()
     char rsaerrs[121];
     ERR_load_crypto_strings();
     while ((rsaerr = ERR_get_error()) > 0) {
-        fprintf(stderr, "%s\n", ERR_error_string(rsaerr, rsaerrs));
+	fprintf(stderr, "%s\n", ERR_error_string(rsaerr, rsaerrs));
     }
 }
 
@@ -1652,15 +1652,15 @@ struct key_st *load_keyfile(char *keyfilename)
     key_st->hmac_key_enc_b64 = strstr(keydata, "-----BEGIN ENCRYPTED HMAC KEY-----");
     key_st->comment = strstr(keydata, "-----BEGIN COMMENT-----");
     *(strchr(strstr(key_st->eprvkey, "-----END ENCRYPTED PRIVATE KEY-----"),
-        '\n')) = '\0';
+	'\n')) = '\0';
     *(strchr(strstr(key_st->pubkey, "-----END PUBLIC KEY-----"),
-        '\n')) = '\0';
+	'\n')) = '\0';
     *(strchr(strstr(key_st->hmac_key_b64, "-----END HMAC KEY-----"),
-        '\n')) = '\0';
+	'\n')) = '\0';
     *(strchr(strstr(key_st->hmac_key_enc_b64, "-----END ENCRYPTED HMAC KEY-----"),
-        '\n')) = '\0';
+	'\n')) = '\0';
     *(strchr(strstr(key_st->comment, "-----END COMMENT-----"),
-        '\n')) = '\0';
+	'\n')) = '\0';
     key_st->hmac_key_b64 = (strchr(key_st->hmac_key_b64, '\n') + 1);
     *(strchr(key_st->hmac_key_b64, '\n')) = '\0';
     key_st->hmac_key_enc_b64 = (strchr(key_st->hmac_key_enc_b64, '\n') + 1);
@@ -1742,7 +1742,7 @@ int load_pkey(struct rsa_keys **rsa_keys, char *pubkey_fingerprint, char *eprivk
 	BIO_free(rsa_keydata);
 	rsa_keydata = BIO_new_mem_buf((*rsa_keys)->keys[i].eprvkey, -1);
 	snprintf(decrypt_message, 1023, "That didn't work.\nRe-enter passphrase: ");
-        while (PEM_read_bio_PrivateKey(rsa_keydata, &((*rsa_keys)->keys[i].evp_keypair), get_passwd, decrypt_message) == NULL) {
+	while (PEM_read_bio_PrivateKey(rsa_keydata, &((*rsa_keys)->keys[i].evp_keypair), get_passwd, decrypt_message) == NULL) {
 	    PEM_read_bio_PrivateKey(rsa_keydata, &((*rsa_keys)->keys[i].evp_keypair), NULL, NULL);
 	    BIO_free(rsa_keydata);
 	    rsa_keydata = BIO_new_mem_buf((*rsa_keys)->keys[i].eprvkey, -1);
@@ -1790,7 +1790,7 @@ int tar_maxread_finalize(struct tar_maxread_st *tmr)
     char padding[512];
     size_t n;
     while ((n = tmr->c_fread(padding, 1, tmr->sz >= 512 ? 512 : tmr->sz, tmr->c_handle)) > 0)
-        tmr->sz -= n;
+	tmr->sz -= n;
 
     free(tmr);
     return(0);
@@ -1803,8 +1803,8 @@ int encode_block_16(unsigned char *r, unsigned char *s, int c)
     int i = 0;
 
     for (i = 0; i < c; i++) {
-        r[i * 2] = hexchars[(s[i] & 0xF0) >> 4];
-        r[i * 2 + 1] = hexchars[(s[i] & 0xF )];
+	r[i * 2] = hexchars[(s[i] & 0xF0) >> 4];
+	r[i * 2 + 1] = hexchars[(s[i] & 0xF )];
     }
     r[i * 2] = '\0';
     return(c * 2);
@@ -1817,11 +1817,11 @@ int decode_block_16(unsigned char *r, unsigned char *s, int c)
     int i = 0;
     int n = 0;
     for (i = 0; i < c; i++) {
-        H = (s[i] >= '0' && s[i] <= '9' ? s[i] - '0' : s[i] >= 'A' && s[i] <= 'F' ? s[i] - 'A' + 10 : 0);
-        i++;
-        L = (s[i] >= '0' && s[i] <= '9' ? s[i] - '0' : s[i] >= 'A' && s[i] <= 'F' ? s[i] - 'A' + 10 : 0);
-        r[n] = (H << 4) | L;
-        n++;
+	H = (s[i] >= '0' && s[i] <= '9' ? s[i] - '0' : s[i] >= 'A' && s[i] <= 'F' ? s[i] - 'A' + 10 : 0);
+	i++;
+	L = (s[i] >= '0' && s[i] <= '9' ? s[i] - '0' : s[i] >= 'A' && s[i] <= 'F' ? s[i] - 'A' + 10 : 0);
+	r[n] = (H << 4) | L;
+	n++;
     }
     r[n] = '\0';
     return(c / 2);
