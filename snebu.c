@@ -4,6 +4,8 @@
  * GNU General Public License (GPL) Version 3.  See the file
  * COPYING.txt for details.
  */
+#define _GNU_SOURCE
+#define _D_FILE_OFFSET_BITS 64
 #include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>

@@ -6,8 +6,14 @@ PREFIX=/usr/local
 BINDIR=$(PREFIX)/bin
 ETCDIR=/etc
 all: $(PROGS)
-snebu: snebu.c
-	$(CC) $< -o $@ -l sqlite3 -l crypto -l lzo2 -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -Wall
+%.o: %.c
+	gcc -c $< -o $@ -Wall
+tarlib.o: tarlib.h
+tarcrypt.o: tarlib.h
+snebu: snebu.o
+	$(CC) $< -o $@ -l sqlite3 -l crypto -l lzo2 -Wall
+tarcrypt: tarcrypt.o tarlib.o
+	$(CC) $^ -o $@ -l crypto -l lzo2 -Wall
 install: $(PROGS) $(SCRIPTS) $(CONFIGS)
 	mkdir -p $(DESTDIR)$(BINDIR)
 	mkdir -p $(DESTDIR)$(ETCDIR)
