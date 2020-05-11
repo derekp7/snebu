@@ -1,0 +1,82 @@
+Synopsis
+----
+Tarcrypt is a filter which process an input tar file, and outputs an encryption enhanced tar file containing extended header information related to the encryption.
+
+The data is presented in a tar compatible format with additional PAX style extended headers describing items such as the compression and encryption algorithms, encrypted private key, public key, and HMAC information.  The purpose of utilizing tar style headers, instead of just encrypting the entire file as one unit, is to maintain a format that can be used with existing Unix/Linux backup tools which already support tar file inputs, with minimum modifications to those tools.
+
+To produce an encrypted tar file the following commands are used.
+
+Creating a key file
+----
+tarcrypt genkey -f [keyfile.key] [-c "comment" ]
+
+This will generate an RSA keypair, and prompt for a passphrase to protect the private key.  The encrypted private key, public key, an HMAC key, and other information are stored in the key file.  Only the HMAC key should be considered secret, as it is used to provide message integrity.  The rest of the information is stored in the output tar file in the global header.
+
+Encrypting a tar file
+----
+[tar command] | tarcrypt encrypt -k [keyfile.key] >[encrypted_file.tar.enc]
+
+Create a tar file, and pipe it as input into tarcrypt.  This has been tested on GNU tar, and supports tar files with standard GNU extensions along with files with PAX headers and extended file attributes.  The -k option may be specified multiple times with different keys, which will produce an encrypted file that can be decoded using the password from any of the keys.
+
+Decrypting a tar file
+----
+cat encrypted_file.tar.enc |tarcrypt decrypt >plaintext.tar
+
+You will be prompted for the passphrase protecting the private key embedded in the encrypted tar file global header.  A standard tar file will be generated as output.
+
+Tarcrypt file format
+----
+The format of the data produced by tarcrypt follows the standard POSIX tar file layout.  Each file data block is proceeded with a 512-byte header, containing metadata about the file (file name, size, date, owner, etc).  In addition, this 512-byte header can be proceeded by a PAX header which contains a similar 512-byte header block followed by a data block containing key-value pairs.  Therefore, tarcrypt places its extended information into this PAX header.
+
+PAX extend header fields used by tarcrypt
+----
+The global header contains the following fields
+
+    TC.eprivkey -- Encrypted RSA private key
+    TC.pubkey -- Public key matching the above private key
+    TC.pubkey.fingerprint -- Fingerprint of the public key
+    TC.hmachash -- SHA256 hash of the HMAC authentication key
+    TC.keyfile.comment -- Comment line from the key file used to generate the encrypted tar
+    TC.version -- version number of the file format
+
+If there is more than one encryption key file used, the above fields (with the exception of TC.version) are appended with a number indicating which key they belong to.  For example: TC.pubkey.0 is the public key for the first key file, TC.pubkey.1 is for the second key.  Additionally, a grouping field "TC.keygroups" is specified that groups certain keys together.  For example:
+
+    TC.keygroups=0|1,2|1
+
+This indicates that there are two key groups.  The first group, "0|1", means that files in this group are encoded with keys 0 and 1.  The second group, "2|1", relate to files that are encoded with keys 2 and 1.
+
+
+In addition, each individual file header contains the following:
+
+    tc.filters -- which filters were used to process raw file (i.e., "compression|cipher")
+    TC.compression -- compression algorithm used prior to encryption
+    TC.cipher -- cipher algorithm string (i.e., rsa-aes256-gcm)
+    TC.original.size -- size of the original raw file
+    TC.hmac -- HMAC hash computed from the hmackey in the key file, and the raw file contents.
+
+If more than one key file is used, then the key group that this file belongs to is specified with:
+
+    TC.keygroup -- which key group this file belongs to from TC.keygroups in the global header (0 indexed)
+
+
+If an input file, after compression and encryption, is larger than the default internal buffer size (10 MB), the encrypted contents are broken into multiple segments.  In that case, the following header field is included
+
+    TC.segmented.header=1 -- set to 1 for true, field not present for false.
+
+This indicates that the file is represented as multiple segments in the tar file, in the format:
+
+    original_filename/part.[sequence_number]
+
+That is, the original file header is converted to a directory type object, and each segment (of 10 MB) is represented as files under that directory with increasing sequence numbers in the file name.
+
+The final segment is preceded with a PAX header with the fields:
+
+TC.segmented.final=1 -- indicating this is the final segment
+TC.hmac -- computed HMAC hash of the raw input file
+(Again, TC.hmac may be followed by a numeric digit [0 indexed] indicating the key it belongs to)
+
+The purpose of segmented files is that when compressing a file prior to encryption, the final size of the file is not known unless two passes are made (which takes time, and has failure modes if the file is being updated during processing).  And the tar format requires that the 512-byte header block proceeding the file data block contain the exact size of the data block (which is now compressed and encrypted).  So by processing the file and storing the output in internal buffers, tarcrypt can write out each segment header block at the time the buffer is filled, with a known file size for that segment to put in the header.
+
+Information for existing backup tools
+----
+If a backup program supports consuming tar files, it would may need to be modified to recognize the above headers, and reproduce them when generating a file restore.  If the inbound tar file is not kept whole (i.e., if the file contents are broken down and the meta data extracted from the headers), then the backup software will need to be able to re-generate the appropriate header information when performing a restore operations, prior to passing the generated tar file back through the tarcrypt program.  Note, that if a segmented file is ingested, the re-generated tar file upon restore does not need to maintain the segmented format.  Instead, if the size is known, it can safely combine the segments into a single file block.
