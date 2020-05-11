@@ -567,23 +567,22 @@ int cmpspaxvar(char *paxdata, int paxlen, char *name, char *invalue) {
     return(1);
 }
 int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int invaluelen) {
-    char *cnvp = *paxdata;
+    int cnvp = 0;
     int cnvplen;
     char *cname = NULL;
     int cnamelen;
     char *cvalue;
     int innamelen = strlen(inname);
     int innvplen;
-    static char *nvpline = NULL;
+    char *nvpline = NULL;
     int foundit=0;
 
     innvplen = innamelen + invaluelen + 3 + (ilog10(innamelen + invaluelen + 3 + (ilog10( innamelen + invaluelen + 3)) + 1)) + 1;
-    nvpline = drealloc(nvpline, innvplen + 1);
+    nvpline = malloc(innvplen + 1);
     sprintf(nvpline, "%d %s=%s\n", innvplen, inname, invalue);
 
-
-    while (cnvp < *paxdata + *paxlen) {
-	cnvplen = strtol(cnvp, &cname, 10);
+    while (*paxdata + cnvp < *paxdata + *paxlen) {
+	cnvplen = strtol(*paxdata + cnvp, &cname, 10);
 	cname++;
 	cvalue = strchr(cname, '=');
 	cnamelen = cvalue - cname;
@@ -592,17 +591,17 @@ int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int inva
 	    if (innvplen > cnvplen) {
 		*paxlen = *paxlen + (innvplen - cnvplen);
 		*paxdata = drealloc(*paxdata, *paxlen);
-		memmove(cnvp + innvplen, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
-		memcpy(cnvp, nvpline, innvplen);
+		memmove(*paxdata + cnvp + innvplen - cnvplen, *paxdata + cnvp + cnvplen, (*paxdata + *paxlen) - (*paxdata + cnvp + cnvplen));
+		memcpy(*paxdata + cnvp, nvpline, innvplen);
 	    }
 	    else if (innvplen < cnvplen) {
-		memmove(cnvp + innvplen, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
-		memcpy(cnvp, nvpline, innvplen);
+		memmove(*paxdata + cnvp + innvplen, *paxdata + cnvp + cnvplen, (*paxdata + *paxlen) - (*paxdata + cnvp + cnvplen));
+		memcpy(*paxdata + cnvp, nvpline, innvplen);
 		*paxlen = *paxlen + (innvplen - cnvplen);
 		*paxdata = drealloc(*paxdata, *paxlen);
 	    }
 	    else {
-		memcpy(cnvp, nvpline, innvplen);
+		memcpy(*paxdata + cnvp, nvpline, innvplen);
 	    }
 	    foundit = 1;
 	    break;
@@ -614,6 +613,7 @@ int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int inva
 	memcpy(*paxdata + *paxlen, nvpline, innvplen);
 	*paxlen = *paxlen + innvplen;
     }
+    free(nvpline);
     return(0);
 }
 int delpaxvar(char **paxdata, int *paxlen, char *inname) {
@@ -721,6 +721,8 @@ size_t dmalloc_size(void *b)
 */
 char *strncpya0(char **dest, const char *src, size_t n)
 {
+    if (n == 0)
+	n = strlen(src);
     if (*dest == NULL)
 	*dest = dmalloc(n + 1);
     if (dmalloc_size(*dest) < n + 1)
@@ -878,7 +880,7 @@ unsigned long long int g2ulli(char *p)
     return(r);
 }
 
-struct lzop_file *lzop_init(size_t (*c_fwrite)(), void *c_handle)
+struct lzop_file *lzop_init_w(size_t (*c_fwrite)(), void *c_handle)
 {
     struct lzop_file *cfile;
     char magic[] = {  0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a };
@@ -1095,7 +1097,7 @@ size_t lzop_read(void *buf, size_t sz, size_t count, struct lzop_file *cfile)
     return(orig_bytesin);
 }
 
-int lzop_finalize(struct lzop_file *cfile)
+int lzop_finalize_w(struct lzop_file *cfile)
 {
     uint32_t chksum = 0;
 
@@ -1158,7 +1160,7 @@ uint16_t *htonsp(uint16_t v)
     return(&r);
 }
 
-struct tarsplit_file *tarsplit_init(size_t (*c_fwrite)(), void *c_handle, char *basename_path, size_t bufsize, struct filespec *fs)
+struct tarsplit_file *tarsplit_init_w(size_t (*c_fwrite)(), void *c_handle, char *basename_path, size_t bufsize, struct filespec *fs, int nk)
 {
     struct tarsplit_file *tsf;
 
@@ -1175,6 +1177,15 @@ struct tarsplit_file *tarsplit_init(size_t (*c_fwrite)(), void *c_handle, char *
     memset(tsf->buf, 0, bufsize);
     tsf->xheader = dmalloc(100);
     tsf->xheaderlen = 0;
+    tsf->tmp_fs = NULL;
+    tsf->hmac = NULL;
+    tsf->hmac = malloc(sizeof(char *) * nk);
+    for (int i = 0; i < nk; i++) {
+	tsf->hmac[i] = malloc(sizeof(char) * EVP_MAX_MD_SIZE * 2 + 1);
+	memset(tsf->hmac[i], 0, EVP_MAX_MD_SIZE * 2 + 1);
+    }
+    tsf->nk = nk;
+
     return tsf;
 }
 
@@ -1182,17 +1193,21 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
 {
     size_t n = sz * count;
     size_t c = 0;
-    static struct filespec *fs = 0;
+    struct filespec *fs;
     char seg[20];
     char padding[512];
     char paxdata[128];
+    char *npaxdata = NULL;
+    int npaxdatalen = 0;
+    char paxhdr_varstring[512];
 
-    if (fs == 0) {
-	fs = malloc(sizeof(struct filespec));
-	fsinit(fs, NULL, tsf->c_fwrite, NULL, tsf->c_handle);
+    if (tsf->tmp_fs == NULL) {
+	tsf->tmp_fs = malloc(sizeof(struct filespec));
+	fsinit(tsf->tmp_fs, NULL, tsf->c_fwrite, NULL, tsf->c_handle);
     }
     else
-	fsclear(fs);
+	fsclear(tsf->tmp_fs);
+    fs = tsf->tmp_fs;
 
     memset(padding, 0, 512);
     while (n > 0) {
@@ -1208,9 +1223,18 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
 	    n -= (tsf->buf + tsf->bufsize - tsf->bufp);
 	    if (n > 0) {
 		if (tsf->segn == 0) {
+		    char sb_filters[256];
+		    if (getpaxvar((tsf->orig_fs->xheader), (tsf->orig_fs->xheaderlen), "TC.filters", &npaxdata, &npaxdatalen) != 0) {
+			strncpy(sb_filters, npaxdata, npaxdatalen);
+			sb_filters[npaxdatalen] = '\0';
+			strcat(sb_filters, "|segmented");
+		    }
+		    else 
+			strcpy(sb_filters, "segmented");
+		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.filters", "compression|cipher|segmented", 28);
 		    sprintf(paxdata, "%llu", tsf->orig_fs->filesize);
-		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "SB.segmented.header", "1", 1);
-		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "SB.original.size", paxdata, strlen(paxdata));
+		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.segmented.header", "1", 1);
+		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.original.size", paxdata, strlen(paxdata));
 		    tsf->orig_fs->ftype = '5';
 		    tsf->orig_fs->filesize = '5';
 		    tar_write_next_hdr(tsf->orig_fs);
@@ -1240,14 +1264,29 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
 		strcata(&(fs->filename), seg);
 		fs->filesize = n;
 		fs->ftype = '0';
-		setpaxvar(&(fs->xheader), &(fs->xheaderlen), "SB.segmented.final", "1", 1);
-		setpaxvar(&(fs->xheader), &(fs->xheaderlen), "SB.hmac", (char *) tsf->hmac, strlen((char *) tsf->hmac));
+		setpaxvar(&(fs->xheader), &(fs->xheaderlen), "TC.segmented.final", "1", 1);
+		if (tsf->nk > 1) {
+		    for (int i = 0; i < tsf->nk; i++) {
+			sprintf(paxhdr_varstring, "TC.hmac.%d", i);
+			setpaxvar(&(fs->xheader), &(fs->xheaderlen), paxhdr_varstring, (char *) tsf->hmac[i], strlen((char *) tsf->hmac[i]));
+		    }
+		}
+		else
+		    setpaxvar(&(fs->xheader), &(fs->xheaderlen), "TC.hmac", (char *) tsf->hmac[0], strlen((char *) tsf->hmac[0]));
 		tar_write_next_hdr(fs);
+		fsclear(fs);
 	    }
 	    else {
 		sprintf(paxdata, "%llu", tsf->orig_fs->filesize);
-		setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "SB.original.size", paxdata, strlen(paxdata));
-		setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "SB.hmac", (char *) tsf->hmac, strlen((char *) tsf->hmac));
+		setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.original.size", paxdata, strlen(paxdata));
+		if (tsf->nk > 0) {
+		    for (int i = 0; i < tsf->nk; i++) {
+			sprintf(paxhdr_varstring, "TC.hmac.%d", i);
+			setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), paxhdr_varstring, (char *) tsf->hmac[i], strlen((char *) tsf->hmac[i]));
+		    }
+		}
+		else
+		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.hmac", (char *) tsf->hmac[0], strlen((char *) tsf->hmac[0]));
 		tsf->orig_fs->filesize = n;
 		tar_write_next_hdr(tsf->orig_fs);
 	    }
@@ -1261,12 +1300,17 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
     return(c);
 }
 
-int tarsplit_finalize(struct tarsplit_file *tsf)
+int tarsplit_finalize_w(struct tarsplit_file *tsf)
 {
     tarsplit_write(NULL, 0, 0, tsf);
     free(tsf->buf);
     free(tsf->basename_path);
     dfree(tsf->xheader);
+    fsfree(tsf->tmp_fs);
+    free(tsf->tmp_fs);
+    for (int i = 0; i < tsf->nk; i++)
+	free(tsf->hmac[i]);
+    free(tsf->hmac);
     free(tsf);
     return(0);
 }
@@ -1280,11 +1324,16 @@ int tarsplit_finalize_r(struct tarsplit_file *tsf)
 	tsf->c_fread(padding, 1, 512 - (( tsf->segsize - 1) % 512 + 1),
 	    tsf->c_handle);
     }
+    fsfree(tsf->tmp_fs);
+    free(tsf->tmp_fs);
+    for (int i = 0; i < tsf->nk; i++)
+	free(tsf->hmac[i]);
+    free(tsf->hmac);
     free(tsf);
     return(0);
 }
 
-struct tarsplit_file *tarsplit_init_r(size_t (*c_fread)(), void *c_handle)
+struct tarsplit_file *tarsplit_init_r(size_t (*c_fread)(), void *c_handle, int nk)
 {
     struct tarsplit_file *tsf;
 
@@ -1295,6 +1344,13 @@ struct tarsplit_file *tarsplit_init_r(size_t (*c_fread)(), void *c_handle)
     tsf->finalseg = 0;
     tsf->segremaining = 0;
     tsf->segsize = 0;
+    tsf->tmp_fs = NULL;
+    tsf->hmac = malloc(sizeof(char *) * nk);
+    for (int i = 0; i < nk; i++) {
+	tsf->hmac[i] = malloc(sizeof(char) * EVP_MAX_MD_SIZE_b64);
+	memset(tsf->hmac[i], 0, EVP_MAX_MD_SIZE_b64);
+    }
+    tsf->nk = nk;
     return tsf;
 }
 
@@ -1303,17 +1359,19 @@ size_t tarsplit_read(void *buf, size_t sz, size_t count, struct tarsplit_file *t
     size_t n = sz * count;
     size_t c = 0;
     size_t r = 0;
-    static struct filespec *fs = 0;
+    struct filespec *fs;
     char padding[512];
     char *paxdata = NULL;
     int paxdatalen = 0;
+    char paxhdr_varstring[32];
 
-    if (fs == 0) {
-	fs = malloc(sizeof(struct filespec));
-	fsinit(fs, tsf->c_fread, NULL, tsf->c_handle, NULL);
+    if (tsf->tmp_fs == NULL) {
+	tsf->tmp_fs = malloc(sizeof(struct filespec));
+	fsinit(tsf->tmp_fs, NULL, tsf->c_fwrite, NULL, tsf->c_handle);
     }
     else
-	fsclear(fs);
+	fsclear(tsf->tmp_fs);
+    fs = tsf->tmp_fs;
 
     while (n > 0) {
 	if (tsf->segremaining == 0) {
@@ -1323,9 +1381,49 @@ size_t tarsplit_read(void *buf, size_t sz, size_t count, struct tarsplit_file *t
 			tsf->c_handle);
 		}
 		tar_get_next_hdr(fs);
-		if (getpaxvar(fs->xheader, fs->xheaderlen, "SB.segmented.final", &paxdata, &paxdatalen) == 0) {
+		if (getpaxvar(fs->xheader, fs->xheaderlen, "TC.segmented.final", &paxdata, &paxdatalen) == 0) {
 		    tsf->finalseg = atoi(paxdata);
 		}
+                if (tsf->nk > 1) {
+		    for (int i = 0; i < tsf->nk; i++) {
+			sprintf(paxhdr_varstring, "TC.hmac.%d", i);
+			if (getpaxvar(fs->xheader, fs->xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0) {
+			    memset(tsf->hmac[0], 0, EVP_MAX_MD_SIZE_b64 - 1);
+			    strncpy((char *) tsf->hmac[i], paxdata, paxdatalen > EVP_MAX_MD_SIZE_b64 - 1 ? EVP_MAX_MD_SIZE_b64 - 1 : paxdatalen);
+			    (tsf->hmac[i])[EVP_MAX_MD_SIZE_b64 - 1] = '\0';
+			    for (int j = EVP_MAX_MD_SIZE_b64 - 1; j >= 0; j--) {
+				if ((tsf->hmac[i])[j] == '\n') {
+				    (tsf->hmac[i])[j] = '\0';
+				    break;
+				}
+			    }
+			}
+		    }
+                }
+                else {
+		    if (getpaxvar(fs->xheader, fs->xheaderlen, "TC.hmac", &paxdata, &paxdatalen) == 0) {
+			memset(tsf->hmac[0], 0, EVP_MAX_MD_SIZE_b64 - 1);
+			strncpy((char *) tsf->hmac[0], paxdata, paxdatalen > EVP_MAX_MD_SIZE_b64 - 1 ? EVP_MAX_MD_SIZE_b64 - 1 : paxdatalen);
+			(tsf->hmac[0])[EVP_MAX_MD_SIZE_b64 - 1] = '\0';
+			for (int j = EVP_MAX_MD_SIZE_b64 - 1; j >= 0; j--) {
+			    if ((tsf->hmac[0])[j] == '\n') {
+				(tsf->hmac[0])[j] = '\0';
+				break;
+			    }
+			}
+		    }
+		}
+
+
+
+
+/*
+		if (getpaxvar(fs->xheader, fs->xheaderlen, "TC.hmac", &paxdata, &paxdatalen) == 0) {
+		    memset(tsf->hmac[0], 0, EVP_MAX_MD_SIZE * 2);
+		    strncpy((char *) tsf->hmac, paxdata, paxdatalen > EVP_MAX_MD_SIZE * 2 ? EVP_MAX_MD_SIZE * 2 : paxdatalen);
+		    (tsf->hmac[0])[EVP_MAX_MD_SIZE * 2] = '\0';
+		}
+*/
 		tsf->segsize = tsf->segremaining = fs->filesize;
 	    }
 	    else {
@@ -1369,19 +1467,24 @@ int genkey(int argc, char **argv)
     EVP_PKEY *evp_keypair = EVP_PKEY_new();
     BIGNUM *bne = BN_new();
     BIO *rsakeyfile;
+    BIO *membuf;
+    char *pubkey_b64;
     EVP_CIPHER_CTX *ctx = NULL;
-    int eklen;
-    int eklen_n;
-    unsigned char *ek;
-    unsigned char iv[EVP_MAX_IV_LENGTH];
-    unsigned char hmac_key[32];
-    unsigned char hmac_key_b64[45];
-    unsigned char hmac_key_enc[128];
-    int hmac_key_enc_sz = 0;
-    unsigned char *hmac_key_enc_p = hmac_key_enc;
-    unsigned char hmac_key_enc_b64[256];
+//    int eklen;
+//    int eklen_n;
+//    unsigned char *ek;
+//    unsigned char iv[EVP_MAX_IV_LENGTH];
+//    unsigned char hmac_rand[32];
+//    unsigned char hmac_rand_b64[((int)((32 + 2) / 3)) * 4 + 1];
+    unsigned char hmac_hash[EVP_MAX_MD_SIZE];
+    unsigned char hmac_hash_b64[((int)((EVP_MAX_MD_SIZE + 2) / 3)) * 4 + 1];
+    unsigned char hmac_key[EVP_MAX_MD_SIZE];
+    unsigned int hmac_key_len = 0;
+    unsigned char hmac_key_b64[((int)((EVP_MAX_MD_SIZE + 2) / 3)) * 4 + 1];
     struct passwd *pw;
     char hostname[64];
+    char passphrase[1024];
+    unsigned char passphrase_hash[SHA256_DIGEST_LENGTH];
 
     pw = getpwuid(getuid());
     gethostname(hostname, 63);
@@ -1408,7 +1511,7 @@ int genkey(int argc, char **argv)
     }
     rsakeyfile = BIO_new_file(filename, "w+");
 
-    OpenSSL_add_all_algorithms();
+//    OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
     BN_set_word(bne, RSA_F4);
     if (RSA_generate_key_ex(rsa_keypair, 2048, bne, NULL) != 1) {
@@ -1416,13 +1519,41 @@ int genkey(int argc, char **argv)
 	exit(1);
     }
     EVP_PKEY_set1_RSA(evp_keypair, rsa_keypair);
-    PEM_write_bio_PKCS8PrivateKey(rsakeyfile, evp_keypair, EVP_aes_128_cbc(), NULL, 0, 0, NULL);
+    {
+	int i;
+	for (i = 0; i <=2; i++) {
+	    if (UI_UTIL_read_pw_string(passphrase, 1024, "Enter passphrase: ", 1) == 0) {
+		break;
+	    }
+	}
+	if (i > 2) {
+	    fprintf(stderr, "Password entry failure\n");
+	    openssl_err();
+	    exit(1);
+	}
+    }
+    PEM_write_bio_PKCS8PrivateKey(rsakeyfile, evp_keypair, EVP_aes_256_cbc(), NULL, 0, NULL, passphrase);
     PEM_write_bio_PUBKEY(rsakeyfile, evp_keypair);
-    RAND_bytes(hmac_key, 32);
+//    RAND_bytes(hmac_rand, 32);
 
+    membuf = BIO_new(BIO_s_mem());
+    PEM_write_bio_PUBKEY(membuf, evp_keypair);
+    BIO_get_mem_data(membuf, &pubkey_b64);
+
+    SHA256((unsigned char *) passphrase, strlen(passphrase), passphrase_hash);
+    HMAC(EVP_sha256(), passphrase_hash, strlen((char *) passphrase_hash),
+	(unsigned char *) pubkey_b64, strlen(pubkey_b64), hmac_key, &hmac_key_len);
+//    memcpy(hmac_key, passphrase_hash, 32);
+    SHA256((unsigned char *) hmac_key, 32, hmac_hash);
+//    HMAC(EVP_sha256(), hmac_rand, 32, passphrase_hash, SHA256_DIGEST_LENGTH,
+//        hmac_key, &hmac_key_len);
+
+    BIO_free(membuf);
     ctx = EVP_CIPHER_CTX_new();
 
     openssl_err();
+
+/*
     ek = malloc(EVP_PKEY_size(evp_keypair));
     EVP_SealInit(ctx, EVP_aes_256_gcm(), &ek, &eklen, iv, &evp_keypair, 1);
     eklen_n = htonl(eklen);
@@ -1431,7 +1562,7 @@ int genkey(int argc, char **argv)
     hmac_key_enc_p += sizeof(eklen_n);
 
     memcpy(hmac_key_enc_p, ek, eklen);
-    hmac_key_enc_p += sizeof(eklen);
+    hmac_key_enc_p += eklen;
 
     memcpy(hmac_key_enc_p, iv, EVP_CIPHER_iv_length(EVP_aes_256_gcm()));
     hmac_key_enc_p += sizeof(EVP_CIPHER_iv_length(EVP_aes_256_gcm()));
@@ -1446,27 +1577,35 @@ int genkey(int argc, char **argv)
 
     EVP_EncodeBlock(hmac_key_b64, hmac_key, 32);
     EVP_EncodeBlock(hmac_key_enc_b64, hmac_key_enc, hmac_key_enc_sz);
+*/
+    EVP_EncodeBlock(hmac_key_b64, hmac_key, 32);
+//    EVP_EncodeBlock(hmac_rand_b64, hmac_rand, 32);
+    EVP_EncodeBlock(hmac_hash_b64, hmac_hash, 32);
 
     BIO_printf(rsakeyfile, "-----BEGIN HMAC KEY-----\n");
     BIO_printf(rsakeyfile, "%s\n", hmac_key_b64);
     BIO_printf(rsakeyfile, "-----END HMAC KEY-----\n");
-    BIO_printf(rsakeyfile, "-----BEGIN ENCRYPTED HMAC KEY-----\n");
-    BIO_printf(rsakeyfile, "%s\n", hmac_key_enc_b64);
-    BIO_printf(rsakeyfile, "-----END ENCRYPTED HMAC KEY-----\n");
+//    BIO_printf(rsakeyfile, "-----BEGIN HMAC SEED-----\n");
+//    BIO_printf(rsakeyfile, "%s\n", hmac_rand_b64);
+//    BIO_printf(rsakeyfile, "-----END HMAC SEED-----\n");
+    BIO_printf(rsakeyfile, "-----BEGIN HMAC HASH-----\n");
+    BIO_printf(rsakeyfile, "%s\n", hmac_hash_b64);
+    BIO_printf(rsakeyfile, "-----END HMAC HASH-----\n");
     BIO_printf(rsakeyfile, "-----BEGIN COMMENT-----\n");
     BIO_printf(rsakeyfile, "%s@%s\n", pw->pw_name, hostname);
     if (comment[0] != '\0')
-	BIO_printf(rsakeyfile, "%s\n", comment);
+	BIO_printf(rsakeyfile, "==== %s ====\n", comment);
     BIO_printf(rsakeyfile, "-----END COMMENT-----\n");
     EVP_CIPHER_CTX_cleanup(ctx);
 
     return(0);
 }
 
-struct rsa_file *rsa_file_init(char mode, EVP_PKEY *evp_keypair, size_t (*c_ffunc)(), void *c_handle)
+struct rsa_file *rsa_file_init(char mode, EVP_PKEY **evp_keypair, int nk, size_t (*c_ffunc)(), void *c_handle)
 {
     struct rsa_file *rcf;
     int eklen_n;
+    int nk_n;
 
     OpenSSL_add_all_algorithms();
     rcf = malloc(sizeof(struct rsa_file));
@@ -1481,25 +1620,51 @@ struct rsa_file *rsa_file_init(char mode, EVP_PKEY *evp_keypair, size_t (*c_ffun
     rcf->eof = 0;
     rcf->mode = mode;
 
+
     rcf->ctx = EVP_CIPHER_CTX_new();
     if (mode == 'w') {
 	rcf->c_fwrite = c_ffunc;
-	rcf->ek = malloc(EVP_PKEY_size(evp_keypair));
-	EVP_SealInit(rcf->ctx, EVP_aes_256_gcm(), &(rcf->ek), &(rcf->eklen), (rcf->iv), &evp_keypair, 1);
-	eklen_n = htonl(rcf->eklen);
-	c_ffunc(&eklen_n, 1, sizeof(rcf->eklen), c_handle);
-	c_ffunc(rcf->ek, 1, rcf->eklen, c_handle);
+	rcf->eklen = malloc(sizeof(int) * nk);
+	rcf->ek = malloc(sizeof(char *) * nk);
+	rcf->nk = nk;
+	for (int i = 0; i < nk; i++)
+	    rcf->ek[i] = malloc(EVP_PKEY_size(evp_keypair[i]));
+
+	EVP_SealInit(rcf->ctx, EVP_aes_256_gcm(), (rcf->ek), (rcf->eklen), (rcf->iv), evp_keypair, nk);
+	nk_n = htonl(nk);
+	c_ffunc(&nk_n, 1, sizeof(nk_n), c_handle);
+	for (int i = 0; i < nk; i++) {
+	    eklen_n = htonl(rcf->eklen[i]);
+	    c_ffunc(&eklen_n, 1, sizeof(eklen_n), c_handle);
+	    c_ffunc(rcf->ek[i], 1, rcf->eklen[i], c_handle);
+	}
 	c_ffunc(rcf->iv, 1, EVP_CIPHER_iv_length(EVP_aes_256_gcm()), c_handle);
     }
     if (mode == 'r') {
 	rcf->c_fread = c_ffunc;
 
-	c_ffunc(&eklen_n, 1, sizeof(eklen_n), c_handle);
-	rcf->eklen = ntohl(eklen_n);
-	rcf->ek = malloc(EVP_PKEY_size(evp_keypair));
-	c_ffunc(rcf->ek, 1, rcf->eklen, c_handle);
+	c_ffunc(&nk_n, 1, sizeof(nk_n), c_handle);
+	nk = ntohl(nk_n);
+	rcf->nk = nk;
+	rcf->ek = malloc(sizeof(char *) * nk);
+	rcf->eklen = malloc(sizeof(int) * nk);
+
+	for (int i = 0; i < nk; i++) {
+	    c_ffunc(&eklen_n, 1, sizeof(eklen_n), c_handle);
+	    rcf->eklen[i] = ntohl(eklen_n);
+	    rcf->ek[i] = malloc(rcf->eklen[i]);
+	    c_ffunc(rcf->ek[i], 1, rcf->eklen[i], c_handle);
+	}
 	c_ffunc(&(rcf->iv), 1, EVP_CIPHER_iv_length(EVP_aes_256_gcm()), c_handle);
-	EVP_OpenInit(rcf->ctx, EVP_aes_256_gcm(), rcf->ek, rcf->eklen, rcf->iv, evp_keypair);
+	for (int i = 0; i < nk; i++) {
+	    if (EVP_OpenInit(rcf->ctx, EVP_aes_256_gcm(), rcf->ek[i], rcf->eklen[i], rcf->iv, *evp_keypair) != 0)
+		break;
+	    else {
+//		fprintf(stderr, "Error: \n");
+//		openssl_err();
+		EVP_CIPHER_CTX_reset(rcf->ctx);
+	    }
+	}
     }
     rcf->c_handle = c_handle;
 
@@ -1549,10 +1714,14 @@ int rsa_file_finalize(struct rsa_file *rcf)
     }
     if (rcf->mode == 'r') {
     }
-    EVP_CIPHER_CTX_cleanup(rcf->ctx);
+//    EVP_CIPHER_CTX_cleanup(rcf->ctx);
+    for (int i = 0; i < rcf->nk; i++)
+	free(rcf->ek[i]);
+    free(rcf->ek);
+    EVP_CIPHER_CTX_free(rcf->ctx);
+    free(rcf->eklen);
     free(rcf->buf);
     free(rcf->outbuf);
-    free(rcf->ek);
     free(rcf);
     return(0);
 }
@@ -1606,50 +1775,53 @@ void openssl_err()
     }
 }
 
-EVP_PKEY *rsa_getkey(char mode, struct key_st *k)
+EVP_PKEY *rsa_getkey(char mode, struct key_st *k, int n)
 {
-    static EVP_PKEY *evp_keypair = NULL;
+    EVP_PKEY *evp_keypair = NULL;
     BIO *rsa_keydata = NULL;
 
     OpenSSL_add_all_algorithms();
     if (evp_keypair == NULL) {
 	evp_keypair = EVP_PKEY_new();
 	if (mode == 'd') {
-	    rsa_keydata = BIO_new_mem_buf(k->eprvkey, strlen(k->eprvkey));
+	    rsa_keydata = BIO_new_mem_buf(k[n].eprvkey, strlen(k[n].eprvkey));
 	    PEM_read_bio_PrivateKey(rsa_keydata, &evp_keypair, NULL, NULL);
 	}
 	if (mode == 'e') {
-	    rsa_keydata = BIO_new_mem_buf(k->pubkey, strlen(k->pubkey));
+	    rsa_keydata = BIO_new_mem_buf(k[n].pubkey, strlen(k[n].pubkey));
 	    PEM_read_bio_PUBKEY(rsa_keydata, &evp_keypair, NULL, NULL);
 	}
-	openssl_err();
+//	openssl_err();
 	BIO_free(rsa_keydata);
     }
     return(evp_keypair);
 }
 
-struct key_st *load_keyfile(char *keyfilename)
+int load_keyfile(char *keyfilename, struct key_st *key_st)
 {
     FILE *keyfile;
     long keyfile_sz;
     char *keydata;
-    struct key_st *key_st;
 
     keyfile = fopen(keyfilename, "r");
+    if (keyfile == 0) {
+	fprintf(stderr, "Error opening %s\n", keyfilename);
+	exit(1);
+    }
     fseek(keyfile, 0L, SEEK_END);
     keyfile_sz = ftell(keyfile);
     rewind(keyfile);
 
     keydata = malloc(keyfile_sz + 1);
-    key_st = malloc(sizeof(struct key_st));
     fread(keydata, 1, keyfile_sz, keyfile);
     keydata[keyfile_sz] = '\0';
     fclose(keyfile);
 
+    key_st->keydata = keydata;
     key_st->eprvkey = strstr(keydata, "-----BEGIN ENCRYPTED PRIVATE KEY-----");
     key_st->pubkey = strstr(keydata, "-----BEGIN PUBLIC KEY-----");
     key_st->hmac_key_b64 = strstr(keydata, "-----BEGIN HMAC KEY-----");
-    key_st->hmac_key_enc_b64 = strstr(keydata, "-----BEGIN ENCRYPTED HMAC KEY-----");
+    key_st->hmac_hash_b64 = strstr(keydata, "-----BEGIN HMAC HASH-----");
     key_st->comment = strstr(keydata, "-----BEGIN COMMENT-----");
     *(strchr(strstr(key_st->eprvkey, "-----END ENCRYPTED PRIVATE KEY-----"),
 	'\n')) = '\0';
@@ -1657,30 +1829,32 @@ struct key_st *load_keyfile(char *keyfilename)
 	'\n')) = '\0';
     *(strchr(strstr(key_st->hmac_key_b64, "-----END HMAC KEY-----"),
 	'\n')) = '\0';
-    *(strchr(strstr(key_st->hmac_key_enc_b64, "-----END ENCRYPTED HMAC KEY-----"),
+    *(strchr(strstr(key_st->hmac_hash_b64, "-----END HMAC HASH-----"),
 	'\n')) = '\0';
     *(strchr(strstr(key_st->comment, "-----END COMMENT-----"),
 	'\n')) = '\0';
     key_st->hmac_key_b64 = (strchr(key_st->hmac_key_b64, '\n') + 1);
     *(strchr(key_st->hmac_key_b64, '\n')) = '\0';
-    key_st->hmac_key_enc_b64 = (strchr(key_st->hmac_key_enc_b64, '\n') + 1);
-    *(strchr(key_st->hmac_key_enc_b64, '\n')) = '\0';
+    key_st->hmac_hash_b64 = (strchr(key_st->hmac_hash_b64, '\n') + 1);
+    *(strchr(key_st->hmac_hash_b64, '\n')) = '\0';
     key_st->comment = (strchr(key_st->comment, '\n') + 1);
     *(strchr(key_st->comment, '\n')) = '\0';
-    return(key_st);
+    key_st->evp_keypair = NULL;
+
+    return(0);
 }
 
 unsigned char *sha256_digest(char *msg)
 {
-    EVP_MD_CTX ctx;
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
     unsigned char b[EVP_MAX_MD_SIZE];
     unsigned char *d;
     unsigned int sz;
 
     OpenSSL_add_all_digests();
-    EVP_DigestInit(&ctx, EVP_sha256());
-    EVP_DigestUpdate(&ctx, msg, strlen(msg));
-    EVP_DigestFinal(&ctx, b, &sz);
+    EVP_DigestInit(ctx, EVP_sha256());
+    EVP_DigestUpdate(ctx, msg, strlen(msg));
+    EVP_DigestFinal(ctx, b, &sz);
     d = malloc(((sz + (3 - 1)) / 3) * 4 + 2);
     EVP_EncodeBlock(d, b, sz);
     return(d);
@@ -1688,72 +1862,194 @@ unsigned char *sha256_digest(char *msg)
 
 unsigned char *sha256_hex(char *msg)
 {
-    EVP_MD_CTX ctx;
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
     unsigned char b[EVP_MAX_MD_SIZE];
     unsigned char *d;
     unsigned int sz;
 
     OpenSSL_add_all_digests();
-    EVP_DigestInit(&ctx, EVP_sha256());
-    EVP_DigestUpdate(&ctx, msg, strlen(msg));
-    EVP_DigestFinal(&ctx, b, &sz);
+    EVP_DigestInit(ctx, EVP_sha256());
+    EVP_DigestUpdate(ctx, msg, strlen(msg));
+    EVP_DigestFinal(ctx, b, &sz);
     d = malloc(sz * 2 + 1);
     encode_block_16(d, b, sz);
+    EVP_MD_CTX_free(ctx);
     return(d);
 }
 
-int load_pkey(struct rsa_keys **rsa_keys, char *pubkey_fingerprint, char *eprivkey, char *keycomment)
+unsigned char *sha256_b64(char *msg)
+{
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    unsigned char b[EVP_MAX_MD_SIZE];
+    unsigned char *d;
+    unsigned int sz;
+
+    OpenSSL_add_all_digests();
+    EVP_DigestInit(ctx, EVP_sha256());
+    EVP_DigestUpdate(ctx, msg, strlen(msg));
+    EVP_DigestFinal(ctx, b, &sz);
+    d = malloc(sz * 2 + 1);
+    EVP_EncodeBlock(d, b, sz);
+    EVP_MD_CTX_free(ctx);
+    return(d);
+}
+
+int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
+{
+    char *msg1 = NULL;
+    char *msg2 = NULL;
+    char *msg3 = NULL;
+    int nkeys = 0;
+    UI *prompt;
+    char passphrase[4096];
+    int UI_result;
+    BIO *rsa_keydata;
+    unsigned char passphrase_hash[SHA256_DIGEST_LENGTH];
+    unsigned int hmac_key_len = 0;
+    unsigned char tmp_hmac_hash[EVP_MAX_MD_SIZE];
+    unsigned char tmp_hmac_hash_b64[((int)((EVP_MAX_MD_SIZE + 2) / 3)) * 4 + 1];
+
+    for (int i = 0; required_keys_group[i] != NULL; i++) {
+	int n = atoi(required_keys_group[i]);
+	if (n < rsa_keys->numkeys && rsa_keys->keys[n].evp_keypair == NULL) {
+	    nkeys++;
+	    strcata(&msg2, "  ");
+	    strcata(&msg2, rsa_keys->keys[n].fingerprint);
+	    if (msg2[strlen(msg2) - 1] != '\n')
+		strcata(&msg2, "\n");
+	    strcata(&msg2, "    ");
+	    strcata(&msg2, rsa_keys->keys[n].comment);
+	    strcata(&msg2, "\n");
+	}
+	else {
+	    // Found at least one private key in the group that is already decrypted
+	    return(0);
+	}
+    }
+
+    if (nkeys > 0) {
+	// get a passphrase
+	strcata(&msg1, "Need a passphrase for one of the following key(s):\n\n");
+	strcata(&msg1, msg2);
+	strcata(&msg1, "\nEnter passphrase: ");
+	prompt = UI_new();
+	UI_add_input_string(prompt, msg1, 0, passphrase, 1, 4095);
+	UI_result = UI_process(prompt);
+	while (1) {
+	    if (UI_result == 0) {
+		// try the passphrase against all keys
+		for (int i = 0; i < rsa_keys->numkeys; i++) {
+		    if (rsa_keys->keys[i].evp_keypair == NULL) {
+			rsa_keydata = BIO_new_mem_buf(rsa_keys->keys[i].eprvkey, -1);
+			rsa_keys->keys[i].evp_keypair = EVP_PKEY_new();
+			if (PEM_read_bio_PrivateKey(rsa_keydata, &(rsa_keys->keys[i].evp_keypair), NULL, passphrase) == NULL) {
+			    // didn't match, try the next key
+			    BIO_free(rsa_keydata);
+			    rsa_keydata = NULL;
+			    EVP_PKEY_free(rsa_keys->keys[i].evp_keypair);
+			    rsa_keys->keys[i].evp_keypair = NULL;
+			    continue;
+			}
+			else {
+			    SHA256((unsigned char *) passphrase, strlen(passphrase), passphrase_hash);
+			    HMAC(EVP_sha256(), passphrase_hash, strlen((char *) passphrase_hash),
+				(unsigned char *) rsa_keys->keys[i].pubkey,
+				strlen(rsa_keys->keys[i].pubkey), rsa_keys->keys[i].hmac_key, &hmac_key_len);
+			    SHA256((unsigned char *) rsa_keys->keys[i].hmac_key, 32, tmp_hmac_hash);
+			    EVP_EncodeBlock(tmp_hmac_hash_b64, tmp_hmac_hash, 32);
+//			    fprintf(stderr, "key %d\n  input hash: %s\ncreated hash: %s\n", i, rsa_keys->keys[i].hmac_hash_b64, tmp_hmac_hash_b64);
+			    BIO_free(rsa_keydata);
+			    rsa_keydata = NULL;
+			}
+		    }
+		}
+		// check the required keys, see if password worked for any of them
+		for (int i = 0; required_keys_group[i] != NULL; i++) {
+		    int n = atoi(required_keys_group[i]);
+		    if (rsa_keys->keys[n].evp_keypair != NULL) {
+			UI_free(prompt);
+			dfree(msg1);
+			dfree(msg2);
+			dfree(msg3);
+			return(0);
+		    }
+		}
+		// None found, loop and try again
+		UI_free(prompt);
+		strcata(&msg3, "\nThat didn't work.\nTry again: ");
+		prompt = UI_new();
+		UI_add_input_string(prompt, msg3, 0, passphrase, 1, 4095);
+		UI_result = UI_process(prompt);
+	    }
+	    else {
+		UI_free(prompt);
+		return(-1);
+	    }
+	}
+    }
+    return(0);
+}
+int load_pkey(struct rsa_keys **rsa_keys, int keynum, char *pubkey_fingerprint, char *eprivkey, char *keycomment, char *hmacseed)
 {
     BIO *rsa_keydata;
-    int i = 0;
     char decrypt_message[2048];
+    char passphrase[1024];
+    unsigned char hmac_key[EVP_MAX_MD_SIZE];
+    unsigned int hmac_key_len = 0;
+    unsigned char hmac_seed[32];
+    unsigned char passphrase_hash[SHA256_DIGEST_LENGTH];
+
 
     if (*rsa_keys == NULL) {
 	*rsa_keys = dmalloc(sizeof(struct rsa_keys));
 	(*rsa_keys)->numkeys = 0;
 	(*rsa_keys)->keys = NULL;
     }
-    for (i = 0; i < (*rsa_keys)->numkeys; i++) {
-	if (strcmp((*rsa_keys)->keys[i].fingerprint, pubkey_fingerprint) == 0) {
-	    return(0);
-	}
-    }
-    if (i >= (*rsa_keys)->numkeys) {
-	(*rsa_keys)->keys = drealloc((*rsa_keys)->keys, sizeof(struct key_st) * (i + 1));
-	(*rsa_keys)->keys[i].fingerprint = NULL;
-	(*rsa_keys)->keys[i].comment = NULL;
-	(*rsa_keys)->keys[i].eprvkey = NULL;
-	(*rsa_keys)->keys[i].evp_keypair = EVP_PKEY_new();
-	(*rsa_keys)->numkeys = i + 1;
+    if (keynum + 1 > (*rsa_keys)->numkeys ) {
+	(*rsa_keys)->numkeys = keynum + 1;
+	(*rsa_keys)->keys = drealloc((*rsa_keys)->keys, sizeof(struct key_st) * (keynum + 1));
     }
 
+    (*rsa_keys)->keys[keynum].fingerprint = NULL;
+    (*rsa_keys)->keys[keynum].comment = NULL;
+    (*rsa_keys)->keys[keynum].eprvkey = NULL;
+    (*rsa_keys)->keys[keynum].evp_keypair = EVP_PKEY_new();
+
     OpenSSL_add_all_algorithms();
-    strncpya0(&((*rsa_keys)->keys[i].fingerprint), pubkey_fingerprint, strlen(pubkey_fingerprint));
+    strncpya0(&((*rsa_keys)->keys[keynum].fingerprint), pubkey_fingerprint, strlen(pubkey_fingerprint));
     if (keycomment != NULL)
-	strncpya0(&((*rsa_keys)->keys[i].comment), keycomment, strlen(keycomment));
-    strncpya0(&((*rsa_keys)->keys[i].eprvkey), eprivkey, strlen(eprivkey));
-//    rsa_keydata = BIO_new_mem_buf((*rsa_keys)->keys[i].eprvkey, strlen((*rsa_keys)->keys[i].eprvkey));
-    rsa_keydata = BIO_new_mem_buf((*rsa_keys)->keys[i].eprvkey, -1);
+	strncpya0(&((*rsa_keys)->keys[keynum].comment), keycomment, strlen(keycomment));
+    strncpya0(&((*rsa_keys)->keys[keynum].eprvkey), eprivkey, strlen(eprivkey));
+    rsa_keydata = BIO_new_mem_buf((*rsa_keys)->keys[keynum].eprvkey, -1);
     if (keycomment != NULL) {
 	snprintf(decrypt_message, 1023, "Loading decryption key for:\n%s\nEnter passphrase: ", keycomment);
     }
-//    PEM_read_bio_PrivateKey(rsa_keydata, &((*rsa_keys)->keys[i].evp_keypair), NULL, NULL);
-    if (PEM_read_bio_PrivateKey(rsa_keydata, &((*rsa_keys)->keys[i].evp_keypair), get_passwd, decrypt_message) == NULL) {
+    UI_UTIL_read_pw_string(passphrase, 1024, decrypt_message, 0);
+    if (PEM_read_bio_PrivateKey(rsa_keydata, &((*rsa_keys)->keys[keynum].evp_keypair), NULL, passphrase) == NULL) {
 	BIO_free(rsa_keydata);
-	rsa_keydata = BIO_new_mem_buf((*rsa_keys)->keys[i].eprvkey, -1);
+	rsa_keydata = BIO_new_mem_buf((*rsa_keys)->keys[keynum].eprvkey, -1);
 	snprintf(decrypt_message, 1023, "That didn't work.\nRe-enter passphrase: ");
-	while (PEM_read_bio_PrivateKey(rsa_keydata, &((*rsa_keys)->keys[i].evp_keypair), get_passwd, decrypt_message) == NULL) {
-	    PEM_read_bio_PrivateKey(rsa_keydata, &((*rsa_keys)->keys[i].evp_keypair), NULL, NULL);
+	UI_UTIL_read_pw_string(passphrase, 1024, decrypt_message, 0);
+	while (PEM_read_bio_PrivateKey(rsa_keydata, &((*rsa_keys)->keys[keynum].evp_keypair), get_passwd, decrypt_message) == NULL) {
+	    PEM_read_bio_PrivateKey(rsa_keydata, &((*rsa_keys)->keys[keynum].evp_keypair), NULL, NULL);
 	    BIO_free(rsa_keydata);
-	    rsa_keydata = BIO_new_mem_buf((*rsa_keys)->keys[i].eprvkey, -1);
+	    rsa_keydata = BIO_new_mem_buf((*rsa_keys)->keys[keynum].eprvkey, -1);
+	    UI_UTIL_read_pw_string(passphrase, 1024, decrypt_message, 0);
 	}
     }
+    EVP_DecodeBlock(hmac_seed, (unsigned char *) hmacseed, 44);
+    SHA256((unsigned char *) passphrase, strlen(passphrase), passphrase_hash);
+    HMAC(EVP_sha256(), (unsigned char *) hmac_seed, 32, passphrase_hash, SHA256_DIGEST_LENGTH,
+        hmac_key, &hmac_key_len);
+
+
     return(0);
 }
 int get_passwd(char *buf, int size, int rwflag, void *prompt)
 {
-    if (UI_UTIL_read_pw(buf, "hello: ", size, prompt, rwflag) == 0)
+    if (UI_UTIL_read_pw_string(buf, size, prompt, rwflag) == 0) {
 	return(strlen(buf));
+    }
     return(-1);
 }
 int get_pkey(struct rsa_keys *rsa_keys, char *fp)
@@ -1803,8 +2099,8 @@ int encode_block_16(unsigned char *r, unsigned char *s, int c)
     int i = 0;
 
     for (i = 0; i < c; i++) {
-	r[i * 2] = hexchars[(s[i] & 0xF0) >> 4];
-	r[i * 2 + 1] = hexchars[(s[i] & 0xF )];
+	r[i * 2] = hexchars[((s[i]) & 0xF0) >> 4];
+	r[i * 2 + 1] = hexchars[((s[i]) & 0xF )];
     }
     r[i * 2] = '\0';
     return(c * 2);
@@ -1834,7 +2130,7 @@ int gen_sparse_data_string(struct filespec *fs, char **sparsetext)
     if (*sparsetext != NULL) {
 	(*sparsetext)[0] = '\0';
     }
-    sprintf(sparsetextp, "%llu", (unsigned long long int) fs->n_sparsedata);
+    sprintf(sparsetextp, "%llu", (unsigned long long int) fs->filesize);
     strcata(sparsetext, sparsetextp);
     for (int i = 0; i < fs->n_sparsedata; i++) {
 	sprintf(sparsetextp, ":%llu:%llu", (unsigned long long int) fs->sparsedata[i].offset, (unsigned long long int) fs->sparsedata[i].size);
@@ -1894,3 +2190,134 @@ int c_fread_sparsedata(size_t (*c_ffunc)(), void *c_handle, struct filespec *fs)
 	free(sparsetext);
     return(sparsetext_len + sparsetext_leni);
 }
+
+struct sha1_file *sha1_file_init_w(size_t (*c_ffunc)(), void *c_handle)
+{
+    struct sha1_file *s1f;
+
+    s1f = malloc(sizeof(struct sha1_file));
+    s1f->c_fwrite = c_ffunc;
+    s1f->c_handle = c_handle;
+    SHA1_Init(&(s1f->cfsha1ctl));
+    return(s1f);
+}
+
+size_t sha1_file_write(void *buf, size_t sz, size_t count, struct sha1_file *s1f)
+{
+    size_t c;
+    c = s1f->c_fwrite(buf, sz, count, s1f->c_handle);
+    SHA1_Update(&(s1f->cfsha1ctl), buf, c);
+    return(c);
+}
+
+int sha1_finalize_w(struct sha1_file *s1f, unsigned char *cfsha1)
+{
+    SHA1_Final(cfsha1, &(s1f->cfsha1ctl));
+    free(s1f);
+    return(0);
+}
+
+struct hmac_file *hmac_file_init_w(size_t (*c_ffunc)(), void *c_handle, unsigned char **key, int *keysz, int nk)
+{
+    struct hmac_file *hmacf;
+
+
+    hmacf = malloc(sizeof(struct hmac_file));
+    hmacf->c_fwrite = c_ffunc;
+    hmacf->c_handle = c_handle;
+    hmacf->nk = nk;
+    hmacf->hctx = malloc(sizeof(void *) * nk);
+    hmacf->key = key;
+    hmacf->keysz = keysz;
+    for (int i = 0; i < nk; i++) {
+	hmacf->hctx[i] = HMAC_CTX_new();
+	HMAC_Init_ex(hmacf->hctx[i], key[i], keysz[i], EVP_sha256(), NULL);
+    }
+    return(hmacf);
+}
+
+size_t hmac_file_write(void *buf, size_t sz, size_t count, struct hmac_file *hmacf)
+{
+    size_t c;
+    c = hmacf->c_fwrite(buf, sz, count, hmacf->c_handle);
+    for (int i = 0; i < hmacf->nk; i++) {
+	HMAC_Update(hmacf->hctx[i], (unsigned char *) (unsigned char *) buf, c);
+    }
+    return(c);
+}
+
+int hmac_finalize_w(struct hmac_file *hmacf, unsigned char **cfhmac, unsigned int *cfhmac_len)
+{
+    for (int i = 0; i < hmacf->nk; i++) {
+	HMAC_Final(hmacf->hctx[i], cfhmac[i], &(cfhmac_len[i]));
+	HMAC_CTX_free(hmacf->hctx[i]);
+    }
+    free(hmacf->hctx);
+    free(hmacf);
+    return(0);
+}
+
+struct hmac_file *hmac_file_init_r(size_t (*c_ffunc)(), void *c_handle, unsigned char **key, int *keysz, int nk)
+{
+    struct hmac_file *hmacf;
+
+
+    hmacf = malloc(sizeof(struct hmac_file));
+    hmacf->c_fread = c_ffunc;
+    hmacf->c_handle = c_handle;
+    hmacf->nk = nk;
+    hmacf->hctx = malloc(sizeof(void *) * nk);
+    hmacf->key = key;
+    hmacf->keysz = keysz;
+    for (int i = 0; i < nk; i++) {
+	hmacf->hctx[i] = HMAC_CTX_new();
+	HMAC_Init_ex(hmacf->hctx[i], key[i], keysz[i], EVP_sha256(), NULL);
+    }
+    return(hmacf);
+}
+
+size_t hmac_file_read(void *buf, size_t sz, size_t count, struct hmac_file *hmacf)
+{
+    size_t c;
+    c = hmacf->c_fread(buf, sz, count, hmacf->c_handle);
+    for (int i = 0; i < hmacf->nk; i++) {
+	HMAC_Update(hmacf->hctx[i], (unsigned char *) (unsigned char *) buf, c);
+    }
+    return(c);
+}
+
+int hmac_finalize_r(struct hmac_file *hmacf, unsigned char **cfhmac, unsigned int *cfhmac_len)
+{
+    for (int i = 0; i < hmacf->nk; i++) {
+	HMAC_Final(hmacf->hctx[i], cfhmac[i], &(cfhmac_len[i]));
+	HMAC_CTX_free(hmacf->hctx[i]);
+    }
+    free(hmacf->hctx);
+    free(hmacf);
+    return(0);
+}
+
+int parse(char *in, char ***out, char t)
+{
+    int i;
+    int c = 0;
+    int l = strlen(in);
+    for (i = 0; i < strlen(in); i++)
+	if (in[i] == t)
+	    c++;
+    if (*out == NULL)
+	*out = dmalloc(sizeof(char **) * (c + 2));
+    if (*out == NULL || dmalloc_size(*out) < sizeof(char **) * (c + 2))
+	*out = drealloc(*out, sizeof(char **) * (c + 2));
+    c = 0;
+    (*out)[c] = in;
+    for (i = 0; i < l; i++) {
+	if (in[i] == t) {
+	    in[i] = '\0';
+	    (*out)[++c] = in + i + 1;
+	}
+    }
+    (*out)[++c] = NULL;
+    return(c);
+}
+

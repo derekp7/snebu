@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -17,6 +18,8 @@
 #include <openssl/hmac.h>
 #include <openssl/ui.h>
 #include "tarlib.h"
+
+char *itoa(char *s, int n);
 
 int main(int argc, char **argv)
 {
@@ -55,24 +58,36 @@ int tarencrypt(int argc, char **argv)
     size_t padding;
     char padblock[512];
     size_t c;
+    struct hmac_file *hmacf;
     struct lzop_file *lzf;
     struct rsa_file *rcf;
-    struct key_st *keys;
-    EVP_PKEY *evp_keypair = EVP_PKEY_new();
+//    struct key_st *keys;
+    struct key_st *keys = NULL;
+    int numkeys = 0;
+    EVP_PKEY **evp_keypair;// = EVP_PKEY_new();
     unsigned char *pubkey_fp;
-    HMAC_CTX hctx;
-    unsigned char hmac[EVP_MAX_MD_SIZE];
-    unsigned int hmac_len = 0;
+    unsigned char **hmac; //[EVP_MAX_MD_SIZE];
+    unsigned int *hmac_len = NULL;
     char *sparsetext = NULL;
     int sparsetext_sz = 0;
     char tmpbuf[512];
+    int keynum;
+    char *numkeys_string = NULL;
+    char itoabuf1[32];
+    unsigned char **hmac_keys;
+    int *hmac_keysz;
 
-    memset(hmac, 0, EVP_MAX_MD_SIZE);
+//    memset(hmac, 0, EVP_MAX_MD_SIZE);
     while ((optc = getopt_long(argc, argv, "k:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'k':
 		strncpy(keyfilename, optarg, 127);
 		keyfilename[127] = 0;
+		if (numkeys == 0)
+		    keys = malloc(sizeof(struct key_st) * ++numkeys);
+		else 
+		    keys = realloc(keys, sizeof(struct key_st) * ++numkeys);
+		load_keyfile(keyfilename, &(keys[numkeys - 1]));
 		foundopts |= opt_keyfilename;
 		break;
 	}
@@ -87,68 +102,125 @@ int tarencrypt(int argc, char **argv)
     fsinit(&fs2, fread, fwrite, stdin, stdout);
     fsinit(&gh, fread, fwrite, stdin, stdout);
 
-    keys = load_keyfile(keyfilename);
-    EVP_DecodeBlock(keys->hmac_key, (unsigned char *) keys->hmac_key_b64, 44);
-    evp_keypair = rsa_getkey('e', keys);
-    pubkey_fp = sha256_hex(keys->pubkey);
+//    keys = load_keyfile(keyfilename);
     gh.ftype = 'g';
     strncpya0(&(gh.filename), "././@xheader", 12);
 
-    setpaxvar(&(gh.xheader), &(gh.xheaderlen), "SB.pubkey.fingerprint", (char *) pubkey_fp, strlen((const char *) pubkey_fp));
-    setpaxvar(&(gh.xheader), &(gh.xheaderlen), "SB.eprivkey", keys->eprvkey, strlen(keys->eprvkey));
-    setpaxvar(&(gh.xheader), &(gh.xheaderlen), "SB.ehmac", keys->hmac_key_enc_b64, strlen(keys->hmac_key_enc_b64));
-    setpaxvar(&(gh.xheader), &(gh.xheaderlen), "SB.keyfile.comment", keys->comment, strlen(keys->comment));
+    setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.version", "1", 1);
+    if (numkeys > 1) {
+	char paxhdr_varstring[32];
+	strncpya0(&numkeys_string, itoa(itoabuf1, numkeys), 0);
+//	asprintf(&numkeys_string, "%d", numkeys);
+	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.numkeys", numkeys_string, strlen(numkeys_string));
+	numkeys_string[0] = '\0';
+	for (keynum = 0; keynum < numkeys; keynum++) {
+	    pubkey_fp = sha256_b64(keys[keynum].pubkey);
+	    sprintf(paxhdr_varstring, "TC.pubkey.fingerprint.%d", keynum);
+	    setpaxvar(&(gh.xheader), &(gh.xheaderlen), paxhdr_varstring, (char *) pubkey_fp, strlen((const char *) pubkey_fp));
+	    sprintf(paxhdr_varstring, "TC.eprivkey.%d", keynum);
+	    setpaxvar(&(gh.xheader), &(gh.xheaderlen), paxhdr_varstring, keys[keynum].eprvkey, strlen(keys[keynum].eprvkey));
+	    sprintf(paxhdr_varstring, "TC.pubkey.%d", keynum);
+	    setpaxvar(&(gh.xheader), &(gh.xheaderlen), paxhdr_varstring, keys[keynum].pubkey, strlen(keys[keynum].pubkey));
+	    sprintf(paxhdr_varstring, "TC.hmachash.%d", keynum);
+	    setpaxvar(&(gh.xheader), &(gh.xheaderlen), paxhdr_varstring, keys[keynum].hmac_hash_b64, strlen(keys[keynum].hmac_hash_b64));
+	    sprintf(paxhdr_varstring, "TC.keyfile.comment.%d", keynum);
+	    setpaxvar(&(gh.xheader), &(gh.xheaderlen), paxhdr_varstring, keys[keynum].comment, strlen(keys[keynum].comment));
+	    EVP_DecodeBlock(keys[keynum].hmac_key, (unsigned char *) keys[keynum].hmac_key_b64, 44);
+	    if (numkeys_string[0] == '\0')
+		strncpya0(&numkeys_string, itoa(itoabuf1, keynum), 0);
+//		asprintf(&numkeys_string, "%d", keynum);
+	    else {
+		strcata(&numkeys_string, "|");
+		strcata(&numkeys_string, itoa(itoabuf1, keynum));
+//		asprintf(&numkeys_string, "%s|%d", numkeys_string, keynum);
+	    }
+	    free(pubkey_fp);
+	}
+	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.keygroups", numkeys_string, strlen(numkeys_string));
+    }
+    else {
+	keynum = 0;
+	pubkey_fp = sha256_b64(keys[keynum].pubkey);
+	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.pubkey.fingerprint", (char *) pubkey_fp, strlen((const char *) pubkey_fp));
+	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.eprivkey", keys[keynum].eprvkey, strlen(keys[keynum].eprvkey));
+	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.pubkey", keys[keynum].pubkey, strlen(keys[keynum].pubkey));
+	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.hmachash", keys[keynum].hmac_hash_b64, strlen(keys[keynum].hmac_hash_b64));
+	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.keyfile.comment", keys[keynum].comment, strlen(keys[keynum].comment));
+	EVP_DecodeBlock(keys[keynum].hmac_key, (unsigned char *) keys[keynum].hmac_key_b64, 44);
+	free(pubkey_fp);
+    }
+    evp_keypair = malloc(sizeof(*evp_keypair) * numkeys);
+    hmac_keys = malloc(sizeof(char *) * numkeys);
+    hmac_keysz = malloc(sizeof(int) * numkeys);
+    hmac = malloc(sizeof(unsigned char *) * numkeys);
+    hmac_len = malloc(sizeof(int) * numkeys);
+    for (int i = 0; i < numkeys; i++) {
+	evp_keypair[i] = rsa_getkey('e', keys, i);
+	hmac_keys[i] = keys[i].hmac_key;
+	hmac_keysz[i] = 32;
+	hmac[i] = malloc(EVP_MAX_MD_SIZE);
+	memset(hmac[i], 0, EVP_MAX_MD_SIZE);
+	hmac_len[i] = EVP_MAX_MD_SIZE;
+    }
     tar_write_next_hdr(&gh);
     fsfree(&gh);
-    char foo[256];
-    memset(foo, 0, 256);
+
     while (tar_get_next_hdr(&fs)) {
 	if (fs.ftype == '0') {
 	    fsclear(&fs2);
 	    fsdup(&fs2, &fs);
-	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.compression", "lzop", 4);
-	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.cipher", "rsa-aes128-gcm", 14);
-	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.pubkey.fingerprint", (char *) pubkey_fp, strlen((const char *) pubkey_fp));
+	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.compression", "lzop", 4);
+	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.cipher", "rsa-aes256-gcm", 14);
+	    if (numkeys_string != NULL)
+		setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.keygroup", numkeys_string, strlen(numkeys_string));
+	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.filters", "compression|cipher", 18);
 	    if (fs.n_sparsedata > 0){
 		char sparse_orig_sz[64];
 		sparsetext_sz = gen_sparse_data_string(&fs, &sparsetext);
 		sprintf(sparse_orig_sz, "%llu", fs.sparse_realsize);
-		setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.sparse", "1", 1);
-		setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.sparse.original.size", sparse_orig_sz, strlen(sparse_orig_sz));
+		setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.sparse", "1", 1);
+		setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.sparse.original.size", sparse_orig_sz, strlen(sparse_orig_sz));
 		fs2.filesize += sparsetext_sz + ilog10(sparsetext_sz) + 2;
 		fs2.n_sparsedata = 0;
 	    }
-	    tsf = tarsplit_init(fwrite, stdout, fs.filename, 1024 * 1024, &fs2);
-	    rcf = rsa_file_init('w', evp_keypair, tarsplit_write, tsf);
-	    lzf = lzop_init(rsa_write, rcf); 
-
-	    HMAC_CTX_init(&hctx);
-	    HMAC_Init_ex(&hctx, keys->hmac_key, 32, EVP_sha256(), NULL);
+	    tsf = tarsplit_init_w(fwrite, stdout, fs.filename, 1024 * 1024, &fs2, numkeys);
+	    rcf = rsa_file_init('w', evp_keypair, numkeys, tarsplit_write, tsf);
+	    lzf = lzop_init_w(rsa_write, rcf); 
+	    hmacf = hmac_file_init_w(lzop_write, lzf, hmac_keys, hmac_keysz, numkeys);
 
 	    if (fs.n_sparsedata > 0) {
 		sprintf(tmpbuf, "%llu:", (unsigned long long int) sparsetext_sz);
-		lzop_write(tmpbuf, 1, strlen(tmpbuf), lzf);
-		lzop_write(sparsetext, 1, sparsetext_sz, lzf);
-		HMAC_Update(&hctx, (unsigned char *) sparsetext, sparsetext_sz);
+		hmac_file_write(tmpbuf, 1, strlen(tmpbuf), hmacf);
+		hmac_file_write(sparsetext, 1, sparsetext_sz, hmacf);
 	    }
 	    sizeremaining = fs.filesize;
 	    padding = 512 - ((fs.filesize + sparsetext_sz - 1) % 512 + 1);
 
 	    while (sizeremaining > 0) {
 		c = fread(databuf, 1, sizeremaining > bufsize ? bufsize : sizeremaining, stdin);
-		HMAC_Update(&hctx, databuf, c);
-		lzop_write(databuf, 1, c, lzf);
+		hmac_file_write(databuf, 1, c, hmacf);
 		sizeremaining -= c;
 	    }
 	    if (padding > 0) {
 		c = fread(databuf, 1, padding, stdin);
 		sizeremaining -= c;
 	    }
-	    HMAC_Final(&hctx, hmac, &hmac_len);
-	    EVP_EncodeBlock(tsf->hmac, hmac, hmac_len);
-	    lzop_finalize(lzf);
+	    hmac_finalize_w(hmacf, hmac, hmac_len);
+/*
+	    tsf->hmac = malloc(sizeof(char *) * numkeys);
+	    for (int i = 0; i < numkeys; i++) {
+		tsf->hmac[i] = malloc(sizeof(char) * EVP_MAX_MD_SIZE * 2 + 1);
+		memset(tsf->hmac[i], 0, EVP_MAX_MD_SIZE * 2 + 1);
+		encode_block_16(tsf->hmac[i], hmac[i], hmac_len[i]);
+	    }
+	    tsf->nk = numkeys;
+*/
+	    for (int i = 0; i < numkeys; i++) {
+		encode_block_16(tsf->hmac[i], hmac[i], hmac_len[i]);
+	    }
+	    lzop_finalize_w(lzf);
 	    rsa_file_finalize(rcf);
-	    tarsplit_finalize(tsf);
+	    tarsplit_finalize_w(tsf);
 	}
 	else {
 	    tar_write_next_hdr(&fs);
@@ -167,8 +239,21 @@ int tarencrypt(int argc, char **argv)
 	fsclear(&fs);
     }
 
+    dfree(numkeys_string);
     fsfree(&fs);
     fsfree(&fs2);
+//    EVP_PKEY_free(evp_keypair);
+    for (int i = 0; i < numkeys; i++) {
+	free(keys[i].keydata);
+	free(hmac[i]);
+	EVP_PKEY_free(evp_keypair[i]);
+    }
+    free(evp_keypair);
+    free(hmac_len);
+    free(hmac);
+    free(keys);
+    free(hmac_keys);
+    free(hmac_keysz);
     return(0);
 }
 
@@ -185,47 +270,133 @@ int tardecrypt()
     struct tarsplit_file *tsf;
     size_t sizeremaining;
     size_t padding;
-    char *padblock[512];
+    char padblock[512];
     size_t c;
     struct tar_maxread_st *tmr;
     struct lzop_file *lzf;
     struct rsa_file *rcf;
+    struct hmac_file *hmacf;
     char *paxdata;
     int paxdatalen;
-    EVP_PKEY *evp_keypair = EVP_PKEY_new();
+    EVP_PKEY *evp_keypair;
     struct rsa_keys *rsa_keys = NULL;
     char *cur_fp = NULL;
     int keynum;
     size_t (*next_c_fread)();
     void *next_c_read_handle;
     int tf_encoding = 0;
+    char *pubkey_fingerprint = NULL;
+    char *eprivkey = NULL;
+    char *keycomment = NULL;
+    char *hmachash = NULL;
+    int numkeys;
+    char numkeys_a[16];
+    char paxhdr_varstring[32];
+    char *required_keys_str = NULL;
+    char **required_keys_list = NULL;
+    char **required_keys_group = NULL;
+    unsigned char *hmac_keys;
+    int hmac_keysz = 32;
+    unsigned char hmac[EVP_MAX_MD_SIZE];
+    unsigned char *hmacp = hmac;
+    unsigned int hmac_len;
+//    int EVP_MAX_MD_SIZE_b64 = ((int)((EVP_MAX_MD_SIZE + 2) / 3)) * 4 + 1;
+    unsigned char hmac_b64[EVP_MAX_MD_SIZE_b64];
+    unsigned char in_hmac_b64[EVP_MAX_MD_SIZE_b64];
+
 
 
     fsinit(&fs, fread, fwrite, stdin, stdout);
     fsinit(&fs2, fread, fwrite, stdin, stdout);
-    memset(&padblock, 0, 512);
+    memset(padblock, 0, 512);
     
     while (tar_get_next_hdr(&fs)) {
 
 	if (fs.ftype == 'g') {
-	    char *pubkey_fingerprint = NULL;
-	    char *eprivkey = NULL;
-	    char *keycomment = NULL;
-	    if (getpaxvar(fs.xheader, fs.xheaderlen, "SB.pubkey.fingerprint", &paxdata, &paxdatalen) == 0) {
-		strncpya0(&pubkey_fingerprint, paxdata, paxdatalen);
-		if (getpaxvar(fs.xheader, fs.xheaderlen, "SB.eprivkey", &paxdata, &paxdatalen) == 0) {
-		    strncpya0(&eprivkey, paxdata, paxdatalen);
-		    if (getpaxvar(fs.xheader, fs.xheaderlen, "SB.keyfile.comment", &paxdata, &paxdatalen) == 0) {
-			strncpya0(&keycomment, paxdata, paxdatalen);
+	    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.numkeys", &paxdata, &paxdatalen) == 0) {
+		strncpy(numkeys_a, paxdata, paxdatalen <=15 ? paxdatalen : 15);
+		numkeys_a[paxdatalen < 15 ? paxdatalen : 15] = '\0';
+		numkeys = atoi(numkeys_a);
+		if (rsa_keys != NULL) {
+		    if (rsa_keys->keys != NULL)
+			free(rsa_keys->keys);
+		    free(rsa_keys);
+		}
+		rsa_keys = malloc(sizeof(struct rsa_keys));
+		rsa_keys->numkeys = numkeys;
+		rsa_keys->keys = malloc(sizeof(struct key_st) * numkeys);
+
+		for (keynum = 0; keynum < numkeys; keynum++) {
+		    rsa_keys->keys[keynum].fingerprint = NULL;
+		    rsa_keys->keys[keynum].comment = NULL;
+		    rsa_keys->keys[keynum].eprvkey = NULL;
+		    rsa_keys->keys[keynum].pubkey = NULL;
+		    rsa_keys->keys[keynum].hmac_hash_b64 = NULL;
+		    rsa_keys->keys[keynum].evp_keypair = NULL;
+
+		    sprintf(paxhdr_varstring, "TC.pubkey.fingerprint.%d", keynum);
+		    if (getpaxvar(fs.xheader, fs.xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0)
+			strncpya0(&(rsa_keys->keys[keynum].fingerprint), paxdata, paxdatalen);
+		    sprintf(paxhdr_varstring, "TC.eprivkey.%d", keynum);
+		    if (getpaxvar(fs.xheader, fs.xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0)
+			strncpya0(&(rsa_keys->keys[keynum].eprvkey), paxdata, paxdatalen);
+		    sprintf(paxhdr_varstring, "TC.pubkey.%d", keynum);
+		    if (getpaxvar(fs.xheader, fs.xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0)
+			strncpya0(&(rsa_keys->keys[keynum].pubkey), paxdata, paxdatalen);
+		    sprintf(paxhdr_varstring, "TC.hmachash.%d", keynum);
+		    if (getpaxvar(fs.xheader, fs.xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0) {
+			strncpya0(&(rsa_keys->keys[keynum].hmac_hash_b64), paxdata, paxdatalen);
 		    }
-		    load_pkey(&rsa_keys, pubkey_fingerprint, eprivkey, keycomment);
+		    sprintf(paxhdr_varstring, "TC.keyfile.comment.%d", keynum);
+		    if (getpaxvar(fs.xheader, fs.xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0)
+			strncpya0(&(rsa_keys->keys[keynum].comment), paxdata, paxdatalen);
+		}
+		if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.keygroups", &paxdata, &paxdatalen) == 0) {
+		    strncpya0(&required_keys_str, paxdata, paxdatalen);
+		    parse(required_keys_str, &required_keys_list, ',');
+		    for (int i = 0; required_keys_list[i] != NULL; i++) {
+			parse(required_keys_list[i], &required_keys_group, '|');
+			decode_privkey(rsa_keys, required_keys_group);
+		    }
+		}
+	    }
+	    else {
+		keynum = 0;
+		numkeys = 1;
+		rsa_keys = malloc(sizeof(struct rsa_keys));
+		rsa_keys->numkeys = 1;
+		rsa_keys->keys = malloc(sizeof(struct key_st));
+		rsa_keys->keys[keynum].fingerprint = NULL;
+		rsa_keys->keys[keynum].comment = NULL;
+		rsa_keys->keys[keynum].eprvkey = NULL;
+		rsa_keys->keys[keynum].pubkey = NULL;
+		rsa_keys->keys[keynum].hmac_hash_b64 = NULL;
+		rsa_keys->keys[keynum].evp_keypair = NULL;
+		if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.pubkey.fingerprint", &paxdata, &paxdatalen) == 0) {
+		    strncpya0(&(rsa_keys->keys[keynum].fingerprint), paxdata, paxdatalen);
+		    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.eprivkey", &paxdata, &paxdatalen) == 0) {
+			strncpya0(&(rsa_keys->keys[keynum].eprvkey), paxdata, paxdatalen);
+			if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.keyfile.comment", &paxdata, &paxdatalen) == 0) {
+			    strncpya0(&(rsa_keys->keys[keynum].comment), paxdata, paxdatalen);
+			}
+			if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.pubkey", &paxdata, &paxdatalen) == 0) {
+			    strncpya0(&(rsa_keys->keys[keynum].pubkey), paxdata, paxdatalen);
+			}
+			if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.hmachash", &paxdata, &paxdatalen) == 0) {
+			    strncpya0(&(rsa_keys->keys[keynum].hmac_hash_b64), paxdata, paxdatalen);
+			}
+			strncpya0(&required_keys_str, "0", 1);
+			parse(required_keys_str, &required_keys_group, '|');
+			decode_privkey(rsa_keys, required_keys_group);
+//			load_pkey(&rsa_keys, 0, pubkey_fingerprint, eprivkey, keycomment, hmachash);
+		    }
 		}
 	    }
 	    continue;
 	}
-	if (getpaxvar(fs.xheader, fs.xheaderlen, "SB.segmented.header", &paxdata, &paxdatalen) == 0 ||
-	    getpaxvar(fs.xheader, fs.xheaderlen, "SB.cipher", &paxdata, &paxdatalen) == 0 ||
-	    getpaxvar(fs.xheader, fs.xheaderlen, "SB.compression", &paxdata, &paxdatalen) == 0) {
+	if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.segmented.header", &paxdata, &paxdatalen) == 0 ||
+	    getpaxvar(fs.xheader, fs.xheaderlen, "TC.cipher", &paxdata, &paxdatalen) == 0 ||
+	    getpaxvar(fs.xheader, fs.xheaderlen, "TC.compression", &paxdata, &paxdatalen) == 0) {
 
 	    fsclear(&fs2);
 	    fsdup(&fs2, &fs);
@@ -233,20 +404,20 @@ int tardecrypt()
 	    next_c_fread = fread;
 	    next_c_read_handle = stdin;
 
-	    if (getpaxvar(fs.xheader, fs.xheaderlen, "SB.original.size", &paxdata, &paxdatalen) == 0) {
+	    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.original.size", &paxdata, &paxdatalen) == 0) {
 		fs2.filesize = strtoull(paxdata, 0, 10);
-		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.original.size");
+		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.original.size");
 	    }
 	    else {
 		fprintf(stderr, "Error -- missing original size xheader\n");
 		exit(1);
 	    }
 
-	    if (getpaxvar(fs.xheader, fs.xheaderlen, "SB.segmented.header", &paxdata, &paxdatalen) == 0) {
-		tsf = tarsplit_init_r(next_c_fread, next_c_read_handle);
+	    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.segmented.header", &paxdata, &paxdatalen) == 0) {
+		tsf = tarsplit_init_r(next_c_fread, next_c_read_handle, numkeys);
 		next_c_fread = tarsplit_read;
 		next_c_read_handle = tsf;
-		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.segmented.header");
+		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.segmented.header");
 		tf_encoding |= tf_encoding_ts;
 	    }
 	    else {
@@ -255,42 +426,87 @@ int tardecrypt()
 		next_c_read_handle = tmr;
 		tf_encoding |= tf_encoding_tmr;
 	    }
-	    if (getpaxvar(fs.xheader, fs.xheaderlen, "SB.cipher", &paxdata, &paxdatalen) == 0) {
-		if (getpaxvar(fs.xheader, fs.xheaderlen, "SB.pubkey.fingerprint", &paxdata, &paxdatalen) != 0) {
-		    fprintf(stderr, "Error -- ciphered file missing fingerprint header\n");
-		    exit(1);
+	    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.cipher", &paxdata, &paxdatalen) == 0) {
+		if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.keygroup", &paxdata, &paxdatalen) == 0) {
+		    strncpya0(&required_keys_str, paxdata, paxdatalen);
+		    parse(required_keys_str, &required_keys_group, '|');
+		    keynum = -1;
+		    for (int i = 0; required_keys_group[i] != NULL; i++) {
+			if (rsa_keys->keys[atoi(required_keys_group[i])].evp_keypair != NULL) {
+			    keynum = atoi(required_keys_group[i]);
+			    break;
+			}
+		    }
+
+		    if (keynum < 0) {
+			fprintf(stderr, "Error -- ciphered file missing fingerprint header\n");
+			exit(1);
+		    }
 		}
-		else
-		    strncpya0(&cur_fp, paxdata, paxdatalen);
-		keynum = get_pkey(rsa_keys, cur_fp);
+		else {
+		    if (rsa_keys->keys[0].evp_keypair != NULL)
+			keynum = 0;
+		}
 		if (keynum < 0) {
 		    fprintf(stderr, "Error -- ciphered file missing key\n");
 		    exit(1);
 		}
+		memset(in_hmac_b64, 0, EVP_MAX_MD_SIZE_b64);
+		if (numkeys > 1) {
+		    sprintf(paxhdr_varstring, "TC.hmac.%d", keynum);
+		    if (getpaxvar(fs.xheader, fs.xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0) {
+			strncpy((char *) in_hmac_b64, paxdata, paxdatalen > EVP_MAX_MD_SIZE_b64 - 1 ? EVP_MAX_MD_SIZE_b64 - 1 : paxdatalen);
+			in_hmac_b64[EVP_MAX_MD_SIZE_b64 - 1] = '\0';
+		    }
+		    for (int i = 0; i < numkeys; i++) {
+			sprintf(paxhdr_varstring, "TC.hmac.%d", i);
+			delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), paxhdr_varstring);
+		    }
+		    delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.keygroup");
+		}
+		else {
+		    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.hmac", &paxdata, &paxdatalen) == 0) {
+			strncpy((char *) in_hmac_b64, paxdata, paxdatalen > EVP_MAX_MD_SIZE_b64 - 1 ? EVP_MAX_MD_SIZE_b64 - 1 : paxdatalen);
+			in_hmac_b64[EVP_MAX_MD_SIZE_b64 - 1] = '\0';
+			delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.hmac");
+		    }
+		}
+		for (int i = EVP_MAX_MD_SIZE_b64 - 1; i >= 0; i--)
+		    if (in_hmac_b64[i] == '\n') {
+			in_hmac_b64[i] = '\0';
+			break;
+		    }
+
 		evp_keypair = rsa_keys->keys[keynum].evp_keypair;
-		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.pubkey.fingerprint");
-		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.cipher");
-		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.hmac");
-		rcf = rsa_file_init('r', evp_keypair, next_c_fread, next_c_read_handle);
+		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.pubkey.fingerprint");
+		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.cipher");
+		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.hmac");
+		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.filters");
+		rcf = rsa_file_init('r', &evp_keypair, 0, next_c_fread, next_c_read_handle);
 		next_c_fread = rsa_read;
 		next_c_read_handle = rcf;
 		tf_encoding |= tf_encoding_cipher;
 
 	    }
-	    if (getpaxvar(fs.xheader, fs.xheaderlen, "SB.compression", &paxdata, &paxdatalen) == 0) {
+	    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.compression", &paxdata, &paxdatalen) == 0) {
 		lzf = lzop_init_r(next_c_fread, next_c_read_handle); 
 		next_c_fread = lzop_read;
 		next_c_read_handle = lzf;
 		tf_encoding |= tf_encoding_compression;
-		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.compression");
+		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.compression");
 	    }
+	    hmac_keys = rsa_keys->keys[keynum].hmac_key;
+	    hmacf = hmac_file_init_r(next_c_fread, next_c_read_handle, &hmac_keys, &hmac_keysz, 1);
+	    next_c_fread = hmac_file_read;
+	    next_c_read_handle = hmacf;
 
-	    if (getpaxvar(fs.xheader, fs.xheaderlen, "SB.sparse", &paxdata, &paxdatalen) == 0) {
+
+	    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.sparse", &paxdata, &paxdatalen) == 0) {
 		fs2.filesize -= c_fread_sparsedata(next_c_fread, next_c_read_handle, &fs2);
-		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.sparse");
-		getpaxvar(fs.xheader, fs.xheaderlen, "SB.sparse.original.size", &paxdata, &paxdatalen);
+		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.sparse");
+		getpaxvar(fs.xheader, fs.xheaderlen, "TC.sparse.original.size", &paxdata, &paxdatalen);
 		fs2.sparse_realsize = strtoull(paxdata, 0, 10);
-		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "SB.sparse.original.size");
+		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.sparse.original.size");
 
 	    }
 
@@ -308,12 +524,21 @@ int tardecrypt()
 	    if (padding > 0) {
 		c = fwrite(padblock, 1, padding, stdout);
 	    }
+	    hmac_finalize_r(hmacf, &hmacp, &hmac_len);
+	    encode_block_16(hmac_b64, hmac, hmac_len);
+	    if (strcmp((tf_encoding & tf_encoding_ts) != 0 ? (char *) tsf->hmac[keynum] : (char *) in_hmac_b64, (char *) hmac_b64) != 0)
+		fprintf(stderr, "Warning: HMAC failed verification\n%s\n%s\n", (tf_encoding & tf_encoding_ts) != 0 ? (char *) tsf->hmac[keynum] : (char *) in_hmac_b64, (char *) hmac_b64);
+//	    fprintf(stderr, " in hmac = %s\n", in_hmac_b64);
+//	    fprintf(stderr, "out hmac = %s\n", hmac_b64);
+//	    fprintf(stderr, "tsf hmac = %d\n", tsf->hmac);
+//	    fprintf(stderr, "tsf hmac = %s\n", tsf->hmac[keynum]);
 	    if ((tf_encoding & tf_encoding_compression) != 0)
 		lzop_finalize_r(lzf);
 	    if ((tf_encoding & tf_encoding_cipher) != 0)
 		rsa_file_finalize(rcf);
-	    if ((tf_encoding & tf_encoding_ts) != 0)
+	    if ((tf_encoding & tf_encoding_ts) != 0) {
 		tarsplit_finalize_r(tsf);
+	    }
 	    if ((tf_encoding & tf_encoding_tmr) != 0)
 		tar_maxread_finalize(tmr);
 	    tf_encoding = 0;
@@ -334,7 +559,32 @@ int tardecrypt()
 	}
 	fsclear(&fs);
     }
+    for (int i = 0; i < rsa_keys->numkeys; i++) {
+	dfree(rsa_keys->keys[i].comment);
+	dfree(rsa_keys->keys[i].fingerprint);
+	dfree(rsa_keys->keys[i].hmac_hash_b64);
+	dfree(rsa_keys->keys[i].eprvkey);
+	dfree(rsa_keys->keys[i].pubkey);
+    }
     fsfree(&fs);
+    fsfree(&fs2);
+    dfree(pubkey_fingerprint);
+    dfree(eprivkey);
+    dfree(keycomment);
+    dfree(hmachash);
+    dfree(cur_fp);
+    dfree(required_keys_group);
+    dfree(required_keys_list);
+    dfree(required_keys_str);
+    free(rsa_keys->keys);
+    free(rsa_keys);
+    EVP_PKEY_free(evp_keypair);
     fwrite(padblock, 1, 512, stdout);
     return(0);
+}
+
+char *itoa(char *s, int n)
+{
+    sprintf(s, "%d", n);
+    return(s);
 }

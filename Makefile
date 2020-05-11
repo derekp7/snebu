@@ -13,7 +13,7 @@ tarcrypt.o: tarlib.h
 snebu: snebu.o
 	$(CC) $< -o $@ -l sqlite3 -l crypto -l lzo2 -Wall
 tarcrypt: tarcrypt.o tarlib.o
-	$(CC) $^ -o $@ -l crypto -l lzo2 -Wall
+	$(CC) $^ -o $@ -l crypto -l ssl -l lzo2 -Wall
 install: $(PROGS) $(SCRIPTS) $(CONFIGS)
 	mkdir -p $(DESTDIR)$(BINDIR)
 	mkdir -p $(DESTDIR)$(ETCDIR)
