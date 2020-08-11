@@ -73,6 +73,7 @@ struct filespec {
     int ngid;
     unsigned long long int filesize;
     unsigned long long int sparse_realsize;
+    unsigned long long int tarcrypt_realsize;
     time_t modtime;
     char *filename;
     char *linktarget;
@@ -81,10 +82,10 @@ struct filespec {
     struct sparsedata *sparsedata;
     int n_sparsedata;
     int pax;
-    size_t (*c_fwrite)();
-    void *c_write_handle;
-    size_t (*c_fread)();
-    void *c_read_handle;
+//    size_t (*c_fwrite)();
+//    void *c_write_handle;
+//    size_t (*c_fread)();
+//    void *c_read_handle;
 };
 
 struct sparsedata {
@@ -195,7 +196,7 @@ int tarencrypt(int argc, char **argv);
 int tardecrypt();
 int tar_get_next_hdr(struct filespec *fs);
 int tar_write_next_hdr(struct filespec *fs);
-int fsinit(struct filespec *fs, size_t (*c_fread)(), size_t (*c_fwrite)(), void *c_read_handle, void *c_write_handle);
+int fsinit(struct filespec *fs);
 int fsclear(struct filespec *fs);
 int fsfree(struct filespec *fs);
 int fsdup(struct filespec *tsf, struct filespec *sfs);
@@ -206,11 +207,14 @@ void *drealloc(void *b, size_t size) ;
 size_t dmalloc_size(void *b);
 char *strncpya0(char **dest, const char *src, size_t n);
 char *strcata(char **dest, const char *src);
+char *strncata0(char **dest, const char *src, size_t n);
 void *memcpya(void **dest, void *src, size_t n);
+void *memcpyao(void **dest, void *src, size_t n, size_t offset);
 int getpaxvar(char *paxdata, int paxlen, char *name, char **rvalue, int *rvaluelen);
 int cmpspaxvar(char *paxdata, int paxlen, char *name, char *invalue);
 int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int invaluelen);
 int delpaxvar(char **paxdata, int *paxlen, char *inname);
+int cpypaxvarstr(char *paxdata, int paxlen, char *name, char **target);
 unsigned int ilog10(unsigned long long int n);
 char *ulli2g(unsigned long long int v, char *p);
 unsigned long long int g2ulli(char *p);
@@ -269,6 +273,9 @@ int gen_sparse_data_string(struct filespec *fs, char **sparsetext);
 int c_fread_sparsedata(size_t (*c_ffunc)(), void *c_handle, struct filespec *fs);
 int get_passwd(char *buf, int size, int rwflag, void *prompt);
 int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group);
+int c_getline(char **buf, size_t (*c_fread)(), void *c_handle);
+unsigned long long int * fibseq();
+unsigned long long int nextfib(unsigned long long int n);
 
 #define EVP_MAX_MD_SIZE_b64 (((int)((EVP_MAX_MD_SIZE + 2) / 3)) * 4 + 1)
 

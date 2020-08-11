@@ -17,6 +17,7 @@
 #include <openssl/rand.h>
 #include <openssl/hmac.h>
 #include <openssl/ui.h>
+#include <sys/time.h>
 #include "tarlib.h"
 
 char *itoa(char *s, int n);
@@ -98,9 +99,9 @@ int tarencrypt(int argc, char **argv)
 	exit(1);
     }
 
-    fsinit(&fs, fread, fwrite, stdin, stdout);
-    fsinit(&fs2, fread, fwrite, stdin, stdout);
-    fsinit(&gh, fread, fwrite, stdin, stdout);
+    fsinit(&fs);
+    fsinit(&fs2);
+    fsinit(&gh);
 
 //    keys = load_keyfile(keyfilename);
     gh.ftype = 'g';
@@ -108,7 +109,7 @@ int tarencrypt(int argc, char **argv)
 
     setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.version", "1", 1);
     if (numkeys > 1) {
-	char paxhdr_varstring[32];
+	char paxhdr_varstring[64];
 	strncpya0(&numkeys_string, itoa(itoabuf1, numkeys), 0);
 //	asprintf(&numkeys_string, "%d", numkeys);
 	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.numkeys", numkeys_string, strlen(numkeys_string));
@@ -121,7 +122,7 @@ int tarencrypt(int argc, char **argv)
 	    setpaxvar(&(gh.xheader), &(gh.xheaderlen), paxhdr_varstring, keys[keynum].eprvkey, strlen(keys[keynum].eprvkey));
 	    sprintf(paxhdr_varstring, "TC.pubkey.%d", keynum);
 	    setpaxvar(&(gh.xheader), &(gh.xheaderlen), paxhdr_varstring, keys[keynum].pubkey, strlen(keys[keynum].pubkey));
-	    sprintf(paxhdr_varstring, "TC.hmachash.%d", keynum);
+	    sprintf(paxhdr_varstring, "TC.hmackeyhash.%d", keynum);
 	    setpaxvar(&(gh.xheader), &(gh.xheaderlen), paxhdr_varstring, keys[keynum].hmac_hash_b64, strlen(keys[keynum].hmac_hash_b64));
 	    sprintf(paxhdr_varstring, "TC.keyfile.comment.%d", keynum);
 	    setpaxvar(&(gh.xheader), &(gh.xheaderlen), paxhdr_varstring, keys[keynum].comment, strlen(keys[keynum].comment));
@@ -144,7 +145,7 @@ int tarencrypt(int argc, char **argv)
 	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.pubkey.fingerprint", (char *) pubkey_fp, strlen((const char *) pubkey_fp));
 	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.eprivkey", keys[keynum].eprvkey, strlen(keys[keynum].eprvkey));
 	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.pubkey", keys[keynum].pubkey, strlen(keys[keynum].pubkey));
-	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.hmachash", keys[keynum].hmac_hash_b64, strlen(keys[keynum].hmac_hash_b64));
+	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.hmackeyhash", keys[keynum].hmac_hash_b64, strlen(keys[keynum].hmac_hash_b64));
 	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.keyfile.comment", keys[keynum].comment, strlen(keys[keynum].comment));
 	EVP_DecodeBlock(keys[keynum].hmac_key, (unsigned char *) keys[keynum].hmac_key_b64, 44);
 	free(pubkey_fp);
@@ -170,10 +171,10 @@ int tarencrypt(int argc, char **argv)
 	    fsclear(&fs2);
 	    fsdup(&fs2, &fs);
 	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.compression", "lzop", 4);
-	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.cipher", "rsa-aes256-gcm", 14);
+	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.cipher", "rsa-aes256-ctr", 14);
 	    if (numkeys_string != NULL)
 		setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.keygroup", numkeys_string, strlen(numkeys_string));
-	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.filters", "compression|cipher", 18);
+//	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.filters", "compression|cipher", 18);
 	    if (fs.n_sparsedata > 0){
 		char sparse_orig_sz[64];
 		sparsetext_sz = gen_sparse_data_string(&fs, &sparsetext);
@@ -278,7 +279,7 @@ int tardecrypt()
     struct hmac_file *hmacf;
     char *paxdata;
     int paxdatalen;
-    EVP_PKEY *evp_keypair;
+    EVP_PKEY *evp_keypair = NULL;
     struct rsa_keys *rsa_keys = NULL;
     char *cur_fp = NULL;
     int keynum;
@@ -289,9 +290,9 @@ int tardecrypt()
     char *eprivkey = NULL;
     char *keycomment = NULL;
     char *hmachash = NULL;
-    int numkeys;
+    int numkeys = 0;
     char numkeys_a[16];
-    char paxhdr_varstring[32];
+    char paxhdr_varstring[64];
     char *required_keys_str = NULL;
     char **required_keys_list = NULL;
     char **required_keys_group = NULL;
@@ -304,10 +305,8 @@ int tardecrypt()
     unsigned char hmac_b64[EVP_MAX_MD_SIZE_b64];
     unsigned char in_hmac_b64[EVP_MAX_MD_SIZE_b64];
 
-
-
-    fsinit(&fs, fread, fwrite, stdin, stdout);
-    fsinit(&fs2, fread, fwrite, stdin, stdout);
+    fsinit(&fs);
+    fsinit(&fs2);
     memset(padblock, 0, 512);
     
     while (tar_get_next_hdr(&fs)) {
@@ -343,7 +342,7 @@ int tardecrypt()
 		    sprintf(paxhdr_varstring, "TC.pubkey.%d", keynum);
 		    if (getpaxvar(fs.xheader, fs.xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0)
 			strncpya0(&(rsa_keys->keys[keynum].pubkey), paxdata, paxdatalen);
-		    sprintf(paxhdr_varstring, "TC.hmachash.%d", keynum);
+		    sprintf(paxhdr_varstring, "TC.hmackeyhash.%d", keynum);
 		    if (getpaxvar(fs.xheader, fs.xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0) {
 			strncpya0(&(rsa_keys->keys[keynum].hmac_hash_b64), paxdata, paxdatalen);
 		    }
@@ -382,7 +381,7 @@ int tardecrypt()
 			if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.pubkey", &paxdata, &paxdatalen) == 0) {
 			    strncpya0(&(rsa_keys->keys[keynum].pubkey), paxdata, paxdatalen);
 			}
-			if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.hmachash", &paxdata, &paxdatalen) == 0) {
+			if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.hmackeyhash", &paxdata, &paxdatalen) == 0) {
 			    strncpya0(&(rsa_keys->keys[keynum].hmac_hash_b64), paxdata, paxdatalen);
 			}
 			strncpya0(&required_keys_str, "0", 1);
@@ -471,22 +470,22 @@ int tardecrypt()
 			delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.hmac");
 		    }
 		}
-		for (int i = EVP_MAX_MD_SIZE_b64 - 1; i >= 0; i--)
+		for (int i = EVP_MAX_MD_SIZE_b64 - 1; i >= 0; i--) {
 		    if (in_hmac_b64[i] == '\n') {
 			in_hmac_b64[i] = '\0';
 			break;
 		    }
+		}
 
 		evp_keypair = rsa_keys->keys[keynum].evp_keypair;
 		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.pubkey.fingerprint");
 		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.cipher");
 		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.hmac");
-		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.filters");
+//		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.filters");
 		rcf = rsa_file_init('r', &evp_keypair, 0, next_c_fread, next_c_read_handle);
 		next_c_fread = rsa_read;
 		next_c_read_handle = rcf;
 		tf_encoding |= tf_encoding_cipher;
-
 	    }
 	    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.compression", &paxdata, &paxdatalen) == 0) {
 		lzf = lzop_init_r(next_c_fread, next_c_read_handle); 
@@ -513,6 +512,7 @@ int tardecrypt()
 	    tar_write_next_hdr(&fs2);
 	    padding = 512 - ((fs2.filesize - 1) % 512 + 1);
 	    sizeremaining = fs2.filesize;
+
 
 	    while (sizeremaining > 0) {
 		c = next_c_fread(databuf, 1, bufsize, next_c_read_handle);
@@ -553,18 +553,21 @@ int tardecrypt()
 		sizeremaining -= c;
 	    }
 	    if (padding > 0) {
-		c = fread(padblock, 1, padding, stdout);
+		c = fread(padblock, 1, padding, stdin);
 		c = fwrite(padblock, 1, padding, stdout);
 	    }
 	}
-	fsclear(&fs);
     }
-    for (int i = 0; i < rsa_keys->numkeys; i++) {
-	dfree(rsa_keys->keys[i].comment);
-	dfree(rsa_keys->keys[i].fingerprint);
-	dfree(rsa_keys->keys[i].hmac_hash_b64);
-	dfree(rsa_keys->keys[i].eprvkey);
-	dfree(rsa_keys->keys[i].pubkey);
+    if (rsa_keys != NULL) {
+	for (int i = 0; i < rsa_keys->numkeys; i++) {
+	    dfree(rsa_keys->keys[i].comment);
+	    dfree(rsa_keys->keys[i].fingerprint);
+	    dfree(rsa_keys->keys[i].hmac_hash_b64);
+	    dfree(rsa_keys->keys[i].eprvkey);
+	    dfree(rsa_keys->keys[i].pubkey);
+	}
+	free(rsa_keys->keys);
+	free(rsa_keys);
     }
     fsfree(&fs);
     fsfree(&fs2);
@@ -576,9 +579,8 @@ int tardecrypt()
     dfree(required_keys_group);
     dfree(required_keys_list);
     dfree(required_keys_str);
-    free(rsa_keys->keys);
-    free(rsa_keys);
-    EVP_PKEY_free(evp_keypair);
+    if (evp_keypair != NULL)
+	EVP_PKEY_free(evp_keypair);
     fwrite(padblock, 1, 512, stdout);
     return(0);
 }

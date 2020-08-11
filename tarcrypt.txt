@@ -35,7 +35,7 @@ The global header contains the following fields
     TC.eprivkey -- Encrypted RSA private key
     TC.pubkey -- Public key matching the above private key
     TC.pubkey.fingerprint -- Fingerprint of the public key
-    TC.hmachash -- SHA256 hash of the HMAC authentication key
+    TC.hmackeyhash -- SHA256 hash of the HMAC authentication key
     TC.keyfile.comment -- Comment line from the key file used to generate the encrypted tar
     TC.version -- version number of the file format
 
@@ -48,7 +48,7 @@ This indicates that there are two key groups.  The first group, "0|1", means tha
 
 In addition, each individual file header contains the following:
 
-    tc.filters -- which filters were used to process raw file (i.e., "compression|cipher")
+    TC.filters -- which filters were used to process raw file (i.e., "compression|cipher")
     TC.compression -- compression algorithm used prior to encryption
     TC.cipher -- cipher algorithm string (i.e., rsa-aes256-gcm)
     TC.original.size -- size of the original raw file

@@ -27,7 +27,7 @@ process_cmdline()
     fi
 
     verbose=0
-    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help,sudo:" -o "c:n:r:d:fvC:h" -- "$@")")
+    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help,sudo:,encryption-key:" -o "c:n:r:d:fvC:hk:" -- "$@")")
     then
         usage target
         exit 1
@@ -51,6 +51,7 @@ process_cmdline()
 	    -h|--help) shift; usage $target;;
 	    -v|--verbose) verbose=$((${verbose} + 1)); shift;;
 	    --sudo) sudousr=$2; shift; shift;;
+	    -k|--encryption-key) keyfile=( "${keyfile[@]}" "$2"); shift; shift;;
             --) shift; break;;
         esac
     done
@@ -67,9 +68,17 @@ defaults()
     [ ! -f ${configfile} ] && configfile=/etc/snebu-client.conf
     [ ! -f ${configfile} ] && configfile=/etc/snebu/snebu-client.conf
     SNEBU=snebu
+    TARCRYPT=tarcrypt
     # Need to bring back command line vars, go get config file name override
     eval "${savevars}"
 
+    # See if we are encrypting
+    if [ ${#keyfile[@]} -gt 0 ]
+    then
+	tarfilter=do_tarencrypt
+    else
+	tarfilter=cat
+    fi
     # Process configuration file
     [ -f "${configfile}" ] && . "${configfile}"
 
@@ -140,10 +149,11 @@ tartest()
     declare has_selinux
     declare has_blahblah
 
-    tarhelp=$(tar --help)
-    echo "${tarhelp}" |grep -- "--acls" >/dev/null 2>&1 && has_acls=1
-    echo "${tarhelp}" |grep -- "--xattrs" >/dev/null 2>&1 && has_xattrs=1
-    echo "${tarhelp}" |grep -- "--selinux" >/dev/null 2>&1 && has_selinux=1
+    has_acls=1; has_xattrs=1; has_selinux=1
+#    tarhelp=$(tar --help)
+#    echo "${tarhelp}" |grep -- "--acls" >/dev/null 2>&1 && has_acls=1
+#    echo "${tarhelp}" |grep -- "--xattrs" >/dev/null 2>&1 && has_xattrs=1
+#    echo "${tarhelp}" |grep -- "--selinux" >/dev/null 2>&1 && has_selinux=1
     
     tarxargs="${has_acls:+--acls} ${has_xattrs:+--xattrs} ${has_selinux:+--selinux}"
     echo "${tarxargs}"
@@ -575,9 +585,11 @@ do_backup()
 
     # Now create a tar file and send it to Snebu
     tar --one-file-system --no-recursion $(tartest) -S -P  -T ${includetmp} -cf - |\
-        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
+	$tarfilter |\
+#        valgrind --track-origins=yes $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
+        valgrind --track-origins=yes -s --leak-check=full --show-leak-kinds=all $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
-    rm -f ${includetmp}
+#    rm -f ${includetmp}
     [ -n "${pluginpost}" ] && $pluginpost
     if [ "${bkrepeat}" != 1 ]
     then
@@ -612,7 +624,7 @@ do_remote_backup()
         rpcsh -h ${clientname} -u "${rmtuser}" -m "cat >${includetmp}"
 
     # Now create a tar file and send it to Snebu
-    rpcsh -h ${clientname} -u "${rmtuser}" -f tartest -m "tar --one-file-system --no-recursion $(tartest) -S -P  -T ${includetmp} -cf -" |\
+    rpcsh -h ${clientname} -u "${rmtuser}" -v "TARCRYPT keyfile" -f "tartest do_tarencrypt" -m "tar --one-file-system --no-recursion $(tartest) -S -P  -T ${includetmp} -cf - |${tarfilter}" |\
         $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
     rpcsh -h ${clientname} -u "${rmtuser}" -m "rm -f ${includetmp}"
@@ -685,5 +697,15 @@ listbackups()
     else
 	$SNEBU listbackups "${sargs[@]}" "${@}" </dev/null
     fi
+}
+do_tarencrypt()
+{
+    tarcrypt_args=( encrypt )
+    for i in "${keyfile[@]}"
+    do
+	tarcrypt_args=( "${tarcrypt_args[@]}" -k $i )
+    done
+    echo $TARCRYPT "${tarcrypt_args[@]}" >>/tmp/log1
+    $TARCRYPT "${tarcrypt_args[@]}"
 }
 main "${@}"

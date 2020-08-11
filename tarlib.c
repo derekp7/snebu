@@ -18,6 +18,17 @@
 #include <openssl/ui.h>
 #include "tarlib.h"
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+EVP_MD_CTX *EVP_MD_CTX_new(void);
+void EVP_MD_CTX_free(EVP_MD_CTX *ctx);
+HMAC_CTX *HMAC_CTX_new(void);
+void HMAC_CTX_free(HMAC_CTX *ctx);
+int EVP_CIPHER_CTX_reset(EVP_CIPHER_CTX *ctx) ;
+int HMAC_CTX_reset(HMAC_CTX *ctx);
+static void *OPENSSL_zalloc(size_t num);
+#endif
+
+
 int tar_get_next_hdr(struct filespec *fs)
 {
     struct tarhead tarhead;
@@ -40,6 +51,8 @@ int tar_get_next_hdr(struct filespec *fs)
     int paxsparsenamelen = 0;
     char *paxsparsesize = 0;
     int paxsparsesizelen = 0;
+    char *paxtarcryptsize = 0;
+    int paxtarcryptsizelen = 0;
     static char *paxsparsesegt = 0;
     size_t paxsparsesegtn = 0;
     int paxsparsenseg = 0;
@@ -159,6 +172,10 @@ int tar_get_next_hdr(struct filespec *fs)
 		delpaxvar(&(fs->xheader), &(fs->xheaderlen), "GNU.sparse.realsize");
 
 	    }
+	    if (getpaxvar(fs->xheader, fs->xheaderlen, "TC.original.size", &paxtarcryptsize, &paxtarcryptsizelen) == 0) {
+		fs->tarcrypt_realsize = strtoull(paxtarcryptsize, 0, 10);
+//		delpaxvar(&(fs->xheader), &(fs->xheaderlen), "TC.original.size");
+	    }
 	    if (*(tarhead.ftype) == 'g')
 		return(1);
 	    continue;
@@ -177,14 +194,15 @@ int tar_get_next_hdr(struct filespec *fs)
 	    if (usepaxsize == 0) {
 		fs->filesize = 0;
 		if ((unsigned char) tarhead.size[0] == 128)
-		    for (int i = 0; i < 8; i++)
+		    for (int i = 0; i < 8; i++) {
 			fs->filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
+		    }
 		else
 		    fs->filesize=strtoull(tarhead.size, 0, 8);
 	    }
 	    fs->modtime=strtol(tarhead.modtime, 0, 8);
-	    if (longlinktarget == 0)
-		strncpya0(&(fs->linktarget), tarhead.linktarget, 100);
+//	    if (longlinktarget == 0)
+//		strncpya0(&(fs->linktarget), tarhead.linktarget, 100);
 
 	    if (strlen(tarhead.auid) == 0)
 		sprintf(tarhead.auid, "%d", fs->nuid);
@@ -253,13 +271,14 @@ int tar_get_next_hdr(struct filespec *fs)
 	    if (usepaxsize == 0) {
 		fs->filesize = 0;
 		if ((unsigned char) tarhead.size[0] == 128)
-		    for (int i = 0; i < 8; i++)
+		    for (int i = 0; i < 8; i++) {
 			fs->filesize += (( ((unsigned long long) ((unsigned char) (tarhead.size[11 - i]))) << (i * 8)));
+		    }
 		else
 		    fs->filesize=strtoull(tarhead.size, 0, 8);
 	    }
 	    fs->modtime=strtol(tarhead.modtime, 0, 8);
-	    if (longlinktarget == 0)
+	    if (longlinktarget == 0 && (*(tarhead.ftype) == '1' || *(tarhead.ftype) == '2'))
 		strncpya0(&(fs->linktarget), tarhead.linktarget, 100);
 
 	    if (strlen(tarhead.auid) == 0)
@@ -507,10 +526,10 @@ int tar_write_next_hdr(struct filespec *fs) {
     }
     if (genpax == 1 && fs->n_sparsedata > 0) {
 	paxsparsehdrsz = 0;
-	paxsparsehdrsz += fprintf(stdout, "%u\n", (unsigned int) fs->n_sparsedata);
+	paxsparsehdrsz += fprintf(stdout, "%d\n", (unsigned int) fs->n_sparsedata);
 	for (int i = 0; i < fs->n_sparsedata; i++) {
-	    paxsparsehdrsz += fprintf(stdout, "%u\n", (unsigned int) fs->sparsedata[i].offset);
-	    paxsparsehdrsz += fprintf(stdout, "%u\n", (unsigned int) fs->sparsedata[i].size);
+	    paxsparsehdrsz += fprintf(stdout, "%llu\n", fs->sparsedata[i].offset);
+	    paxsparsehdrsz += fprintf(stdout, "%llu\n", fs->sparsedata[i].size);
 	}
 	memset(curblock, '\0', 512);
 	if ((paxsparsehdrsz % 512) > 0)
@@ -539,6 +558,8 @@ int getpaxvar(char *paxdata, int paxlen, char *name, char **rvalue, int *rvaluel
 	    *rvaluelen = valuelen;
 	    return(0);
 	}
+	if (nvplen <= 0)
+	    return(1);
 	nvp += nvplen;
     }
     return(1);
@@ -632,7 +653,7 @@ int delpaxvar(char **paxdata, int *paxlen, char *inname) {
 	if (cnamelen >= strlen(inname) && strncmp(inname, cname, cnamelen) == 0) {
 	    memmove(cnvp, cnvp + cnvplen, (*paxdata + *paxlen) - (cnvp + cnvplen));
 	    *paxlen = *paxlen - cnvplen;
-	    *paxdata = drealloc(*paxdata, *paxlen);
+//	    *paxdata = drealloc(*paxdata, *paxlen);
 	    break;
 	}
 	cnvp += cnvplen;
@@ -678,6 +699,26 @@ unsigned int ilog10(unsigned long long int n) {
 	}
     }
     return(0);
+}
+
+int cpypaxvarstr(char *paxdata, int paxlen, char *name, char **target)
+{
+    int len = 0;
+    char *value = NULL;
+    int r;
+
+    r = getpaxvar(paxdata, paxlen, name, &value, &len);
+    if (r == 0) {
+	strncpya0(target, value, len);
+	for (int i = strlen(*target); i > 0; i--)
+	    if ((*target)[i] == '\n') {
+		(*target)[i] = '\0';
+		break;
+	    }
+    }
+    else
+	strncpya0(target, "", 0);
+    return(r);
 }
 
 // malloc that records size of allocated memory segment
@@ -744,6 +785,21 @@ char *strcata(char **dest, const char *src)
     return(*dest);
 }
 
+char *strncata0(char **dest, const char *src, size_t n)
+{
+    size_t o = *dest == NULL ? 0 : strlen(*dest);
+    size_t b = strnlen(src, n) >= n ? n : strlen(src);
+    if (*dest == NULL) {
+	*dest = dmalloc(b + 1);
+	((char *)(*dest))[0] = 0;
+    }
+    if (dmalloc_size(*dest) < strlen(*dest) + b + 1)
+	*dest = drealloc(*dest, strlen(*dest) + b + 1);
+    strncat(*dest, src, n);
+    (*dest)[o + b] = '\0';
+    return(*dest);
+}
+
 /* auto-allocating version of memcpy
  * *dest must be either NULL, or allocated via dmalloc();
 */
@@ -757,8 +813,21 @@ void *memcpya(void **dest, void *src, size_t n)
     return(*dest);
 }
 
+/* auto-allocating version of memcpy with offset
+ * *dest must be either NULL, or allocated via dmalloc();
+ */
+void *memcpyao(void **dest, void *src, size_t n, size_t offset)
+{
+    if (*dest == NULL)
+	*dest = dmalloc(n);
+    if (dmalloc_size(*dest) < n)
+	*dest = drealloc(*dest, n);
+    memcpy((*dest) + offset, src, n);
+    return(*dest);
+}
+
 // Initialize filespec structure
-int fsinit(struct filespec *fs, size_t (*c_fread)(), size_t (*c_fwrite)(), void *c_read_handle, void *c_write_handle)
+int fsinit(struct filespec *fs)
 {
     fs->ftype = 0;
     fs->mode = 0;
@@ -778,10 +847,10 @@ int fsinit(struct filespec *fs, size_t (*c_fread)(), size_t (*c_fwrite)(), void 
     fs->sparsedata = dmalloc(sizeof(fs->sparsedata) * 4);
     fs->n_sparsedata = 0;
     fs->pax = 0;
-    fs->c_fread = c_fread;
-    fs->c_fwrite = c_fwrite;
-    fs->c_read_handle = c_read_handle;
-    fs->c_write_handle = c_write_handle;
+//    fs->c_fread = c_fread;
+//    fs->c_fwrite = c_fwrite;
+//    fs->c_read_handle = c_read_handle;
+//    fs->c_write_handle = c_write_handle;
     fsclear(fs);
     return(0);
 }
@@ -828,7 +897,7 @@ int fsdup(struct filespec *tsf, struct filespec *sfs)
     tsf->modtime = sfs->modtime;
     memcpy(tsf->agid, sfs->agid, 33);
     strncpya0(&(tsf->filename), sfs->filename, strlen(sfs->filename));
-    strncpya0(&(tsf->linktarget), sfs->filename, strlen(sfs->linktarget));
+    strncpya0(&(tsf->linktarget), sfs->linktarget, strlen(sfs->linktarget));
     memcpya((void **) &(tsf->xheader), sfs->xheader, sfs->xheaderlen);
     tsf->xheaderlen = sfs->xheaderlen;
     memcpya((void **) &(tsf->sparsedata), sfs->sparsedata, sizeof(struct sparsedata) * sfs->n_sparsedata);
@@ -1197,13 +1266,13 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
     char seg[20];
     char padding[512];
     char paxdata[128];
-    char *npaxdata = NULL;
-    int npaxdatalen = 0;
+//    char *npaxdata = NULL;
+//    int npaxdatalen = 0;
     char paxhdr_varstring[512];
 
     if (tsf->tmp_fs == NULL) {
 	tsf->tmp_fs = malloc(sizeof(struct filespec));
-	fsinit(tsf->tmp_fs, NULL, tsf->c_fwrite, NULL, tsf->c_handle);
+	fsinit(tsf->tmp_fs);
     }
     else
 	fsclear(tsf->tmp_fs);
@@ -1223,6 +1292,7 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
 	    n -= (tsf->buf + tsf->bufsize - tsf->bufp);
 	    if (n > 0) {
 		if (tsf->segn == 0) {
+#if 0
 		    char sb_filters[256];
 		    if (getpaxvar((tsf->orig_fs->xheader), (tsf->orig_fs->xheaderlen), "TC.filters", &npaxdata, &npaxdatalen) != 0) {
 			strncpy(sb_filters, npaxdata, npaxdatalen);
@@ -1232,6 +1302,7 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
 		    else 
 			strcpy(sb_filters, "segmented");
 		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.filters", "compression|cipher|segmented", 28);
+#endif
 		    sprintf(paxdata, "%llu", tsf->orig_fs->filesize);
 		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.segmented.header", "1", 1);
 		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.original.size", paxdata, strlen(paxdata));
@@ -1271,22 +1342,24 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
 			setpaxvar(&(fs->xheader), &(fs->xheaderlen), paxhdr_varstring, (char *) tsf->hmac[i], strlen((char *) tsf->hmac[i]));
 		    }
 		}
-		else
+		else {
 		    setpaxvar(&(fs->xheader), &(fs->xheaderlen), "TC.hmac", (char *) tsf->hmac[0], strlen((char *) tsf->hmac[0]));
+		}
 		tar_write_next_hdr(fs);
 		fsclear(fs);
 	    }
 	    else {
 		sprintf(paxdata, "%llu", tsf->orig_fs->filesize);
 		setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.original.size", paxdata, strlen(paxdata));
-		if (tsf->nk > 0) {
+		if (tsf->nk > 1) {
 		    for (int i = 0; i < tsf->nk; i++) {
 			sprintf(paxhdr_varstring, "TC.hmac.%d", i);
 			setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), paxhdr_varstring, (char *) tsf->hmac[i], strlen((char *) tsf->hmac[i]));
 		    }
 		}
-		else
+		else  {
 		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.hmac", (char *) tsf->hmac[0], strlen((char *) tsf->hmac[0]));
+		}
 		tsf->orig_fs->filesize = n;
 		tar_write_next_hdr(tsf->orig_fs);
 	    }
@@ -1367,7 +1440,7 @@ size_t tarsplit_read(void *buf, size_t sz, size_t count, struct tarsplit_file *t
 
     if (tsf->tmp_fs == NULL) {
 	tsf->tmp_fs = malloc(sizeof(struct filespec));
-	fsinit(tsf->tmp_fs, NULL, tsf->c_fwrite, NULL, tsf->c_handle);
+	fsinit(tsf->tmp_fs);
     }
     else
 	fsclear(tsf->tmp_fs);
@@ -1388,7 +1461,7 @@ size_t tarsplit_read(void *buf, size_t sz, size_t count, struct tarsplit_file *t
 		    for (int i = 0; i < tsf->nk; i++) {
 			sprintf(paxhdr_varstring, "TC.hmac.%d", i);
 			if (getpaxvar(fs->xheader, fs->xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0) {
-			    memset(tsf->hmac[0], 0, EVP_MAX_MD_SIZE_b64 - 1);
+			    memset(tsf->hmac[i], 0, EVP_MAX_MD_SIZE_b64 - 1);
 			    strncpy((char *) tsf->hmac[i], paxdata, paxdatalen > EVP_MAX_MD_SIZE_b64 - 1 ? EVP_MAX_MD_SIZE_b64 - 1 : paxdatalen);
 			    (tsf->hmac[i])[EVP_MAX_MD_SIZE_b64 - 1] = '\0';
 			    for (int j = EVP_MAX_MD_SIZE_b64 - 1; j >= 0; j--) {
@@ -1470,12 +1543,6 @@ int genkey(int argc, char **argv)
     BIO *membuf;
     char *pubkey_b64;
     EVP_CIPHER_CTX *ctx = NULL;
-//    int eklen;
-//    int eklen_n;
-//    unsigned char *ek;
-//    unsigned char iv[EVP_MAX_IV_LENGTH];
-//    unsigned char hmac_rand[32];
-//    unsigned char hmac_rand_b64[((int)((32 + 2) / 3)) * 4 + 1];
     unsigned char hmac_hash[EVP_MAX_MD_SIZE];
     unsigned char hmac_hash_b64[((int)((EVP_MAX_MD_SIZE + 2) / 3)) * 4 + 1];
     unsigned char hmac_key[EVP_MAX_MD_SIZE];
@@ -1534,7 +1601,6 @@ int genkey(int argc, char **argv)
     }
     PEM_write_bio_PKCS8PrivateKey(rsakeyfile, evp_keypair, EVP_aes_256_cbc(), NULL, 0, NULL, passphrase);
     PEM_write_bio_PUBKEY(rsakeyfile, evp_keypair);
-//    RAND_bytes(hmac_rand, 32);
 
     membuf = BIO_new(BIO_s_mem());
     PEM_write_bio_PUBKEY(membuf, evp_keypair);
@@ -1543,51 +1609,18 @@ int genkey(int argc, char **argv)
     SHA256((unsigned char *) passphrase, strlen(passphrase), passphrase_hash);
     HMAC(EVP_sha256(), passphrase_hash, strlen((char *) passphrase_hash),
 	(unsigned char *) pubkey_b64, strlen(pubkey_b64), hmac_key, &hmac_key_len);
-//    memcpy(hmac_key, passphrase_hash, 32);
     SHA256((unsigned char *) hmac_key, 32, hmac_hash);
-//    HMAC(EVP_sha256(), hmac_rand, 32, passphrase_hash, SHA256_DIGEST_LENGTH,
-//        hmac_key, &hmac_key_len);
 
     BIO_free(membuf);
     ctx = EVP_CIPHER_CTX_new();
 
     openssl_err();
-
-/*
-    ek = malloc(EVP_PKEY_size(evp_keypair));
-    EVP_SealInit(ctx, EVP_aes_256_gcm(), &ek, &eklen, iv, &evp_keypair, 1);
-    eklen_n = htonl(eklen);
-
-    memcpy(hmac_key_enc_p, &eklen_n, sizeof(eklen_n));
-    hmac_key_enc_p += sizeof(eklen_n);
-
-    memcpy(hmac_key_enc_p, ek, eklen);
-    hmac_key_enc_p += eklen;
-
-    memcpy(hmac_key_enc_p, iv, EVP_CIPHER_iv_length(EVP_aes_256_gcm()));
-    hmac_key_enc_p += sizeof(EVP_CIPHER_iv_length(EVP_aes_256_gcm()));
-
-    EVP_SealUpdate(ctx, hmac_key_enc_p, &hmac_key_enc_sz, hmac_key, 32);
-    hmac_key_enc_p += hmac_key_enc_sz;
-
-    EVP_SealFinal(ctx, hmac_key_enc_p, &hmac_key_enc_sz);
-    hmac_key_enc_p += hmac_key_enc_sz;
-
-    hmac_key_enc_sz = hmac_key_enc_p - hmac_key_enc;
-
     EVP_EncodeBlock(hmac_key_b64, hmac_key, 32);
-    EVP_EncodeBlock(hmac_key_enc_b64, hmac_key_enc, hmac_key_enc_sz);
-*/
-    EVP_EncodeBlock(hmac_key_b64, hmac_key, 32);
-//    EVP_EncodeBlock(hmac_rand_b64, hmac_rand, 32);
     EVP_EncodeBlock(hmac_hash_b64, hmac_hash, 32);
 
     BIO_printf(rsakeyfile, "-----BEGIN HMAC KEY-----\n");
     BIO_printf(rsakeyfile, "%s\n", hmac_key_b64);
     BIO_printf(rsakeyfile, "-----END HMAC KEY-----\n");
-//    BIO_printf(rsakeyfile, "-----BEGIN HMAC SEED-----\n");
-//    BIO_printf(rsakeyfile, "%s\n", hmac_rand_b64);
-//    BIO_printf(rsakeyfile, "-----END HMAC SEED-----\n");
     BIO_printf(rsakeyfile, "-----BEGIN HMAC HASH-----\n");
     BIO_printf(rsakeyfile, "%s\n", hmac_hash_b64);
     BIO_printf(rsakeyfile, "-----END HMAC HASH-----\n");
@@ -1606,6 +1639,7 @@ struct rsa_file *rsa_file_init(char mode, EVP_PKEY **evp_keypair, int nk, size_t
     struct rsa_file *rcf;
     int eklen_n;
     int nk_n;
+
 
     OpenSSL_add_all_algorithms();
     rcf = malloc(sizeof(struct rsa_file));
@@ -1630,7 +1664,7 @@ struct rsa_file *rsa_file_init(char mode, EVP_PKEY **evp_keypair, int nk, size_t
 	for (int i = 0; i < nk; i++)
 	    rcf->ek[i] = malloc(EVP_PKEY_size(evp_keypair[i]));
 
-	EVP_SealInit(rcf->ctx, EVP_aes_256_gcm(), (rcf->ek), (rcf->eklen), (rcf->iv), evp_keypair, nk);
+	EVP_SealInit(rcf->ctx, EVP_aes_256_ctr(), (rcf->ek), (rcf->eklen), (rcf->iv), evp_keypair, nk);
 	nk_n = htonl(nk);
 	c_ffunc(&nk_n, 1, sizeof(nk_n), c_handle);
 	for (int i = 0; i < nk; i++) {
@@ -1638,7 +1672,7 @@ struct rsa_file *rsa_file_init(char mode, EVP_PKEY **evp_keypair, int nk, size_t
 	    c_ffunc(&eklen_n, 1, sizeof(eklen_n), c_handle);
 	    c_ffunc(rcf->ek[i], 1, rcf->eklen[i], c_handle);
 	}
-	c_ffunc(rcf->iv, 1, EVP_CIPHER_iv_length(EVP_aes_256_gcm()), c_handle);
+	c_ffunc(rcf->iv, 1, EVP_CIPHER_iv_length(EVP_aes_256_ctr()), c_handle);
     }
     if (mode == 'r') {
 	rcf->c_fread = c_ffunc;
@@ -1655,9 +1689,9 @@ struct rsa_file *rsa_file_init(char mode, EVP_PKEY **evp_keypair, int nk, size_t
 	    rcf->ek[i] = malloc(rcf->eklen[i]);
 	    c_ffunc(rcf->ek[i], 1, rcf->eklen[i], c_handle);
 	}
-	c_ffunc(&(rcf->iv), 1, EVP_CIPHER_iv_length(EVP_aes_256_gcm()), c_handle);
+	c_ffunc(&(rcf->iv), 1, EVP_CIPHER_iv_length(EVP_aes_256_ctr()), c_handle);
 	for (int i = 0; i < nk; i++) {
-	    if (EVP_OpenInit(rcf->ctx, EVP_aes_256_gcm(), rcf->ek[i], rcf->eklen[i], rcf->iv, *evp_keypair) != 0)
+	    if (EVP_OpenInit(rcf->ctx, EVP_aes_256_ctr(), rcf->ek[i], rcf->eklen[i], rcf->iv, *evp_keypair) != 0)
 		break;
 	    else {
 //		fprintf(stderr, "Error: \n");
@@ -1667,6 +1701,7 @@ struct rsa_file *rsa_file_init(char mode, EVP_PKEY **evp_keypair, int nk, size_t
 	}
     }
     rcf->c_handle = c_handle;
+
 
     return(rcf);
 }
@@ -2297,6 +2332,13 @@ int hmac_finalize_r(struct hmac_file *hmacf, unsigned char **cfhmac, unsigned in
     return(0);
 }
 
+// Parses inbound string *in, splitting on character t
+// returning array of pointers in ***out
+// if ***out is null, it is auto-allocated with dmalloc
+// if ***out is not null, it needs to be already allocated
+// with dmalloc
+// ***out must be free'd with dfree
+
 int parse(char *in, char ***out, char t)
 {
     int i;
@@ -2321,3 +2363,104 @@ int parse(char *in, char ***out, char t)
     return(c);
 }
 
+int c_getline(char **buf, size_t (*c_fread)(), void *c_handle)
+{
+    size_t bufsz;
+    size_t c = 0;
+    if (buf == NULL)
+	return(-1);
+    if (*buf == NULL)
+	*buf = dmalloc(8);
+    bufsz = dmalloc_size(*buf);
+    while (c_fread((*buf) + c, 1, 1, c_handle) == 1 && (*buf)[c++] != '\n')
+	if (c >= bufsz)
+	    *buf = drealloc(*buf, (bufsz = nextfib(bufsz)));
+
+    if (c >= bufsz)
+	*buf = drealloc(*buf, (bufsz = nextfib(bufsz)));
+    (*buf)[c] = '\0';
+    return(c);
+}
+unsigned long long int * fibseq()
+{
+    static int i = 0;
+    static unsigned long long int seq[95];
+
+    if (i != 0)
+        return(seq);
+    else {
+        for (i = 0; i < 94; i++) {
+            if (i == 0)
+                seq[i] = 0;
+            else if (i == 1)
+                seq[i] = 1;
+            else
+                seq[i] = seq[i - 1] + seq[i - 2];
+        }
+        return(seq);
+    }
+}
+
+unsigned long long int nextfib(unsigned long long int n)
+{
+    for (int i = 0; i < 94; i++) {
+        if (*(fibseq() + i) > n)
+            return(*(fibseq() + i));
+    }
+    return(0);
+}
+
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER))
+EVP_MD_CTX *EVP_MD_CTX_new(void)
+{
+    return OPENSSL_zalloc(sizeof(EVP_MD_CTX));
+}
+
+void EVP_MD_CTX_free(EVP_MD_CTX *ctx)
+{
+    EVP_MD_CTX_cleanup(ctx);
+    OPENSSL_free(ctx);
+}
+
+HMAC_CTX *HMAC_CTX_new(void)
+{
+    HMAC_CTX *ctx = OPENSSL_malloc(sizeof(*ctx));
+    if (ctx != NULL) {
+	if (!HMAC_CTX_reset(ctx)) {
+	    HMAC_CTX_free(ctx);
+	    return NULL;
+	}
+    }
+    return ctx;
+}
+
+void HMAC_CTX_free(HMAC_CTX *ctx)
+{
+    if (ctx != NULL) {
+	HMAC_CTX_cleanup(ctx);
+	OPENSSL_free(ctx);
+    }
+}
+
+int EVP_CIPHER_CTX_reset(EVP_CIPHER_CTX *ctx)
+{
+    EVP_CIPHER_CTX_cleanup(ctx);
+    return 1;
+}
+
+int HMAC_CTX_reset(HMAC_CTX *ctx)
+{
+    HMAC_CTX_cleanup(ctx);
+    return 1;
+}
+
+static void *OPENSSL_zalloc(size_t num)
+{
+    void *ret = OPENSSL_malloc(num);
+
+    if (ret != NULL)
+        memset(ret, 0, num);
+    return ret;
+}
+
+#endif
