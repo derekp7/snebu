@@ -7,7 +7,7 @@ BINDIR=$(PREFIX)/bin
 ETCDIR=/etc
 all: $(PROGS)
 %.o: %.c
-	gcc -pg -c $< -o $@ -Wall
+	gcc -c $< -o $@ -Wall
 tarlib.o: tarlib.h
 tarcrypt.o: tarlib.h
 snebu-submitfiles.o: tarlib.h
@@ -25,5 +25,5 @@ install: $(PROGS) $(SCRIPTS) $(CONFIGS)
 	cp -f $(CONFIGS) $(DESTDIR)$(ETCDIR)/
 
 clean:
-	rm -f $(PROGS)
+	rm -f $(PROGS) snebu-main.o snebu-newbackup.o tarlib.o snebu-submitfiles.o snebu-restore.o snebu-listbackups.o snebu-expire-purge.o snebu-permissions.o
 

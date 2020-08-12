@@ -3,15 +3,48 @@ Introduction
 
 Snebu -- the Simple Network Backup Utility, Systems Nominal, Everything's Backed Up
 
-Snebu is an efficient, incremental, snapshot-style, deduplicating, database-backed, multi-host, client/server, simple, secure, disk-based backup system for Unix / Linux systems.
+Snebu is an efficient, incremental, snapshot-style, de-duplicating, compressing, encrypting, database-backed, multi-host, client/server, simple, secure, disk-based backup system for Unix / Linux systems.
+
+Super-quick setup
+----
+* After creating or editing `/etc/snebu.conf` and `/etc/snebu-client.conf` as specified below...
+* And, if using encryption, generate a key
+  ```tarcrypt genkey -f myhost.key```
+
+* If backing up to a local resource (locally attached storage):
+  ```
+  snebu-client backup -v -k myhost.key /home/mydir
+  ```
+
+* If backing up to a remote server:
+  ```
+  snebu-client backup -v --remote-server central-backup-server -k myhost.key \
+    -k corporate-skeleton.key
+  ```
+
+* Or, if in a larger environment and you want to centrally manager backups from the backup server, write a script on the server and schedule it via cron with commands such as:
+  ```
+  snebu-client backup --remote-client host1.example.com -k key1.key -k corp.key
+  snebu-client backup --remote-client host2.example.com -k key2.key -k corp.key
+  ```
+
+The optional `-k` parameters above specify encryption keys.  These key files contain an RSA key pair, with the private key encrypted.  The key data is stored on the backup server, and during a restore operation you will be prompted for the passphrase protecting the private key.  The key file does not need to be present on the target client during a restore operation.
+
+You can specify more than one key, in which case the passphrase for any of the keys can be used during restore.
+
+If you don't specifiy a directory to back up, default include/exclude lists are processesed as specified in /etc/snebu-client.conf.
+
+See the quick start guide below for more details.  As you can see, you can back up a single host to some attached media, or to a remote host (even something simple as a Rapsberry Pi).  Or you can 
 
 Features
 ----
 
-* Efficent  
+* Efficient  
   Incremental -- transfers only modified data across the network.  
   Snapshot-style -- Each backup represents the complete state of the system.  
-  Deduplicating  -- File-level deduplication and compression, including de-dup across multiple hosts.  
+  De-duplicating  -- File-level de-duplication and compression, including de-dup across multiple hosts.  
+
+* Compresed/encrypted -- Uses built-in lzo based encryption, with optional RSA public key based encryption.  With public key encryption, you don't have to be concerned with leaving a plain text encryption key on the client, or losing the encryption key.  The encryption also utilizes an HMAC key to provide authenticity of the backup, and to allow for de-duplication of encrypted backups (including across multiple hosts, as long as the same key file is used on that group of hosts).
 
 * Database-backed -- Metadata information is stored in an SQLite database.
 
@@ -22,7 +55,7 @@ Features
 * Simple -- System consists of a single compiled binary, `snebu`, plus a front-end client, `snebu-client` written in Bash shell script.  If used with multiple hosts, communications all happen over ssh, and there are no agent programs that need to be installed on remote hosts.  Backed up files are stored in a "vault" directory, with the metadata in a light weight SQLite database file.  (SQLite requires no database server processes, all functionality is built into the SQLite library linked against the main `snebu` binary).
 
 * Secure -- Backup server can pull backups from hosts, or clients can push backups to the central backup server using minimal permission accounts (i.e., you can configure an account to be able to submit, but not delete backups, or restrict restores to only specific backup sets).
-
+Encryption is also provided by a separate isolated process, `tarcrypt`, which acts as a filter for tar files, compressing/encrypting the data contents while allowing the metadata to be processed and indexed by the backup server database.
 
 Audience
 ----
@@ -58,7 +91,7 @@ Concepts
 
 The Snebu backup system is composed of a backend process, `snebu`, and a front-end client called `snebu-client`.  The client gathers a list of files to back up (using the `find` command), sends this list to the backend, and gets back a list of files that are needed to complete an incremental backup.  These files are then sent to the backend using the Unix `tar` format.
 
-Backups are stored in backup sets.  A backup set is uniquely identified by the backup name (typically the host name getting backed up), and a datestamp in the form of a Unix time_t value (essentially, a count of the number of seconds since Jan 1, 1970).  This value functions as a serial number.
+Backups are stored in backup sets.  A backup set is uniquely identified by the backup name (typically the host name getting backed up), and a datestamp in the form of a Unix time_t value (essentially, a count of the number of seconds since Jan 1, 1970).  This value functions as a serial number, and is used by the expiration process for purging old backups.
 
 Each backup set has a retention schedule attached to it, specified by the `-r` flag.  The retention schedule is used by the expiration process to, for example, expire all daily backups older than 10 days, or all monthly backups older than 6 months.  Anything can be used for for a schedule name, but typical values are `daily`, `weekly`, `monthly`, `yearly`, and `archive`.  If not specified, then the `snebu-client` script will automatically pick a retention schedule based on the date (Sunday through Friday are daily, Saturday is weekly, and the 1st of the month is monthly).
 
@@ -359,7 +392,17 @@ snebu-client
     
      -r, --retention schedule   Retention schedule for this backup set.  Typical
                                 values are "daily", "weekly", "monthly", "yearly".
-    
+
+     -k, --encryption-key       Turns on encryption, and specifies encryption
+                                key location.  May be specified more than once to
+                                encrypt with multiple keys.
+                                
+                                The program "tarcrypt" needs to be present on the
+                                client for this option.  Keys are generated with
+                                the command:
+
+                                  tarcrypt genkey -f keyname
+
      -C, --changedir path       Changes to the given directory path before
                                 backing up or restoring.
     
@@ -413,6 +456,10 @@ snebu-client
                                 time_t format, sames as the output of the "date
                                 +%s" command.
     
+         --decrypt              Turns on decryption.  Requires "tarcrypt" to be
+                                on the client.  Password(s) will be promted for
+                                during restore.
+
      -C, --changedir path       Changes to the given directory path before
                                 backing up or restoring.
     

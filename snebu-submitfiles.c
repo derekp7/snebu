@@ -123,6 +123,10 @@ int submitfiles(int argc, char **argv)
     pipebuf(&in, &out);
     submitfiles2(in);
     opendb(bkcatalog);
+    if (sqlerr != 0) {
+        fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+        sqlite3_free(sqlerr);
+    }
 
     sqlite3_prepare_v2(bkcatalog,
         (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
@@ -296,8 +300,8 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_int64 fileid = sqlite3_last_insert_rowid(bkcatalog);
 
             sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-                "insert or ignore into diskfiles_t (sha1)  "
-                "values ('%q')", mdfields[8])), 0, 0, &sqlerr);
+                "insert or ignore into diskfiles_t (sha1, extension)  "
+                "values ('%q', '%q')", mdfields[8], strcmp(mdfields[1], "E") == 0 ? "enc" : strcmp(mdfields[1], "0") == 0 || strcmp(mdfields[1], "S") == 0 ? "lzo" : "" )), 0, 0, &sqlerr);
             if (sqlerr != 0) {
                 fprintf(stderr, "%s\n", sqlerr);
                 sqlite3_free(sqlerr);
@@ -384,9 +388,10 @@ int submitfiles2(int out_h)
     int numkeys = 0;
     char paxhdr_varstring[256];
 
+
     if ((child = fork()) == 0) {
 	FILE *out = fdopen(out_h, "w");
-	char *sparsetext;
+	char *sparsetext = NULL;
 	char *ciphertype = NULL;
 
 	fsinit(&fs);
@@ -465,7 +470,6 @@ int submitfiles2(int out_h)
 		curtmpfile = mkstemp(tmpfilepath);
 		curfile = fdopen(curtmpfile, "w");
 		tsf = tarsplit_init_r(fread, stdin, numkeys);
-		fwrite("TC", 1, 2, curfile);
 		if (ciphertype != NULL)
 		    ciphertype[0] = '\0';
 		if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.compression", &paxdata, &paxdatalen) == 0) {
@@ -542,11 +546,13 @@ int submitfiles2(int out_h)
 		strncata0(&ciphertype, "|", 1);
 		if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.cipher", &paxdata, &paxdatalen) == 0) {
 		    strncata0(&ciphertype, paxdata, paxdatalen - 1);
+		    is_ciphered = 1;
 		}
-		fprintf(curfile, "%s\n", ciphertype);
+		if (is_ciphered == 1)
+		    fprintf(curfile, "%s\n", ciphertype);
 		sizeremaining = fs.filesize;
 		padding = 512 - ((fs.filesize - 1) % 512 + 1);
-		if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.cipher", &paxdata, &paxdatalen) == 0) {
+		if (is_ciphered == 1) {
 		    is_ciphered = 1;
 		    if (numkeys > 1)
 			for (int i = 0; i < numkeys; i++) {
@@ -667,6 +673,7 @@ int submitfiles2(int out_h)
 	free(config.vault);
 	free(config.meta);
 	dfree(ciphertype);
+	dfree(sparsetext);
 	exit(0);
     }
     else {
@@ -696,7 +703,9 @@ int pipebuf(int *in, int *out)
 
 	struct timeval s_tm;
 
-	char buf[1024];
+	int bufsize = 1024 * 1024 * 64;
+	char *buf = malloc(bufsize);
+//	char buf[bufsize];
 	ssize_t n;
 	ssize_t o;
 	int ateof = 0;
@@ -743,7 +752,7 @@ int pipebuf(int *in, int *out)
 		}
 	    }
 	    // if there is room in the buffer, wait for either input or output
-	    else if (rbavail(r) > 1024 && ateof == 0) {
+	    else if (rbavail(r) > bufsize && ateof == 0) {
 		FD_ZERO(&s_in);
 		FD_SET(pipein[0], &s_in);
 		FD_ZERO(&s_out);
@@ -1284,8 +1293,8 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
     char *sqlerr;
 
     sqlite3_exec(bkcatalog,
-//        "create temporary table if not exists received_file_entities_t (  \n"
-        "create table if not exists received_file_entities_t (  \n"
+        "create temporary table if not exists received_file_entities_t (  \n"
+//        "create table if not exists received_file_entities_t (  \n"
         "    file_id       integer primary key,  \n"
         "    backupset_id  integer,  \n"
         "    ftype         char,  \n"
@@ -1320,8 +1329,8 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
     }
 
     sqlite3_exec(bkcatalog,
-//	"create temporary table if not exists file_entities_t "
-	"create table if not exists file_entities_t "
+	"create temporary table if not exists file_entities_t "
+//	"create table if not exists file_entities_t "
 	"as select * from file_entities where 0", 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n", sqlerr);

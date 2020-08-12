@@ -27,7 +27,7 @@ process_cmdline()
     fi
 
     verbose=0
-    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help,sudo:,encryption-key:" -o "c:n:r:d:fvC:hk:" -- "$@")")
+    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help,sudo:,encryption-key:,decrypt" -o "c:n:r:d:fvC:hk:" -- "$@")")
     then
         usage target
         exit 1
@@ -52,6 +52,7 @@ process_cmdline()
 	    -v|--verbose) verbose=$((${verbose} + 1)); shift;;
 	    --sudo) sudousr=$2; shift; shift;;
 	    -k|--encryption-key) keyfile=( "${keyfile[@]}" "$2"); shift; shift;;
+	    --decrypt) decrypt=1; shift;;
             --) shift; break;;
         esac
     done
@@ -79,6 +80,13 @@ defaults()
     else
 	tarfilter=cat
     fi
+    if [ "${decrypt}" == 1 ]
+    then
+	rtarfilter=do_tardecrypt
+    else
+	rtarfilter=cat
+    fi
+
     # Process configuration file
     [ -f "${configfile}" ] && . "${configfile}"
 
@@ -213,6 +221,16 @@ usage()
 	
 	 -r, --retention schedule   Retention schedule for this backup set.  Typical
 	                            values are "daily", "weekly", "monthly", "yearly".
+
+	 -k, --encryption-key       Turns on encryption, and specifies encryption
+	                            key location.  May be specified more than once to
+	                            encrypt with multiple keys.
+				    
+				    The program "tarcrypt" needs to be present on the
+	                            client for this option.  Keys are generated with
+	                            the command:
+
+	                              tarcrypt genkey -f keyname
 	
 	 -C, --changedir path       Changes to the given directory path before
 	                            backing up or restoring.
@@ -267,6 +285,10 @@ usage()
 	 -d, --date datestamp       Date stamp for this backup set.  The format is in
 	                            time_t format, sames as the output of the "date
 	                            +%s" command.
+
+	     --decrypt              Turns on decryption.  Requires "tarcrypt" to be
+	                            on the client.  Password(s) will be promted for
+	                            during restore.
 	
 	 -C, --changedir path       Changes to the given directory path before
 	                            backing up or restoring.
@@ -586,8 +608,7 @@ do_backup()
     # Now create a tar file and send it to Snebu
     tar --one-file-system --no-recursion $(tartest) -S -P  -T ${includetmp} -cf - |\
 	$tarfilter |\
-#        valgrind --track-origins=yes $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
-        valgrind --track-origins=yes -s --leak-check=full --show-leak-kinds=all $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
+        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
 #    rm -f ${includetmp}
     [ -n "${pluginpost}" ] && $pluginpost
@@ -649,7 +670,7 @@ do_restore()
         tarargs=( "${tarargs[@]}" -C $tgtdirectory )
     fi
 
-    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${restoreopts[@]}" "${@}" </dev/null |tar "${tarargs[@]}" $(tartest) -xvf -
+    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${restoreopts[@]}" "${@}" </dev/null |${rtarfilter} |tar "${tarargs[@]}" $(tartest) -xvf -
 }
 
 do_remote_restore()
@@ -659,7 +680,7 @@ do_remote_restore()
         tarargs=( "${tarargs[@]}" -C $tgtdirectory )
     fi
     $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${@}" </dev/null |\
-    rpcsh -h ${clientname} -u "${rmtuser}" -m "tar ${tarargs[*]} $(tartest) -xvf -"
+    rpcsh -h ${clientname} -u "${rmtuser}" -v "TARCRYPT" -m "${rtarfilter} |tar ${tarargs[*]} $(tartest) -xvf -"
 
 }
 
@@ -705,7 +726,10 @@ do_tarencrypt()
     do
 	tarcrypt_args=( "${tarcrypt_args[@]}" -k $i )
     done
-    echo $TARCRYPT "${tarcrypt_args[@]}" >>/tmp/log1
     $TARCRYPT "${tarcrypt_args[@]}"
+}
+do_tardecrypt()
+{
+    $TARCRYPT decrypt
 }
 main "${@}"

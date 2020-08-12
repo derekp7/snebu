@@ -105,7 +105,7 @@ int restore(int argc, char **argv)
 		    if (numgrafts + 1>= maxgrafts) {
 			maxgrafts += 16;
 			graft = realloc(graft, sizeof(*graft) * maxgrafts);
-	    }
+		    }
 		    if ((grafteqptr = strchr(optarg, '=')) == 0) {
 			help("restore");
 			exit(1);
@@ -529,9 +529,17 @@ int restore(int argc, char **argv)
 	strncpya0(&(fs.linktarget), (char *) sqlite3_column_text(sqlres, 13), sqlite3_column_bytes(sqlres, 13));
 	memcpya((void **) &(fs.xheader), (void *) sqlite3_column_blob(sqlres, 14), sqlite3_column_bytes(sqlres, 14));
 	fs.xheaderlen = sqlite3_column_bytes(sqlres, 14);
+	    
+	// Process graft filenames
+	for (i = 0; i < numgrafts; i++) {
+	    if (strncmp(fs.filename, graft[i][0], strlen(graft[i][0])) == 0) {
+		snprintf(graftfilename, 8192, "%s%s", graft[i][1], fs.filename + strlen(graft[i][0]));
+		strncpya0(&fs.filename, graftfilename, 0);
+		break;
+	    }
+	}
 
-	if (in_ftype == '0' || in_ftype == 'S' || in_ftype == 'E') {
-
+	if (fs.filesize > 0) {
 	    if (sha1filepath != NULL)
 		sha1filepath[0] = '\0';
 	    strcata(&sha1filepath, config.vault);
@@ -539,7 +547,7 @@ int restore(int argc, char **argv)
 	    strncata0(&sha1filepath, (char *) sqlite3_column_text(sqlres, 10), 2);
 	    strcata(&sha1filepath, "/");
 	    strcata(&sha1filepath, (char *) sqlite3_column_text(sqlres, 10) + 2);
-	    if (in_ftype == '0' || in_ftype == 'S')
+	    if (in_ftype == '0' || in_ftype == 'S' || in_ftype == '1')
 		strcata(&sha1filepath, ".lzo");
 	    else if (in_ftype == 'E')
 		strcata(&sha1filepath, ".enc");
@@ -547,7 +555,7 @@ int restore(int argc, char **argv)
 	    sha1file = fopen(sha1filepath, "r");
 	    if (sha1file == NULL) {
 		perror("restore: open backing file:");
-		fprintf(stderr, "Can not restore %s -- missing backing file %s\n", fs.filename, sha1filepath);
+		fprintf(stderr, "ftype: %c Can not restore %s -- missing backing file %s\n", in_ftype, fs.filename, sha1filepath);
 		continue;
 	    }
 	    if (in_ftype == 'E') {
@@ -603,33 +611,28 @@ int restore(int argc, char **argv)
 	    blockpad = 512 - ((bytestoread - 1) % 512 + 1);
 	    if (in_ftype == 'S') {
 		char *s_buf = NULL;
-		char n;
+		int n;
 		char **sparselist = NULL;
 		c_getline(&s_buf, backing_fread, backing_f_handle);
 		n = parse(s_buf, &sparselist, ':');
-		fprintf(stderr, "n is %d\n", n);
 		if (n <= 1 || n % 2 != 1) {
-		    fprintf(stderr, "Sparse data corrupted header\n");
+		    fprintf(stderr, "Sparse data corrupted header %s %d %s\n", sha1filepath, n, fs.filename);
 		    continue;
 		}
 		fs.n_sparsedata = (n - 1) / 2;
 		fs.sparse_realsize = fs.filesize;
 		fs.filesize = strtoull(sparselist[0], 0, 10);
-		fs.sparsedata = dmalloc(fs.n_sparsedata * sizeof(struct sparsedata));
+		if (dmalloc_size(fs.sparsedata) < fs.n_sparsedata * sizeof(struct sparsedata))
+		    fs.sparsedata = dmalloc(fs.n_sparsedata * sizeof(struct sparsedata));
 		for (int i = 0; i < (n - 1) / 2; i ++) {
 		    ((fs.sparsedata)[i]).offset = strtoull(sparselist[i * 2 + 1], 0, 10);
 		    ((fs.sparsedata)[i]).size = strtoull(sparselist[i * 2 + 2], 0, 10);
 		}
+		dfree(sparselist);
+		dfree(s_buf);
 
 	    }
-	    // Process graft filenames
-	    for (i = 0; i < numgrafts; i++) {
-		if (strncmp(fs.filename, graft[i][0], strlen(graft[i][0])) == 0) {
-		    snprintf(graftfilename, 8192, "%s%s", graft[i][1], fs.filename + strlen(graft[i][0]));
-		    fs.filename = graftfilename;
-		    break;
-		}
-	    }
+
 	    if (use_pax_header == 1)
 		fs.pax = 1;
 	    tar_write_next_hdr(&fs);
@@ -647,6 +650,9 @@ int restore(int argc, char **argv)
 	        lzop_finalize_r((struct lzop_file *) backing_f_handle);
 	    fclose(sha1file);
 	}
+	else {
+	    tar_write_next_hdr(&fs);
+	}
 
 	fsclear(&fs);
     }
@@ -656,7 +662,11 @@ int restore(int argc, char **argv)
     dfree(sha1filepath);
     memset(buf, 0, 512);
     fwrite(buf, 1, 512, stdout);
+    if (c_hdrbuf != NULL)
+	free(c_hdrbuf);
 
+    if (graft != NULL)
+	free(graft);
     free(files_from_fname);
     free(files_from_fnameu);
     return(0);

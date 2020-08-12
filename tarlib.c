@@ -53,7 +53,7 @@ int tar_get_next_hdr(struct filespec *fs)
     int paxsparsesizelen = 0;
     char *paxtarcryptsize = 0;
     int paxtarcryptsizelen = 0;
-    static char *paxsparsesegt = 0;
+    char *paxsparsesegt = 0;
     size_t paxsparsesegtn = 0;
     int paxsparsenseg = 0;
     int paxsparsehdrsz = 0;
@@ -254,6 +254,8 @@ int tar_get_next_hdr(struct filespec *fs)
 		    fs->sparsedata[fs->n_sparsedata].size = strtoull(paxsparsesegt, 0, 10);
 		    fs->n_sparsedata++;
 		}
+		free(paxsparsesegt);
+		paxsparsesegtn = 0;
 		if ((paxsparsehdrsz % 512) > 0) {
 		    paxsparsehdrsz += fread(junk, 1, 512 - paxsparsehdrsz % 512, stdin);
 		}
