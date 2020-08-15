@@ -28,7 +28,6 @@ int HMAC_CTX_reset(HMAC_CTX *ctx);
 static void *OPENSSL_zalloc(size_t num);
 #endif
 
-
 int tar_get_next_hdr(struct filespec *fs)
 {
     struct tarhead tarhead;
@@ -430,9 +429,9 @@ int tar_write_next_hdr(struct filespec *fs) {
 	    tmpchksum += 0xFF & *p;
 	sprintf(tarhead.chksum, "%6.6o", tmpchksum);
 	fwrite(&tarhead, 1, 512, stdout);  // write out pax header
+
 	for (i = 0; i < fs->xheaderlen; i += 512) {
-	    for (int j = 0; j < 512; j++)
-		curblock[j] = 0;
+	    memset(curblock, 0, 512);
 	    memcpy(curblock, fs->xheader + i, fs->xheaderlen - i >= 512 ? 512 :
 		(fs->xheaderlen - i));
 	    fwrite(curblock, 1, 512, stdout);  // write out pax data
@@ -990,24 +989,25 @@ size_t lzop_write(void *buf, size_t sz, size_t count, struct lzop_file *cfile)
     size_t t = 0;
     size_t x;
 
-    do {
+    while (n > 0) {
 	bufroom = cfile->bufsize - (cfile->bufp - cfile->buf);
 	if (n <= bufroom) {
-	    memcpy(cfile->bufp, buf, n);
+	    memcpy(cfile->bufp, buf + t, n);
 	    cfile->bufp += n;
 	    t += n;
 	    n = 0;
 	}
 	else {
-	    memcpy(cfile->bufp, buf, bufroom);
+	    memcpy(cfile->bufp, buf + t, bufroom);
+	    n -= bufroom;
 	    cfile->bufp += bufroom;
 	    t += bufroom; 
-	    buf += (cfile->buf + cfile->bufsize - cfile->bufp);
+//	    buf += (cfile->buf + cfile->bufsize - cfile->bufp);
 	    // compress cfile->buf, write out
 
 	    // write uncompressed block size
 	    if (cfile->c_fwrite(htonlp(cfile->bufsize), 1, 4, cfile->c_handle) < 4) {
-		return(0);
+		exit(1);
 	    }
 	    chksum = lzo_adler32(1, (unsigned char *) cfile->buf, cfile->bufsize);
 	    lzo1x_1_compress((unsigned char *) cfile->buf, cfile->bufsize, (unsigned char *) cfile->cbuf, &(cfile->cbufsize), cfile->working_memory);
@@ -1016,34 +1016,34 @@ size_t lzop_write(void *buf, size_t sz, size_t count, struct lzop_file *cfile)
 	    if (cfile->cbufsize < cfile->bufsize) {
 		// write compressed block size
 		if (cfile->c_fwrite(htonlp(cfile->cbufsize), 1, 4, cfile->c_handle) < 4) {
-		    return(0);
+		    exit(1);
 		}
 	    }
 	    else
 		// write uncompressed block size again
 		if (cfile->c_fwrite(htonlp(cfile->bufsize), 1, 4, cfile->c_handle) < 4) {
-		    return(0);
+		    exit(1);
 		}
 	    // write checksum
 	    if (cfile->c_fwrite(htonlp(chksum), 1, 4, cfile->c_handle) < 4) {
-		return(0);
+		exit(1);
 	    }
 	    // if compression was beneficial
 	    if (cfile->cbufsize < cfile->bufsize) {
 		//write compressed data
 		if ((x = cfile->c_fwrite(cfile->cbuf, 1, cfile->cbufsize, cfile->c_handle)) < cfile->cbufsize) {
-		    return(0);
+		    exit(1);
 		}
 	    }
 	    else {
 		//write uncompressed data
-		if (cfile->c_fwrite(cfile->buf, 1, cfile->bufsize, cfile->c_handle) < cfile->bufsize) {
-		    return(0);
+		if ((x = cfile->c_fwrite(cfile->buf, 1, cfile->bufsize, cfile->c_handle)) < cfile->bufsize) {
+		    exit(1);
 		}
 	    }
 	    cfile->bufp = cfile->buf;
 	}
-    } while (n > 0);
+    }
     return(t);
 }
 struct lzop_file *lzop_init_r(size_t (*c_fread)(), void *c_handle)
@@ -1554,7 +1554,6 @@ int genkey(int argc, char **argv)
     char hostname[64];
     char passphrase[1024];
     unsigned char passphrase_hash[SHA256_DIGEST_LENGTH];
-
     pw = getpwuid(getuid());
     gethostname(hostname, 63);
     hostname[63] = '\0';
@@ -1580,7 +1579,6 @@ int genkey(int argc, char **argv)
     }
     rsakeyfile = BIO_new_file(filename, "w+");
 
-//    OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
     BN_set_word(bne, RSA_F4);
     if (RSA_generate_key_ex(rsa_keypair, 2048, bne, NULL) != 1) {
@@ -1609,7 +1607,7 @@ int genkey(int argc, char **argv)
     BIO_get_mem_data(membuf, &pubkey_b64);
 
     SHA256((unsigned char *) passphrase, strlen(passphrase), passphrase_hash);
-    HMAC(EVP_sha256(), passphrase_hash, strlen((char *) passphrase_hash),
+    HMAC(EVP_sha256(), passphrase_hash, SHA256_DIGEST_LENGTH,
 	(unsigned char *) pubkey_b64, strlen(pubkey_b64), hmac_key, &hmac_key_len);
     SHA256((unsigned char *) hmac_key, 32, hmac_hash);
 
@@ -1643,7 +1641,6 @@ struct rsa_file *rsa_file_init(char mode, EVP_PKEY **evp_keypair, int nk, size_t
     int nk_n;
 
 
-    OpenSSL_add_all_algorithms();
     rcf = malloc(sizeof(struct rsa_file));
     rcf->bufsize = 4096;
     rcf->buf = malloc(rcf->bufsize + EVP_MAX_IV_LENGTH);
@@ -1817,7 +1814,6 @@ EVP_PKEY *rsa_getkey(char mode, struct key_st *k, int n)
     EVP_PKEY *evp_keypair = NULL;
     BIO *rsa_keydata = NULL;
 
-    OpenSSL_add_all_algorithms();
     if (evp_keypair == NULL) {
 	evp_keypair = EVP_PKEY_new();
 	if (mode == 'd') {
@@ -1888,7 +1884,6 @@ unsigned char *sha256_digest(char *msg)
     unsigned char *d;
     unsigned int sz;
 
-    OpenSSL_add_all_digests();
     EVP_DigestInit(ctx, EVP_sha256());
     EVP_DigestUpdate(ctx, msg, strlen(msg));
     EVP_DigestFinal(ctx, b, &sz);
@@ -1904,7 +1899,6 @@ unsigned char *sha256_hex(char *msg)
     unsigned char *d;
     unsigned int sz;
 
-    OpenSSL_add_all_digests();
     EVP_DigestInit(ctx, EVP_sha256());
     EVP_DigestUpdate(ctx, msg, strlen(msg));
     EVP_DigestFinal(ctx, b, &sz);
@@ -1921,7 +1915,6 @@ unsigned char *sha256_b64(char *msg)
     unsigned char *d;
     unsigned int sz;
 
-    OpenSSL_add_all_digests();
     EVP_DigestInit(ctx, EVP_sha256());
     EVP_DigestUpdate(ctx, msg, strlen(msg));
     EVP_DigestFinal(ctx, b, &sz);
@@ -1989,7 +1982,7 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
 			}
 			else {
 			    SHA256((unsigned char *) passphrase, strlen(passphrase), passphrase_hash);
-			    HMAC(EVP_sha256(), passphrase_hash, strlen((char *) passphrase_hash),
+			    HMAC(EVP_sha256(), passphrase_hash, SHA256_DIGEST_LENGTH,
 				(unsigned char *) rsa_keys->keys[i].pubkey,
 				strlen(rsa_keys->keys[i].pubkey), rsa_keys->keys[i].hmac_key, &hmac_key_len);
 			    SHA256((unsigned char *) rsa_keys->keys[i].hmac_key, 32, tmp_hmac_hash);
@@ -2014,6 +2007,10 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
 		// None found, loop and try again
 		UI_free(prompt);
 		strcata(&msg3, "\nThat didn't work.\nTry again: ");
+    ERR_load_crypto_strings();
+
+	    openssl_err();
+
 		prompt = UI_new();
 		UI_add_input_string(prompt, msg3, 0, passphrase, 1, 4095);
 		UI_result = UI_process(prompt);
@@ -2052,7 +2049,6 @@ int load_pkey(struct rsa_keys **rsa_keys, int keynum, char *pubkey_fingerprint, 
     (*rsa_keys)->keys[keynum].eprvkey = NULL;
     (*rsa_keys)->keys[keynum].evp_keypair = EVP_PKEY_new();
 
-    OpenSSL_add_all_algorithms();
     strncpya0(&((*rsa_keys)->keys[keynum].fingerprint), pubkey_fingerprint, strlen(pubkey_fingerprint));
     if (keycomment != NULL)
 	strncpya0(&((*rsa_keys)->keys[keynum].comment), keycomment, strlen(keycomment));
@@ -2183,8 +2179,9 @@ int c_fread_sparsedata(size_t (*c_ffunc)(), void *c_handle, struct filespec *fs)
     char *tmpbufp = tmpbuf;
     char *sparsetext = NULL;
     int sparsetext_len = 0;
-    char *tokenp;
     int sparsetext_leni = 0;
+    char **sparsetext_tokens = NULL;
+    int n_sparsetext_tokens = 0;
 
     for (i = 0; i < 15; i++) {
 	if (c_ffunc(tmpbufp, 1, 1, c_handle) == 1) {
@@ -2199,33 +2196,30 @@ int c_fread_sparsedata(size_t (*c_ffunc)(), void *c_handle, struct filespec *fs)
 	}
     }
     sparsetext_len = atoi(tmpbuf);
-    sparsetext_leni = strlen(tmpbuf) + 1;
     sparsetext = malloc(sparsetext_len);
+    memset(sparsetext, 0, sparsetext_len);
     c_ffunc(sparsetext, 1, sparsetext_len, c_handle);
     if (sparsetext[sparsetext_len - 1] == '\n')
 	sparsetext[sparsetext_len - 1] = '\0';
-    tokenp = strtok(sparsetext, ":");
-    if (tokenp == NULL) {
+    n_sparsetext_tokens = parse(sparsetext, &sparsetext_tokens, ':');
+    if (n_sparsetext_tokens == 0) {
 	fprintf(stderr, "Sparse file header corrupted\n");
 	if (sparsetext != NULL)
 	    free(sparsetext);
-	return(sparsetext_len + sparsetext_leni);
+	exit(1);
     }
-    fs->n_sparsedata = atoi(tokenp);
+    fs->n_sparsedata = (n_sparsetext_tokens - 1) / 2;
     fs->sparsedata = drealloc(fs->sparsedata, fs->n_sparsedata * sizeof(struct sparsedata));
-    i = 0;
-    while ((tokenp = strtok(NULL, ":")) != NULL) {
-	if ((int) (i / 2) >= fs->n_sparsedata)
-	    break;
-	if (i % 2 == 0)
-	    fs->sparsedata[(int) (i / 2)].offset = atoi(tokenp);
-	else
-	    fs->sparsedata[(int) (i / 2)].size= atoi(tokenp);
-	i++;
+    for (i = 1; i < n_sparsetext_tokens; i += 2) {
+	fs->sparsedata[(int) ((i - 1) / 2)].offset = strtoull(sparsetext_tokens[i], 0, 10);
+	fs->sparsedata[(int) ((i - 1) / 2)].size = strtoull(sparsetext_tokens[i + 1], 0, 10);
     }
+    sparsetext_leni = strtoull(sparsetext_tokens[0], 0, 10);
     if (sparsetext != NULL)
 	free(sparsetext);
-    return(sparsetext_len + sparsetext_leni);
+    if (sparsetext_tokens != NULL)
+	dfree(sparsetext_tokens);
+    return(sparsetext_leni);
 }
 
 struct sha1_file *sha1_file_init_w(size_t (*c_ffunc)(), void *c_handle)
@@ -2275,10 +2269,10 @@ struct hmac_file *hmac_file_init_w(size_t (*c_ffunc)(), void *c_handle, unsigned
 
 size_t hmac_file_write(void *buf, size_t sz, size_t count, struct hmac_file *hmacf)
 {
-    size_t c;
+    int c;
     c = hmacf->c_fwrite(buf, sz, count, hmacf->c_handle);
     for (int i = 0; i < hmacf->nk; i++) {
-	HMAC_Update(hmacf->hctx[i], (unsigned char *) (unsigned char *) buf, c);
+	HMAC_Update(hmacf->hctx[i], (unsigned char *) buf, c);
     }
     return(c);
 }
@@ -2426,7 +2420,7 @@ void EVP_MD_CTX_free(EVP_MD_CTX *ctx)
 
 HMAC_CTX *HMAC_CTX_new(void)
 {
-    HMAC_CTX *ctx = OPENSSL_malloc(sizeof(*ctx));
+    HMAC_CTX *ctx = OPENSSL_zalloc(sizeof(*ctx));
     if (ctx != NULL) {
 	if (!HMAC_CTX_reset(ctx)) {
 	    HMAC_CTX_free(ctx);

@@ -123,10 +123,6 @@ int submitfiles(int argc, char **argv)
     pipebuf(&in, &out);
     submitfiles2(in);
     opendb(bkcatalog);
-    if (sqlerr != 0) {
-        fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-        sqlite3_free(sqlerr);
-    }
 
     sqlite3_prepare_v2(bkcatalog,
         (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
@@ -276,6 +272,7 @@ int submitfiles(int argc, char **argv)
 //		delpaxvar(&xattru, &xattrn, "TC.filters");
 	    }
 	    delpaxvar(&xattru, &xattrn, "atime");
+	    delpaxvar(&xattru, &xattrn, "TC.segmented.header");
             sqlite3_bind_int(inbfrec, 1, bkid);
             sqlite3_bind_text(inbfrec, 2, mdfields[1], -1, SQLITE_STATIC);
             sqlite3_bind_text(inbfrec, 3, mdfields[2], -1, SQLITE_STATIC);

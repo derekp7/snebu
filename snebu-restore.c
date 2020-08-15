@@ -485,7 +485,7 @@ int restore(int argc, char **argv)
 	"join temp_keymap on keynum = db_keynum "
 	"group by cd.file_id "
 	"order by 1) c "
-	"on a.file_id = c.file_id "
+	"on a.file_id = c.file_id order by 1"
 	)), -1, &sqlres, 0);
     sqlite3_free(sqlstmt);
     sqlite3_prepare_v2(bkcatalog,
@@ -539,7 +539,7 @@ int restore(int argc, char **argv)
 	    }
 	}
 
-	if (fs.filesize > 0) {
+	if (fs.filesize > 0 || in_ftype == 'E') {
 	    if (sha1filepath != NULL)
 		sha1filepath[0] = '\0';
 	    strcata(&sha1filepath, config.vault);
@@ -585,6 +585,7 @@ int restore(int argc, char **argv)
 		c_hdrbuf[0] = '\0';
 //		setpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.filters", "compression|cipher", 18);
 		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.keygroup");
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.segmented.header");
 		if (numkeys > 1)
 		    setpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.keygroup", (char *) sqlite3_column_text(sqlres, 15), sqlite3_column_bytes(sqlres, 15));
 		while (sqlres2_result == SQLITE_ROW && sqlite3_column_int(sqlres2, 0) < sqlite3_column_int(sqlres, 0))

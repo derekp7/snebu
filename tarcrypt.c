@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -24,6 +23,10 @@ char *itoa(char *s, int n);
 
 int main(int argc, char **argv)
 {
+# if OPENSSL_API_COMPAT < 0x10100000L
+    OpenSSL_add_all_algorithms();
+# endif
+
     if (argc > 1) {
 	if (strcmp(argv[1], "encrypt") == 0)
 	    tarencrypt(argc - 1, argv + 1);
@@ -36,6 +39,9 @@ int main(int argc, char **argv)
 	else
 	    return(1);
     }
+# if OPENSSL_API_COMPAT < 0x10100000L
+    EVP_cleanup();
+# endif
     return(0);
 }
 int tarencrypt(int argc, char **argv)
@@ -52,7 +58,7 @@ int tarencrypt(int argc, char **argv)
     struct filespec fs;
     struct filespec fs2;
     struct filespec gh;
-    size_t bufsize = 256 * 1024;
+    size_t bufsize = 4096;
     unsigned char databuf[bufsize];
     struct tarsplit_file *tsf;
     size_t sizeremaining;
@@ -69,8 +75,10 @@ int tarencrypt(int argc, char **argv)
     unsigned char *pubkey_fp;
     unsigned char **hmac; //[EVP_MAX_MD_SIZE];
     unsigned int *hmac_len = NULL;
+    size_t (*next_c_fwrite)();
+    void *next_c_write_handle;
     char *sparsetext = NULL;
-    int sparsetext_sz = 0;
+    unsigned long long int sparsetext_sz = 0;
     char tmpbuf[512];
     int keynum;
     char *numkeys_string = NULL;
@@ -185,21 +193,31 @@ int tarencrypt(int argc, char **argv)
 		fs2.n_sparsedata = 0;
 	    }
 	    tsf = tarsplit_init_w(fwrite, stdout, fs.filename, 1024 * 1024, &fs2, numkeys);
-	    rcf = rsa_file_init('w', evp_keypair, numkeys, tarsplit_write, tsf);
-	    lzf = lzop_init_w(rsa_write, rcf); 
-	    hmacf = hmac_file_init_w(lzop_write, lzf, hmac_keys, hmac_keysz, numkeys);
+	    next_c_write_handle = tsf;
+	    next_c_fwrite = tarsplit_write;
+	    rcf = rsa_file_init('w', evp_keypair, numkeys, next_c_fwrite, next_c_write_handle);
+	    next_c_write_handle = rcf;
+	    next_c_fwrite = rsa_write;
+	    lzf = lzop_init_w(next_c_fwrite, next_c_write_handle); 
+	    next_c_write_handle = lzf;
+	    next_c_fwrite = lzop_write;
+
+	    hmacf = hmac_file_init_w(next_c_fwrite, next_c_write_handle, hmac_keys, hmac_keysz, numkeys);
+	    next_c_write_handle = hmacf;
+	    next_c_fwrite = hmac_file_write;
 
 	    if (fs.n_sparsedata > 0) {
-		sprintf(tmpbuf, "%llu:", (unsigned long long int) sparsetext_sz);
-		hmac_file_write(tmpbuf, 1, strlen(tmpbuf), hmacf);
-		hmac_file_write(sparsetext, 1, sparsetext_sz, hmacf);
+		sprintf(tmpbuf, "%llu:", sparsetext_sz);
+		next_c_fwrite(tmpbuf, 1, strlen(tmpbuf), hmacf);
+		next_c_fwrite(sparsetext, 1, strlen(sparsetext), hmacf);
 	    }
 	    sizeremaining = fs.filesize;
-	    padding = 512 - ((fs.filesize + sparsetext_sz - 1) % 512 + 1);
+//	    padding = 512 - ((fs.filesize + (fs.n_sparsedata > 0 ? sparsetext_sz + ilog10(sparsetext_sz) + 2 : 0) - 1) % 512 + 1);
+	    padding = 512 - ((fs.filesize  - 1) % 512 + 1);
 
 	    while (sizeremaining > 0) {
 		c = fread(databuf, 1, sizeremaining > bufsize ? bufsize : sizeremaining, stdin);
-		hmac_file_write(databuf, 1, c, hmacf);
+		c = next_c_fwrite(databuf, 1, c, next_c_write_handle);
 		sizeremaining -= c;
 	    }
 	    if (padding > 0) {
@@ -207,15 +225,7 @@ int tarencrypt(int argc, char **argv)
 		sizeremaining -= c;
 	    }
 	    hmac_finalize_w(hmacf, hmac, hmac_len);
-/*
-	    tsf->hmac = malloc(sizeof(char *) * numkeys);
-	    for (int i = 0; i < numkeys; i++) {
-		tsf->hmac[i] = malloc(sizeof(char) * EVP_MAX_MD_SIZE * 2 + 1);
-		memset(tsf->hmac[i], 0, EVP_MAX_MD_SIZE * 2 + 1);
-		encode_block_16(tsf->hmac[i], hmac[i], hmac_len[i]);
-	    }
-	    tsf->nk = numkeys;
-*/
+
 	    for (int i = 0; i < numkeys; i++) {
 		encode_block_16(tsf->hmac[i], hmac[i], hmac_len[i]);
 	    }
@@ -243,7 +253,6 @@ int tarencrypt(int argc, char **argv)
     dfree(numkeys_string);
     fsfree(&fs);
     fsfree(&fs2);
-//    EVP_PKEY_free(evp_keypair);
     for (int i = 0; i < numkeys; i++) {
 	free(keys[i].keydata);
 	free(hmac[i]);
@@ -255,6 +264,8 @@ int tarencrypt(int argc, char **argv)
     free(keys);
     free(hmac_keys);
     free(hmac_keysz);
+    if (sparsetext != NULL)
+        dfree(sparsetext);
     return(0);
 }
 
@@ -266,23 +277,23 @@ int tardecrypt()
 {
     struct filespec fs;
     struct filespec fs2;
-    size_t bufsize = 256 * 1024;
+    size_t bufsize = 4096;
     char databuf[bufsize];
-    struct tarsplit_file *tsf;
+    struct tarsplit_file *tsf = NULL;
     size_t sizeremaining;
     size_t padding;
     char padblock[512];
     size_t c;
-    struct tar_maxread_st *tmr;
-    struct lzop_file *lzf;
-    struct rsa_file *rcf;
+    struct tar_maxread_st *tmr = NULL;
+    struct lzop_file *lzf = NULL;
+    struct rsa_file *rcf = NULL;
     struct hmac_file *hmacf;
     char *paxdata;
     int paxdatalen;
     EVP_PKEY *evp_keypair = NULL;
     struct rsa_keys *rsa_keys = NULL;
     char *cur_fp = NULL;
-    int keynum;
+    int keynum = 0;
     size_t (*next_c_fread)();
     void *next_c_read_handle;
     int tf_encoding = 0;
@@ -481,7 +492,6 @@ int tardecrypt()
 		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.pubkey.fingerprint");
 		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.cipher");
 		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.hmac");
-//		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.filters");
 		rcf = rsa_file_init('r', &evp_keypair, 0, next_c_fread, next_c_read_handle);
 		next_c_fread = rsa_read;
 		next_c_read_handle = rcf;
@@ -499,27 +509,38 @@ int tardecrypt()
 	    next_c_fread = hmac_file_read;
 	    next_c_read_handle = hmacf;
 
-
 	    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.sparse", &paxdata, &paxdatalen) == 0) {
-		fs2.filesize -= c_fread_sparsedata(next_c_fread, next_c_read_handle, &fs2);
+		sizeremaining = c_fread_sparsedata(next_c_fread, next_c_read_handle, &fs2);
 		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.sparse");
 		getpaxvar(fs.xheader, fs.xheaderlen, "TC.sparse.original.size", &paxdata, &paxdatalen);
 		fs2.sparse_realsize = strtoull(paxdata, 0, 10);
 		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.sparse.original.size");
 
+		unsigned long int sparsehdrsz;
+		sparsehdrsz = ilog10(fs2.n_sparsedata) + 2;
+		for (int i = 0; i < fs2.n_sparsedata; i++) {
+		    sparsehdrsz += ilog10(fs2.sparsedata[i].offset) + 2;
+		    sparsehdrsz += ilog10(fs2.sparsedata[i].size) + 2;
+		}
+		sparsehdrsz += (512 - ((sparsehdrsz - 1) % 512 + 1));
+		fs2.filesize += sparsehdrsz;
+
 	    }
+	    else
+		sizeremaining = fs2.filesize;
 
 	    tar_write_next_hdr(&fs2);
-	    padding = 512 - ((fs2.filesize - 1) % 512 + 1);
-	    sizeremaining = fs2.filesize;
 
+	    padding = 512 - ((sizeremaining - 1) % 512 + 1);
 
 	    while (sizeremaining > 0) {
-		c = next_c_fread(databuf, 1, bufsize, next_c_read_handle);
+		c = next_c_fread(databuf, 1, sizeremaining < bufsize ? sizeremaining : bufsize, next_c_read_handle);
 		fwrite(databuf, 1, c, stdout);
 		sizeremaining -= c;
-		if (sizeremaining > 0 && c == 0)
+		if (sizeremaining > 0 && c == 0) {
+		    fprintf(stderr, "Problem reading\n");
 		    exit(1);
+		}
 	    }
 	    if (padding > 0) {
 		c = fwrite(padblock, 1, padding, stdout);
@@ -527,11 +548,7 @@ int tardecrypt()
 	    hmac_finalize_r(hmacf, &hmacp, &hmac_len);
 	    encode_block_16(hmac_b64, hmac, hmac_len);
 	    if (strcmp((tf_encoding & tf_encoding_ts) != 0 ? (char *) tsf->hmac[keynum] : (char *) in_hmac_b64, (char *) hmac_b64) != 0)
-		fprintf(stderr, "Warning: HMAC failed verification\n%s\n%s\n", (tf_encoding & tf_encoding_ts) != 0 ? (char *) tsf->hmac[keynum] : (char *) in_hmac_b64, (char *) hmac_b64);
-//	    fprintf(stderr, " in hmac = %s\n", in_hmac_b64);
-//	    fprintf(stderr, "out hmac = %s\n", hmac_b64);
-//	    fprintf(stderr, "tsf hmac = %d\n", tsf->hmac);
-//	    fprintf(stderr, "tsf hmac = %s\n", tsf->hmac[keynum]);
+		fprintf(stderr, "Warning: HMAC failed verification\n%s\n%s\n%s\n", fs2.filename, (tf_encoding & tf_encoding_ts) != 0 ? (char *) tsf->hmac[keynum] : (char *) in_hmac_b64, (char *) hmac_b64);
 	    if ((tf_encoding & tf_encoding_compression) != 0)
 		lzop_finalize_r(lzf);
 	    if ((tf_encoding & tf_encoding_cipher) != 0)

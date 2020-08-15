@@ -7,16 +7,16 @@ BINDIR=$(PREFIX)/bin
 ETCDIR=/etc
 all: $(PROGS)
 %.o: %.c
-	gcc -c $< -o $@ -Wall
+	gcc -D_GNU_SOURCE -std=c99 -c $< -o $@ -Wall
 tarlib.o: tarlib.h
 tarcrypt.o: tarlib.h
 snebu-submitfiles.o: tarlib.h
 snebu-restore.o: tarlib.h
 
 snebu: snebu-main.o snebu-newbackup.o tarlib.o snebu-submitfiles.o snebu-restore.o snebu-listbackups.o snebu-expire-purge.o snebu-permissions.o
-	$(CC) $^ -o $@ -l sqlite3 -l crypto -l lzo2 -Wall
+	$(CC) -D_GNU_SOURCE -std=c99 $^ -o $@ -l sqlite3 -l crypto -l lzo2 -Wall
 tarcrypt: tarcrypt.o tarlib.o
-	$(CC) $^ -o $@ -l crypto -l ssl -l lzo2 -Wall
+	$(CC) -D_GNU_SOURCE -std=c99 $^ -o $@ -l crypto -l ssl -l lzo2 -Wall
 install: $(PROGS) $(SCRIPTS) $(CONFIGS)
 	mkdir -p $(DESTDIR)$(BINDIR)
 	mkdir -p $(DESTDIR)$(ETCDIR)
@@ -25,5 +25,5 @@ install: $(PROGS) $(SCRIPTS) $(CONFIGS)
 	cp -f $(CONFIGS) $(DESTDIR)$(ETCDIR)/
 
 clean:
-	rm -f $(PROGS) snebu-main.o snebu-newbackup.o tarlib.o snebu-submitfiles.o snebu-restore.o snebu-listbackups.o snebu-expire-purge.o snebu-permissions.o
+	rm -f $(PROGS) snebu-main.o snebu-newbackup.o tarlib.o snebu-submitfiles.o snebu-restore.o snebu-listbackups.o snebu-expire-purge.o snebu-permissions.o tarcrypt.o
 
