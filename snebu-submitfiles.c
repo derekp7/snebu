@@ -166,7 +166,6 @@ int submitfiles(int argc, char **argv)
     }
     sqlite3_exec(bkcatalog,
         "create temporary table if not exists temp_key_map ( "
-//        "create table if not exists temp_key_map ( "
 	"keyposition	integer, "
 	"id		integer, "
 	"constraint temp_key_map_c1 unique ( "
@@ -178,13 +177,11 @@ int submitfiles(int argc, char **argv)
 
     int inlen = 0;
     while ((inlen = getline(&inbuf, &len, metadata)) > 0) {
-//	fprintf(stderr, "Processing:\n  len = %lu\n len2 = %lu\n instr=>%s<=\n", len, strlen(inbuf), inbuf);
 	for (int i = inlen - 1; i > 0; i--)
 	    if (inbuf[i] == '\n') {
 		inbuf[i] = '\0';
 		break;
 	    }
-//	fprintf(stderr, "%s\n", inbuf);
 	parse(inbuf, &mdfields, '\t');
 	// Record encryption key data from global header
 	if (strcmp(mdfields[0], "0") == 0) {
@@ -197,12 +194,6 @@ int submitfiles(int argc, char **argv)
 		"insert or ignore into cipher_master (pkfp, eprivkey, pubkey, hmackeyhash, comment) "
 		"values ('%q', '%q', '%q', '%q', '%q')", mdfields[2], eprvkeyu, pubkeyu,
 		mdfields[5], commentu)), 0, 0, &sqlerr);
-/*
-	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into cipher_master (pkfp, eprivkey, pubkey, hmackeyhash, comment) "
-		"values ('%q', '%q', '%q', '%q', '%q')", mdfields[2], strunesc(mdfields[3], &eprvkeyu), strunesc(mdfields[4], &pubkeyu),
-		mdfields[5], strunesc(mdfields[6], &commentu))), 0, 0, &sqlerr);
-*/
 	    if (sqlerr != 0) {
 		fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
 		sqlite3_free(sqlerr);
@@ -235,9 +226,6 @@ int submitfiles(int argc, char **argv)
 		else
 		    cryptinfo = realloc(cryptinfo, sizeof(struct cryptinfo_s) * numkeys);
 		for (int i = cryptinfo_n; i < numkeys; i++) {
-//		    cryptinfo[i].compression = NULL;
-//		    cryptinfo[i].cipher= NULL;
-//		    cryptinfo[i].filters= NULL;
 		    cryptinfo[i].hmac = NULL;
 		}
 		cryptinfo_n = numkeys;
@@ -250,10 +238,7 @@ int submitfiles(int argc, char **argv)
 		if (dmalloc_size(xattru) < ((int) (strlen(mdfields[13]) * 3 / 4)))
 		    xattru = drealloc(xattru, (int) (strlen(mdfields[13]) * 3 / 4));
 	    DecodeBlock2(xattru, mdfields[13], strlen(mdfields[13]), &xattrn);
-//	    xattrn = atoi(mdfields[13]);
 	    cipher_record = 0;
-//	    fwrite(xattru, 1, xattrn, stderr);
-//	    fprintf(stderr, "\n\n");
 	    if (getpaxvar(xattru, xattrn, "TC.cipher", &paxdata, &paxdatalen) == 0) {
 		cipher_record = 1;
 		cpypaxvarstr(xattru, xattrn, "TC.keygroup", &keygroups);
@@ -262,9 +247,6 @@ int submitfiles(int argc, char **argv)
 		    int n = atoi(keygroupsp[i]);
 		    if (n < numkeys) {
 			cryptinfo[n].keynum = n;
-//			cpypaxvarstr(xattru, xattrn, "TC.compression", &(cryptinfo[n].compression));
-//			cpypaxvarstr(xattru, xattrn, "TC.cipher", &(cryptinfo[n].cipher));
-//			cpypaxvarstr(xattru, xattrn, "TC.filters", &(cryptinfo[n].filters));
 			if (numkeys > 1)
 			    sprintf(xattr_varstring, "TC.hmac.%d", n);
 			else
@@ -273,9 +255,6 @@ int submitfiles(int argc, char **argv)
 			delpaxvar(&xattru, &xattrn, xattr_varstring);
 		    }
 		}
-//		delpaxvar(&xattru, &xattrn, "TC.compression");
-//		delpaxvar(&xattru, &xattrn, "TC.cipher");
-//		delpaxvar(&xattru, &xattrn, "TC.filters");
 	    }
 	    delpaxvar(&xattru, &xattrn, "atime");
 	    delpaxvar(&xattru, &xattrn, "TC.segmented.header");
@@ -291,10 +270,8 @@ int submitfiles(int argc, char **argv)
             sqlite3_bind_int(inbfrec, 10, atoi(mdfields[9]));
             strunesc(mdfields[10], &filenameu);
             sqlite3_bind_text(inbfrec, 11, filenameu, -1, SQLITE_STATIC);
-//            sqlite3_bind_text(inbfrec, 11, strunesc(mdfields[10], &filenameu), -1, SQLITE_STATIC);
             strunesc(mdfields[11], &linknameu);
             sqlite3_bind_text(inbfrec, 12, linknameu, -1, SQLITE_STATIC);
-//            sqlite3_bind_text(inbfrec, 12, strunesc(mdfields[11], &linknameu), -1, SQLITE_STATIC);
             sqlite3_bind_blob(inbfrec, 13, xattru, xattrn, SQLITE_STATIC);
             if (! sqlite3_step(inbfrec)) {
                 fprintf(stderr, "Error inserting metadata record into temporary table\n"); ;
@@ -336,9 +313,6 @@ int submitfiles(int argc, char **argv)
     dfree(pubkeyu);
     dfree(commentu);
     for (int i = 0; i < numkeys; i++) {
-//	dfree(cryptinfo[i].compression);
-//	dfree(cryptinfo[i].cipher);
-//	dfree(cryptinfo[i].filters);
 	dfree(cryptinfo[i].hmac);
     }
     free(cryptinfo);
@@ -351,9 +325,6 @@ int submitfiles(int argc, char **argv)
     sqlite3_close(bkcatalog);
 
 
-//    while ((c = read(out, inbuf, 1024)) > 0) {
-//        fwrite(inbuf, 1, c, stdout);
-//    }
     return(0);
 }
 
@@ -1297,7 +1268,6 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 
     sqlite3_exec(bkcatalog,
         "create temporary table if not exists received_file_entities_t (  \n"
-//        "create table if not exists received_file_entities_t (  \n"
         "    file_id       integer primary key,  \n"
         "    backupset_id  integer,  \n"
         "    ftype         char,  \n"
@@ -1333,7 +1303,6 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 
     sqlite3_exec(bkcatalog,
 	"create temporary table if not exists file_entities_t "
-//	"create table if not exists file_entities_t "
 	"as select * from file_entities where 0", 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n", sqlerr);
