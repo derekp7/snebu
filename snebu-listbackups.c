@@ -15,6 +15,7 @@ extern sqlite3 *bkcatalog;
 
 int listbackups(int argc, char **argv);
 void usage();
+int checkperm(sqlite3 *bkcatalog, char *action, char *backupname);
 
 int listbackups(int argc, char **argv)
 {
@@ -96,6 +97,11 @@ int listbackups(int argc, char **argv)
 	}
 	strcat(filespec, ")");
     }
+    if (checkperm(bkcatalog, "listbackups", bkname)) {
+	sqlite3_close(bkcatalog);
+	return(1);
+    }
+
 
     if (foundopts == 0) {
 

@@ -25,6 +25,7 @@ size_t rbavail(struct ringbuf *r);
 void rbfree(struct ringbuf *r);
 int pipebuf(int *in,  int *out);
 void usage();
+int checkperm(sqlite3 *bkcatalog, char *action, char *backupname);
 extern sqlite3 *bkcatalog;
 extern struct {
     char *vault;
@@ -123,6 +124,11 @@ int submitfiles(int argc, char **argv)
     pipebuf(&in, &out);
     submitfiles2(in);
     opendb(bkcatalog);
+
+    if (checkperm(bkcatalog, "backup", bkname)) {
+        sqlite3_close(bkcatalog);
+        return(1);
+    }
 
     sqlite3_prepare_v2(bkcatalog,
         (sqlstmt = sqlite3_mprintf("select backupset_id from backupsets  "
