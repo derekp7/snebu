@@ -485,15 +485,12 @@ int tar_write_next_hdr(struct filespec *fs) {
 		paxsparsehdrsz += ilog10(fs->sparsedata[i].size) + 2;
 	    else
 		paxsparsehdrsz += 1;
-	    if (i < fs->n_sparsedata)
-		paxsparsehdrsz += 2;
 	}
 	paxsparsehdrsz += 1;
 	if ((paxsparsehdrsz % 512) != 0)
 	   paxsparsehdrsz += (512 - (paxsparsehdrsz % 512));
 	filesize += paxsparsehdrsz;
     }
-
     ulli2g(filesize, tarhead.size);
     memcpy(tarhead.chksum, "        ", 8);
     for (tmpchksum = 0, p = (char *) (&tarhead), i = 512;
@@ -1309,7 +1306,7 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
 		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.segmented.header", "1", 1);
 		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.original.size", paxdata, strlen(paxdata));
 		    tsf->orig_fs->ftype = '5';
-		    tsf->orig_fs->filesize = '5';
+		    tsf->orig_fs->filesize = 0;
 		    tar_write_next_hdr(tsf->orig_fs);
 
 		}

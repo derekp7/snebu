@@ -182,14 +182,12 @@ int tarencrypt(int argc, char **argv)
 	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.cipher", "rsa-aes256-ctr", 14);
 	    if (numkeys_string != NULL)
 		setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.keygroup", numkeys_string, strlen(numkeys_string));
-//	    setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.filters", "compression|cipher", 18);
 	    if (fs.n_sparsedata > 0){
 		char sparse_orig_sz[64];
 		sparsetext_sz = gen_sparse_data_string(&fs, &sparsetext);
 		sprintf(sparse_orig_sz, "%llu", fs.sparse_realsize);
 		setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.sparse", "1", 1);
 		setpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.sparse.original.size", sparse_orig_sz, strlen(sparse_orig_sz));
-		fs2.filesize += sparsetext_sz + ilog10(sparsetext_sz) + 2;
 		fs2.n_sparsedata = 0;
 	    }
 	    tsf = tarsplit_init_w(fwrite, stdout, fs.filename, 1024 * 1024, &fs2, numkeys);
@@ -212,7 +210,6 @@ int tarencrypt(int argc, char **argv)
 		next_c_fwrite(sparsetext, 1, strlen(sparsetext), hmacf);
 	    }
 	    sizeremaining = fs.filesize;
-//	    padding = 512 - ((fs.filesize + (fs.n_sparsedata > 0 ? sparsetext_sz + ilog10(sparsetext_sz) + 2 : 0) - 1) % 512 + 1);
 	    padding = 512 - ((fs.filesize  - 1) % 512 + 1);
 
 	    while (sizeremaining > 0) {
@@ -321,7 +318,6 @@ int tardecrypt()
     memset(padblock, 0, 512);
     
     while (tar_get_next_hdr(&fs)) {
-
 	if (fs.ftype == 'g') {
 	    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.numkeys", &paxdata, &paxdatalen) == 0) {
 		strncpy(numkeys_a, paxdata, paxdatalen <=15 ? paxdatalen : 15);
@@ -407,6 +403,24 @@ int tardecrypt()
 	if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.segmented.header", &paxdata, &paxdatalen) == 0 ||
 	    getpaxvar(fs.xheader, fs.xheaderlen, "TC.cipher", &paxdata, &paxdatalen) == 0 ||
 	    getpaxvar(fs.xheader, fs.xheaderlen, "TC.compression", &paxdata, &paxdatalen) == 0) {
+
+	    if (fs.filesize == 0) {
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.compression");
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.cipher");
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.original.size");
+		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.keygroup");
+		if (numkeys > 1) {
+		    for (int i = 0; i < numkeys; i++) {
+			sprintf(paxhdr_varstring, "TC.hmac.%d", i);
+			delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), paxhdr_varstring);
+		    }
+		}
+		else
+		    delpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.hmac");
+
+		tar_write_next_hdr(&fs);
+		continue;
+	    }
 
 	    fsclear(&fs2);
 	    fsdup(&fs2, &fs);
@@ -515,16 +529,6 @@ int tardecrypt()
 		getpaxvar(fs.xheader, fs.xheaderlen, "TC.sparse.original.size", &paxdata, &paxdatalen);
 		fs2.sparse_realsize = strtoull(paxdata, 0, 10);
 		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.sparse.original.size");
-
-		unsigned long int sparsehdrsz;
-		sparsehdrsz = ilog10(fs2.n_sparsedata) + 2;
-		for (int i = 0; i < fs2.n_sparsedata; i++) {
-		    sparsehdrsz += ilog10(fs2.sparsedata[i].offset) + 2;
-		    sparsehdrsz += ilog10(fs2.sparsedata[i].size) + 2;
-		}
-		sparsehdrsz += (512 - ((sparsehdrsz - 1) % 512 + 1));
-		fs2.filesize += sparsehdrsz;
-
 	    }
 	    else
 		sizeremaining = fs2.filesize;

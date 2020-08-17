@@ -375,7 +375,7 @@ int restore(int argc, char **argv)
 	"create temporary view hardlink_file_entities  "
 	"as select min(file_id) as file_id, ftype, permission, device_id,  "
 	"inode, user_name, user_id, group_name, group_id, size, sha1, datestamp,  "
-	"filename, extdata, xheader from restore_file_entities where ftype = 0 group by ftype,  "
+	"filename, extdata, xheader from restore_file_entities where ftype = '0' or ftype = 'E' group by ftype,  "
 	"permission, device_id, inode, user_name, user_id, group_name,  "
 	"group_id, size, sha1, datestamp, extdata, xheader having count(*) > 1;"), 0, 0, 0);
 
@@ -467,7 +467,7 @@ int restore(int argc, char **argv)
 	"case when b.file_id not null and a.file_id != b.file_id  "
 	"then 1 else a.ftype end,  "
 	"a.permission, a.device_id, a.inode, a.user_name, a.user_id,  "
-	"a.group_name, a.group_id, a.size, a.sha1, a.datestamp, a.filename,  "
+	"a.group_name, a.group_id, case when b.file_id not null and a.file_id != b.file_id then 0 else a.size end, a.sha1, a.datestamp, a.filename,  "
 	"case when b.file_id not null and a.file_id != b.file_id  "
 	"then b.filename else a.extdata end, a.xheader, c.keygroup "
 	"from restore_file_entities a left join hardlink_file_entities b  "
@@ -504,6 +504,8 @@ int restore(int argc, char **argv)
     char *sha1filepath = NULL;
     char *c_hdrbuf = NULL;
     size_t c_hdrbuf_alloc = 0;
+    char *paxdata = NULL;
+    int paxdatalen = 0;
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
 	char in_ftype = (sqlite3_column_text(sqlres, 1))[0];
 	FILE *sha1file;
@@ -539,7 +541,8 @@ int restore(int argc, char **argv)
 	    }
 	}
 
-	if (fs.filesize > 0 || in_ftype == 'E') {
+	if (((in_ftype == '0' || in_ftype == 'S' || in_ftype == 'E') && fs.filesize > 0) ||
+	    getpaxvar(fs.xheader, fs.xheaderlen, "TC.sparse", &paxdata, &paxdatalen) == 0) {
 	    if (sha1filepath != NULL)
 		sha1filepath[0] = '\0';
 	    strcata(&sha1filepath, config.vault);
@@ -609,11 +612,11 @@ int restore(int argc, char **argv)
 		backing_fread = lzop_read;
 		bytestoread = fs.filesize;
 	    }
-	    blockpad = 512 - ((bytestoread - 1) % 512 + 1);
 	    if (in_ftype == 'S') {
 		char *s_buf = NULL;
 		int n;
 		char **sparselist = NULL;
+		unsigned long int sparsehdrsz;
 		c_getline(&s_buf, backing_fread, backing_f_handle);
 		n = parse(s_buf, &sparselist, ':');
 		if (n <= 1 || n % 2 != 1) {
@@ -623,16 +626,24 @@ int restore(int argc, char **argv)
 		fs.n_sparsedata = (n - 1) / 2;
 		fs.sparse_realsize = fs.filesize;
 		fs.filesize = strtoull(sparselist[0], 0, 10);
+		bytestoread=fs.filesize;
 		if (dmalloc_size(fs.sparsedata) < fs.n_sparsedata * sizeof(struct sparsedata))
 		    fs.sparsedata = dmalloc(fs.n_sparsedata * sizeof(struct sparsedata));
+		sparsehdrsz = ilog10(fs.n_sparsedata) + 2;
 		for (int i = 0; i < (n - 1) / 2; i ++) {
 		    ((fs.sparsedata)[i]).offset = strtoull(sparselist[i * 2 + 1], 0, 10);
 		    ((fs.sparsedata)[i]).size = strtoull(sparselist[i * 2 + 2], 0, 10);
+		    sparsehdrsz += ilog10(fs.sparsedata[i].offset) + 2;
+                    sparsehdrsz += ilog10(fs.sparsedata[i].size) + 2;
 		}
+
+		sparsehdrsz += (512 - ((sparsehdrsz - 1) % 512 + 1));
+		//fs.filesize += sparsehdrsz;
 		dfree(sparselist);
 		dfree(s_buf);
 
 	    }
+	    blockpad = 512 - ((bytestoread - 1) % 512 + 1);
 
 	    if (use_pax_header == 1)
 		fs.pax = 1;

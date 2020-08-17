@@ -8,6 +8,7 @@
 #include <getopt.h>
 #include <sqlite3.h>
 #include <errno.h>
+#include <time.h>
 
 #include "tarlib.h"
 
@@ -34,10 +35,22 @@ extern struct {
 char *EncodeBlock2(char *out, char *in, int m, int *n);
 char *DecodeBlock2(char *out, char *in, int m, int *n);
 int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
-    unsigned long long est_size,  unsigned long long *bytes_read, unsigned long long bytes_readp);
+    unsigned long long est_size,  unsigned long long *bytes_read);
 int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid);
 sqlite3 *opendb();
 long int strtoln(char *nptr, char **endptr, int base, int len);
+void update_status(unsigned long long total_bytes_received, unsigned long long est_size, char *cur_filename, time_t cur_time, time_t start_time, int is_flushing);
+
+struct {
+    unsigned long long unit;
+    char *label;
+} display_units [] = {
+    { 1, "B" },
+    { 1000, "KB" },
+    { 1000000, "MB" },
+    { 1000000000, "GB" },
+    { 1000000000000, "TB" },
+};
 
 int submitfiles(int argc, char **argv)
 {
@@ -64,9 +77,7 @@ int submitfiles(int argc, char **argv)
     int cipher_record;
     char *filenameu = NULL;
     char *linknameu = NULL;
-    unsigned long long bytes_read = 0;
-    unsigned long long bytes_readp = 0;
-    unsigned long long est_size = 0;
+    unsigned long long linkedfiles_bytes = 0;
     char *eprvkeyu = NULL;
     char *pubkeyu = NULL;
     char *commentu = NULL;
@@ -80,9 +91,6 @@ int submitfiles(int argc, char **argv)
 
     struct cryptinfo_s {
 	int keynum;
-//	char *compression;
-//	char *cipher;
-//	char *filters;
 	char *hmac;
     };
     char *keygroups = NULL;
@@ -94,6 +102,7 @@ int submitfiles(int argc, char **argv)
     int cryptinfo_n = 0;
     char xattr_varstring[1024];
     int bkid;
+    unsigned long long est_size = 0;
 
     while ((optc = getopt_long(argc, argv, "n:d:v", longopts, &longoptidx)) >= 0)
         switch (optc) {
@@ -144,6 +153,16 @@ int submitfiles(int argc, char **argv)
     sqlite3_free(sqlstmt);
     sqlite3_finalize(sqlres);
 
+    sqlite3_prepare_v2(bkcatalog,
+        (sqlstmt = sqlite3_mprintf("select sum(size)  "
+            "from needed_file_entities where backupset_id = %d",
+            bkid)), -1, &sqlres, 0);
+    sqlite3_free(sqlstmt);
+    if (sqlite3_step(sqlres) == SQLITE_ROW) {
+        est_size = sqlite3_column_int64(sqlres, 0);
+    }
+    sqlite3_finalize(sqlres);
+
     submitfiles_tmptables(bkcatalog, bkid);
     metadata = fdopen(out, "r");
 
@@ -176,6 +195,13 @@ int submitfiles(int argc, char **argv)
     }
 
     int inlen = 0;
+    unsigned long long  total_bytes_received = 0;
+    time_t start_time = time(NULL);
+    time_t lastupdate_time = 0;
+    time_t lastflush_time = start_time;
+    time_t curtime;
+
+    printf("Transfering files\n");
     while ((inlen = getline(&inbuf, &len, metadata)) > 0) {
 	for (int i = inlen - 1; i > 0; i--)
 	    if (inbuf[i] == '\n') {
@@ -278,6 +304,7 @@ int submitfiles(int argc, char **argv)
                 exit(1);
             }
 	    sqlite3_int64 fileid = sqlite3_last_insert_rowid(bkcatalog);
+	    total_bytes_received += atoll(mdfields[7]);
 
             sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
                 "insert or ignore into diskfiles_t (sha1, extension)  "
@@ -302,9 +329,24 @@ int submitfiles(int argc, char **argv)
 		}
 	    }
             sqlite3_reset(inbfrec);
+	    // Update status line
+
+	    if ((curtime = time(NULL)) > lastupdate_time + 1 || lastupdate_time == 0) {
+		lastupdate_time = curtime;
+		update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, 0);
+	    }
+	    if ((curtime = time(NULL)) > lastflush_time + 5) {
+		lastflush_time = curtime;
+		flush_received_files(bkcatalog, verbose, bkid, est_size, &linkedfiles_bytes);
+		total_bytes_received += linkedfiles_bytes;
+		lastupdate_time = curtime;
+		update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, 1);
+	    }
 	}
 	inbuf[0] = '\0';
     }
+
+
     free(inbuf);
     dfree(keygroups);
     dfree(keygroupsp);
@@ -320,7 +362,10 @@ int submitfiles(int argc, char **argv)
     dfree(filenameu);
     dfree(linknameu);
     sqlite3_finalize(inbfrec);
-    flush_received_files(bkcatalog, verbose, bkid, est_size, &bytes_read, bytes_readp);
+    flush_received_files(bkcatalog, verbose, bkid, est_size, &linkedfiles_bytes);
+    total_bytes_received += linkedfiles_bytes;
+    update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, 1);
+    printf("\n");
     fclose(metadata);
     sqlite3_close(bkcatalog);
 
@@ -795,6 +840,44 @@ int pipebuf(int *in, int *out)
     }
 }
 
+void update_status(unsigned long long total_bytes_received, unsigned long long est_size, char *cur_filename, time_t curtime, time_t start_time, int is_flushing)
+{
+    //figure out display unit (KB, MB, etc)
+    int b_received_unit = sizeof(display_units) / sizeof(*display_units) - 1;
+    int BPS_unit = sizeof(display_units) / sizeof(*display_units) - 1;
+    double BPS = (double) total_bytes_received / (curtime - start_time);
+    char statusline_fmtstr[128];
+    int curbytes_len;
+    int fname_len;
+    char statusline[256];
+    char curbytes[64];
+
+    b_received_unit = 0;
+    for (int i = 0; i < sizeof(display_units) / sizeof(*display_units); i++)
+	if (total_bytes_received >= display_units[i].unit)
+	    b_received_unit = i;
+    BPS_unit = 0;
+    for (int i = 0; i < sizeof(display_units) / sizeof(*display_units); i++)
+	if (BPS >= display_units[i].unit)
+	    BPS_unit = i;
+    int b_total_unit = 0;
+    for (int i = 0; i < sizeof(display_units) / sizeof(*display_units); i++)
+	if (est_size >= display_units[i].unit)
+	    b_total_unit = i;
+
+    sprintf(curbytes, "[ %.2f %s / %.2f %s ], %.2f %ss", (double) total_bytes_received /
+	display_units[b_received_unit].unit, display_units[b_received_unit].label, 
+	(double) est_size / display_units[b_total_unit].unit, display_units[b_total_unit].label,
+	(double) BPS / display_units[BPS_unit].unit, display_units[BPS_unit].label);
+    curbytes_len = strlen(curbytes);
+    fname_len = 79 - curbytes_len;
+    sprintf(statusline_fmtstr, "%%-%d.%ds %%s\r", fname_len, fname_len);
+    sprintf(statusline, statusline_fmtstr, cur_filename, curbytes);
+    fprintf(stdout, "%c %s", is_flushing == 1 ? '*' : ' ', statusline);
+    fflush(stdout);
+}
+
+
 char *stresc(char *src, char **target)
 {
     int i;
@@ -1049,17 +1132,17 @@ char *DecodeBlock2(char *out, char *in, int m, int *n)
 }
 
 int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
-    unsigned long long est_size,  unsigned long long *bytes_read, unsigned long long bytes_readp)
+    unsigned long long est_size,  unsigned long long *bytes_read)
 {
     char *sqlerr;
     sqlite3_stmt *sqlres;
     char *sqlstmt = 0;
     int x;
-    static unsigned long long bytes_read_l = 0;
+//    static unsigned long long bytes_read_l = 0;
 
-//    sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
-//    logaction(bkcatalog, bkid, 5, "Copying entries to diskfiles");
-//    fprintf(stderr, "Writing to diskfiles\n");
+
+//  Populate diskfiles table from temporary diskfiles_t
+
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into diskfiles select * from diskfiles_t"
     )), 0, 0, &sqlerr);
@@ -1071,8 +1154,9 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     sqlite3_free(sqlstmt);
     sqlite3_exec(bkcatalog, "delete from diskfiles_t", 0, 0, 0);
 
-//    logaction(bkcatalog, bkid, 5, "Writing to file_entities_t");
-//    fprintf(stderr, "Writing to file_entities_t\n");
+
+//  Populate temporary table file_entities_t with received files
+
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities_t "
 	"(file_id, ftype, permission, device_id, inode, "
@@ -1094,7 +1178,9 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     }
     sqlite3_free(sqlstmt);
 
-//    logaction(bkcatalog, bkid, 5, "Writing to file_entities");
+
+//  And now transfer to permanent file_entitities table
+
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities "
 	"(ftype, permission, device_id, inode, "
@@ -1110,6 +1196,10 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
         sqlite3_free(sqlerr);
     }
     sqlite3_free(sqlstmt);
+
+
+//  Take care of cipher_detail
+
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into cipher_detail ( "
 	"file_id, keynum, hmac) "
@@ -1135,18 +1225,22 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     }
     sqlite3_free(sqlstmt);
 
+#if 0
     if (verbose >= 1) {
 	x = sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "select sum(size) from file_entities_t")), -1, &sqlres, 0);
 	if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
-	    bytes_read_l += sqlite3_column_int64(sqlres, 0);
+	    bytes_read_l = sqlite3_column_int64(sqlres, 0);
 	    *bytes_read = bytes_read_l;
 	}
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
+#endif
 
-//    logaction(bkcatalog, bkid, 5, "Writing to backupset_detail");
+
+//  Create records in backupset_detail
+
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into backupset_detail (backupset_id, file_id) "
 	"select %d, f.file_id from file_entities f "
@@ -1166,8 +1260,13 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     }
     sqlite3_free(sqlstmt);
 
-//    logaction(bkcatalog, bkid, 5, "Writing hardlinks to file_entities_t");
+
+//  Clear out file_entities_t for next step
     sqlite3_exec(bkcatalog, "delete from file_entities_t", 0, 0, 0);
+
+
+//  Handle hard link files
+
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities_t "
 	"(file_id, ftype, permission, device_id, inode, "
@@ -1189,7 +1288,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	sqlite3_free(sqlerr);
     }
     sqlite3_free(sqlstmt);
-//    logaction(bkcatalog, bkid, 5, "Writing hardlinks to file_entities");
+
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities "
 	"(ftype, permission, device_id, inode, "
@@ -1205,6 +1304,9 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
         sqlite3_free(sqlerr);
     }
     sqlite3_free(sqlstmt);
+
+
+//  Cipher details again for hardlink files
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into cipher_detail ( "
@@ -1224,7 +1326,9 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     )), 0, 0, &sqlerr);
     sqlite3_free(sqlstmt);
 
-//    logaction(bkcatalog, bkid, 5, "Writing hardlinks to backupset_detail");
+
+// Backupset details for hardlinks
+
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into backupset_detail (backupset_id, file_id) "
 	"select %d, f.file_id from file_entities f "
@@ -1244,22 +1348,19 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     }
     sqlite3_free(sqlstmt);
 
-    if (verbose >= 1) {
-	x = sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	    "select sum(size) from file_entities_t")), -1, &sqlres, 0);
-	if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
-	    bytes_read_l += sqlite3_column_int64(sqlres, 0);
-	    *bytes_read = bytes_read_l;
-	}
-	sqlite3_finalize(sqlres);
-	sqlite3_free(sqlstmt);
+//  Get sum of bytes in hardlinked files for status reporting
+    x = sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"select sum(size) from file_entities_t")), -1, &sqlres, 0);
+    if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {
+	*bytes_read = sqlite3_column_int64(sqlres, 0);
     }
+    sqlite3_finalize(sqlres);
+    sqlite3_free(sqlstmt);
 
 
-//    logaction(bkcatalog, bkid, 5, "flushing temporary tables");
     sqlite3_exec(bkcatalog, "delete from received_file_entities_t", 0, 0, 0);
     sqlite3_exec(bkcatalog, "delete from file_entities_t", 0, 0, 0);
-//    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
+    sqlite3_exec(bkcatalog, "delete from temp_cipher_detail", 0, 0, 0);
     return(0);
 }
 int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
