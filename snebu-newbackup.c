@@ -246,7 +246,7 @@ int newbackup(int argc, char **argv)
 
     sqlite3_exec(bkcatalog, "BEGIN", 0, 0, 0);
     if (verbose >= 1)
-	fprintf(stderr, "Receiving input file list\n");
+	fprintf(stderr, "Gathering full snapshot file manifest\n");
     while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
 	int pathskip = 0;
 	char pathsub[4097];
@@ -360,7 +360,7 @@ int newbackup(int argc, char **argv)
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
 
     if (verbose >= 2)
-	fprintf(stderr, "Generating required files list\n");
+	fprintf(stderr, "Generating delta snapshot file manifest\n");
 
     if (force_full_backup == 1) {
 	if (verbose >= 1)

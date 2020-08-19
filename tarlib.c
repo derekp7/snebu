@@ -50,8 +50,6 @@ int tar_get_next_hdr(struct filespec *fs)
     int paxsparsenamelen = 0;
     char *paxsparsesize = 0;
     int paxsparsesizelen = 0;
-    char *paxtarcryptsize = 0;
-    int paxtarcryptsizelen = 0;
     char *paxsparsesegt = 0;
     size_t paxsparsesegtn = 0;
     int paxsparsenseg = 0;
@@ -171,10 +169,6 @@ int tar_get_next_hdr(struct filespec *fs)
 		delpaxvar(&(fs->xheader), &(fs->xheaderlen), "GNU.sparse.realsize");
 
 	    }
-	    if (getpaxvar(fs->xheader, fs->xheaderlen, "TC.original.size", &paxtarcryptsize, &paxtarcryptsizelen) == 0) {
-		fs->tarcrypt_realsize = strtoull(paxtarcryptsize, 0, 10);
-//		delpaxvar(&(fs->xheader), &(fs->xheaderlen), "TC.original.size");
-	    }
 	    if (*(tarhead.ftype) == 'g')
 		return(1);
 	    continue;
@@ -200,8 +194,6 @@ int tar_get_next_hdr(struct filespec *fs)
 		    fs->filesize=strtoull(tarhead.size, 0, 8);
 	    }
 	    fs->modtime=strtol(tarhead.modtime, 0, 8);
-//	    if (longlinktarget == 0)
-//		strncpya0(&(fs->linktarget), tarhead.linktarget, 100);
 
 	    if (strlen(tarhead.auid) == 0)
 		sprintf(tarhead.auid, "%d", fs->nuid);
@@ -214,7 +206,7 @@ int tar_get_next_hdr(struct filespec *fs)
 	    fs->agid[32] = 0;
 
 	    // Handle GNU sparse files
-	    if (*(tarhead.ftype) == 'S') {
+	    if (*(tarhead.ftype) == 'S' && paxsparse != 1) {
 		s_isextended = tarhead.u.sph.isextended;
 		fs->sparse_realsize = g2ulli(tarhead.u.sph.realsize);
 		if (dmalloc_size(fs->sparsedata) < 4 * sizeof(struct sparsedata))
@@ -845,10 +837,6 @@ int fsinit(struct filespec *fs)
     fs->sparsedata = dmalloc(sizeof(fs->sparsedata) * 4);
     fs->n_sparsedata = 0;
     fs->pax = 0;
-//    fs->c_fread = c_fread;
-//    fs->c_fwrite = c_fwrite;
-//    fs->c_read_handle = c_read_handle;
-//    fs->c_write_handle = c_write_handle;
     fsclear(fs);
     return(0);
 }
@@ -999,8 +987,6 @@ size_t lzop_write(void *buf, size_t sz, size_t count, struct lzop_file *cfile)
 	    n -= bufroom;
 	    cfile->bufp += bufroom;
 	    t += bufroom; 
-//	    buf += (cfile->buf + cfile->bufsize - cfile->bufp);
-	    // compress cfile->buf, write out
 
 	    // write uncompressed block size
 	    if (cfile->c_fwrite(htonlp(cfile->bufsize), 1, 4, cfile->c_handle) < 4) {
@@ -1265,8 +1251,6 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
     char seg[20];
     char padding[512];
     char paxdata[128];
-//    char *npaxdata = NULL;
-//    int npaxdatalen = 0;
     char paxhdr_varstring[512];
 
     if (tsf->tmp_fs == NULL) {
@@ -1291,17 +1275,6 @@ size_t tarsplit_write(void *buf, size_t sz, size_t count, struct tarsplit_file *
 	    n -= (tsf->buf + tsf->bufsize - tsf->bufp);
 	    if (n > 0) {
 		if (tsf->segn == 0) {
-#if 0
-		    char sb_filters[256];
-		    if (getpaxvar((tsf->orig_fs->xheader), (tsf->orig_fs->xheaderlen), "TC.filters", &npaxdata, &npaxdatalen) != 0) {
-			strncpy(sb_filters, npaxdata, npaxdatalen);
-			sb_filters[npaxdatalen] = '\0';
-			strcat(sb_filters, "|segmented");
-		    }
-		    else 
-			strcpy(sb_filters, "segmented");
-		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.filters", "compression|cipher|segmented", 28);
-#endif
 		    sprintf(paxdata, "%llu", tsf->orig_fs->filesize);
 		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.segmented.header", "1", 1);
 		    setpaxvar(&(tsf->orig_fs->xheader), &(tsf->orig_fs->xheaderlen), "TC.original.size", paxdata, strlen(paxdata));
@@ -1485,17 +1458,6 @@ size_t tarsplit_read(void *buf, size_t sz, size_t count, struct tarsplit_file *t
 			}
 		    }
 		}
-
-
-
-
-/*
-		if (getpaxvar(fs->xheader, fs->xheaderlen, "TC.hmac", &paxdata, &paxdatalen) == 0) {
-		    memset(tsf->hmac[0], 0, EVP_MAX_MD_SIZE * 2);
-		    strncpy((char *) tsf->hmac, paxdata, paxdatalen > EVP_MAX_MD_SIZE * 2 ? EVP_MAX_MD_SIZE * 2 : paxdatalen);
-		    (tsf->hmac[0])[EVP_MAX_MD_SIZE * 2] = '\0';
-		}
-*/
 		tsf->segsize = tsf->segremaining = fs->filesize;
 	    }
 	    else {
@@ -1745,7 +1707,6 @@ int rsa_file_finalize(struct rsa_file *rcf)
     }
     if (rcf->mode == 'r') {
     }
-//    EVP_CIPHER_CTX_cleanup(rcf->ctx);
     for (int i = 0; i < rcf->nk; i++)
 	free(rcf->ek[i]);
     free(rcf->ek);
@@ -1984,7 +1945,6 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
 				strlen(rsa_keys->keys[i].pubkey), rsa_keys->keys[i].hmac_key, &hmac_key_len);
 			    SHA256((unsigned char *) rsa_keys->keys[i].hmac_key, 32, tmp_hmac_hash);
 			    EVP_EncodeBlock(tmp_hmac_hash_b64, tmp_hmac_hash, 32);
-//			    fprintf(stderr, "key %d\n  input hash: %s\ncreated hash: %s\n", i, rsa_keys->keys[i].hmac_hash_b64, tmp_hmac_hash_b64);
 			    BIO_free(rsa_keydata);
 			    rsa_keydata = NULL;
 			}

@@ -103,6 +103,8 @@ int submitfiles(int argc, char **argv)
     char xattr_varstring[1024];
     int bkid;
     unsigned long long est_size = 0;
+    int est_files = 0;
+    int tot_files = 0;
 
     while ((optc = getopt_long(argc, argv, "n:d:v", longopts, &longoptidx)) >= 0)
         switch (optc) {
@@ -161,7 +163,24 @@ int submitfiles(int argc, char **argv)
     if (sqlite3_step(sqlres) == SQLITE_ROW) {
         est_size = sqlite3_column_int64(sqlres, 0);
     }
+    else
+        est_size = 0;
     sqlite3_finalize(sqlres);
+
+    sqlite3_prepare_v2(bkcatalog,
+        (sqlstmt = sqlite3_mprintf("select count(*)  "
+            "from needed_file_entities where backupset_id = %d",
+            bkid)), -1, &sqlres, 0);
+    sqlite3_free(sqlstmt);
+    if (sqlite3_step(sqlres) == SQLITE_ROW) {
+        est_files = sqlite3_column_int64(sqlres, 0);
+    }
+    sqlite3_finalize(sqlres);
+
+    int b_total_unit = 0;
+    for (int i = 0; i < sizeof(display_units) / sizeof(*display_units); i++)
+	if (est_size >= display_units[i].unit)
+	    b_total_unit = i;
 
     submitfiles_tmptables(bkcatalog, bkid);
     metadata = fdopen(out, "r");
@@ -199,9 +218,15 @@ int submitfiles(int argc, char **argv)
     time_t start_time = time(NULL);
     time_t lastupdate_time = 0;
     time_t lastflush_time = start_time;
-    time_t curtime;
+    time_t curtime = time(NULL);
 
-    printf("Transfering files\n");
+    if (verbose >= 1)
+	fprintf(stderr, "Transfering files\n");
+    if (verbose >= 1)
+	fprintf(stderr, "Estimated backup size: %6.2f %s\n\n",
+	    (double) est_size / display_units[b_total_unit].unit,
+	    display_units[b_total_unit].label);
+
     while ((inlen = getline(&inbuf, &len, metadata)) > 0) {
 	for (int i = inlen - 1; i > 0; i--)
 	    if (inbuf[i] == '\n') {
@@ -305,6 +330,7 @@ int submitfiles(int argc, char **argv)
             }
 	    sqlite3_int64 fileid = sqlite3_last_insert_rowid(bkcatalog);
 	    total_bytes_received += atoll(mdfields[7]);
+	    tot_files++;
 
             sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
                 "insert or ignore into diskfiles_t (sha1, extension)  "
@@ -333,14 +359,15 @@ int submitfiles(int argc, char **argv)
 
 	    if ((curtime = time(NULL)) > lastupdate_time + 1 || lastupdate_time == 0) {
 		lastupdate_time = curtime;
-		update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, 0);
-	    }
-	    if ((curtime = time(NULL)) > lastflush_time + 5) {
-		lastflush_time = curtime;
-		flush_received_files(bkcatalog, verbose, bkid, est_size, &linkedfiles_bytes);
-		total_bytes_received += linkedfiles_bytes;
-		lastupdate_time = curtime;
-		update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, 1);
+		if ((curtime = time(NULL)) > lastflush_time + 5) {
+		    if (verbose >= 1)
+			update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, 1);
+		    flush_received_files(bkcatalog, verbose, bkid, est_size, &linkedfiles_bytes);
+		    total_bytes_received += linkedfiles_bytes;
+		    lastflush_time = curtime;
+		}
+		if (verbose >= 1)
+		    update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, 0);
 	    }
 	}
 	inbuf[0] = '\0';
@@ -362,10 +389,27 @@ int submitfiles(int argc, char **argv)
     dfree(filenameu);
     dfree(linknameu);
     sqlite3_finalize(inbfrec);
+    if (verbose >= 1)
+	update_status(total_bytes_received, est_size, "Completed", curtime, start_time, 1);
     flush_received_files(bkcatalog, verbose, bkid, est_size, &linkedfiles_bytes);
     total_bytes_received += linkedfiles_bytes;
-    update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, 1);
-    printf("\n");
+    if (verbose >= 1) {
+	update_status(total_bytes_received, est_size, "Completed", curtime, start_time, 0);
+	fprintf(stderr, "\n");
+    }
+    if (verbose >= 1)
+	fprintf(stderr, "%6.2f %s in %d files requested,\n",
+	    (double) est_size / display_units[b_total_unit].unit,
+	    display_units[b_total_unit].label, est_files);
+    int b_received_unit = 0;
+    for (int i = 0; i < sizeof(display_units) / sizeof(*display_units); i++)
+        if (total_bytes_received >= display_units[i].unit)
+            b_received_unit = i;
+
+    if (verbose >= 1)
+	fprintf(stderr, "%6.2f %s in %d files received.\n",
+	    (double) total_bytes_received / display_units[b_received_unit].unit,
+	    display_units[b_received_unit].label, tot_files);
     fclose(metadata);
     sqlite3_close(bkcatalog);
 
@@ -539,8 +583,18 @@ int submitfiles2(int out_h)
 		    if (dmalloc_size(escxheader) < ((int)((fs.xheaderlen + 2) / 3)) * 4 + 1)
 			escxheader = drealloc(escxheader, ((int)((fs.xheaderlen + 2) / 3)) * 4 + 1);
 
+		unsigned long long int filesize = fs.filesize;
+
+		if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.original.size", &paxdata, &paxdatalen) == 0) {
+		    filesize = strtoull(paxdata, 0, 10);
+		}
+
+		if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.sparse.original.size", &paxdata, &paxdatalen) == 0) {
+		    filesize = strtoull(paxdata, 0, 10);
+		}
+
 		fprintf(out, "1\t%c\t%4.4o\t%s\t%d\t%s\t%d\t%lld\t%s\t%lu\t%s\t%s\t%d\t%s\n",
-		    'E', fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid, fs.tarcrypt_realsize,
+		    'E', fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid, filesize,
 			use_hmac == 0 ? cfsha1x : hmac, fs.modtime, stresc(fs.filename, &escfname),
 			stresc(fs.linktarget == 0 ? "" : fs.linktarget, &esclname), fs.xheaderlen,
 			fs.xheaderlen == 0 ? "" : EncodeBlock2(escxheader, fs.xheader, fs.xheaderlen, NULL)
@@ -549,7 +603,7 @@ int submitfiles2(int out_h)
 		fclose(curfile);
 		wrote_file = 1;
 	    }
-	    else if (fs.filesize > 0) {
+	    else if (fs.filesize > 0 || fs.n_sparsedata > 0) {
 		int is_ciphered = 0;
 		size_t (*c_fwrite)();
 		void *c_handle;
@@ -625,12 +679,26 @@ int submitfiles2(int out_h)
 		else
 		    if (dmalloc_size(escxheader) < ((int)((fs.xheaderlen + 2) / 3)) * 4 + 1)
 			escxheader = drealloc(escxheader, ((int)((fs.xheaderlen + 2) / 3)) * 4 + 1);
+
+		unsigned long long int filesize = fs.filesize;
+
+		if (is_ciphered == 1) { 
+		    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.original.size", &paxdata, &paxdatalen) == 0) {
+			filesize = strtoull(paxdata, 0, 10);
+		    }
+
+		    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.sparse.original.size", &paxdata, &paxdatalen) == 0) {
+			filesize = strtoull(paxdata, 0, 10);
+		    }
+		}
+
 		fprintf(out, "1\t%c\t%4.4o\t%s\t%d\t%s\t%d\t%lld\t%s\t%lu\t%s\t%s\t%d\t%s\n",
-		    is_ciphered == 1 ? 'E' : fs.n_sparsedata > 0 ? 'S' : fs.ftype, fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid, is_ciphered == 1 ? fs.tarcrypt_realsize : fs.n_sparsedata > 0 ? fs.sparse_realsize : fs.filesize,
-			use_hmac == 0 ? cfsha1x : hmac, fs.modtime, stresc(fs.filename, &escfname),
-			stresc(fs.linktarget == 0 ? "" : fs.linktarget, &esclname), fs.xheaderlen,
-			fs.xheaderlen == 0 ? "" : EncodeBlock2(escxheader, fs.xheader, fs.xheaderlen, NULL)
-		    );
+		    is_ciphered == 1 ? 'E' : fs.n_sparsedata > 0 ? 'S' : fs.ftype, fs.mode,
+		    fs.auid, fs.nuid, fs.agid, fs.ngid, filesize, use_hmac == 0 ? cfsha1x : hmac,
+		    fs.modtime, stresc(fs.filename, &escfname),
+		    stresc(fs.linktarget == 0 ? "" : fs.linktarget, &esclname), fs.xheaderlen,
+		    fs.xheaderlen == 0 ? "" : EncodeBlock2(escxheader, fs.xheader, fs.xheaderlen, NULL)
+		);
 		wrote_file = 1;
 	    }
 	    else {
@@ -731,7 +799,7 @@ int pipebuf(int *in, int *out)
 	fclose(stdout);
 	close(pipein[1]);
 	close(pipeout[0]);
-	r = rbinit(1731);
+	r = rbinit(bufsize);
 	fd_set s_in;
 	fd_set s_out;
 	free(config.vault);
@@ -742,6 +810,7 @@ int pipebuf(int *in, int *out)
 	while (1) {
 	    if (rbused(r) == 0 && ateof == 1) {
 		rbfree(r);
+		free(buf);
 		exit(0);
 	    }
 	    // if the buffer is empty, then wait for input and see if output will block
@@ -844,13 +913,20 @@ void update_status(unsigned long long total_bytes_received, unsigned long long e
 {
     //figure out display unit (KB, MB, etc)
     int b_received_unit = sizeof(display_units) / sizeof(*display_units) - 1;
-    int BPS_unit = sizeof(display_units) / sizeof(*display_units) - 1;
-    double BPS = (double) total_bytes_received / (curtime - start_time);
+    int BPS_unit = 0;
+    double BPS = (curtime - start_time) == 0 ? 0 : (double) total_bytes_received / (curtime - start_time);
     char statusline_fmtstr[128];
     int curbytes_len;
     int fname_len;
     char statusline[256];
-    char curbytes[64];
+    char curbytes[128];
+    char pct_str[16];
+    int pctstr_len;
+    int dots_before;
+    int dots_after;
+    int pct;
+    int scalelen = 20;
+    char progress_scale[21];
 
     b_received_unit = 0;
     for (int i = 0; i < sizeof(display_units) / sizeof(*display_units); i++)
@@ -860,21 +936,28 @@ void update_status(unsigned long long total_bytes_received, unsigned long long e
     for (int i = 0; i < sizeof(display_units) / sizeof(*display_units); i++)
 	if (BPS >= display_units[i].unit)
 	    BPS_unit = i;
-    int b_total_unit = 0;
-    for (int i = 0; i < sizeof(display_units) / sizeof(*display_units); i++)
-	if (est_size >= display_units[i].unit)
-	    b_total_unit = i;
 
-    sprintf(curbytes, "[ %.2f %s / %.2f %s ], %.2f %ss", (double) total_bytes_received /
-	display_units[b_received_unit].unit, display_units[b_received_unit].label, 
-	(double) est_size / display_units[b_total_unit].unit, display_units[b_total_unit].label,
+    pct = (int) est_size == 0 ? 100 : (((double) total_bytes_received / est_size) * 100);
+    pctstr_len = sprintf(pct_str, "%d%%", pct);
+    dots_before = (int) ((scalelen - pctstr_len) * ((double) pct / 100));
+    dots_after = scalelen - pctstr_len - dots_before;
+    progress_scale[0] = '\0';
+    for (int j = 0; j < dots_before; j++)
+	strcat(progress_scale, ".");
+    strcat(progress_scale, pct_str);
+    for (int j = 0; j < dots_after; j++)
+	strcat(progress_scale, ".");
+
+    sprintf(curbytes, "[%s] %6.2f%c / %6.2f %s/s", progress_scale, (double) total_bytes_received /
+	display_units[b_received_unit].unit, *(display_units[b_received_unit].label), 
 	(double) BPS / display_units[BPS_unit].unit, display_units[BPS_unit].label);
+
     curbytes_len = strlen(curbytes);
-    fname_len = 79 - curbytes_len;
+    fname_len = 76 - curbytes_len;
     sprintf(statusline_fmtstr, "%%-%d.%ds %%s\r", fname_len, fname_len);
     sprintf(statusline, statusline_fmtstr, cur_filename, curbytes);
-    fprintf(stdout, "%c %s", is_flushing == 1 ? '*' : ' ', statusline);
-    fflush(stdout);
+    fprintf(stderr, "%c %s", is_flushing == 1 ? '*' : ' ', statusline);
+    fflush(stderr);
 }
 
 
@@ -1348,7 +1431,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     }
     sqlite3_free(sqlstmt);
 
-//  Get sum of bytes in hardlinked files for status reporting
+//  Get sum of bytes in hardlinked files for status reporting   
     x = sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"select sum(size) from file_entities_t")), -1, &sqlres, 0);
     if ((x = sqlite3_step(sqlres)) == SQLITE_ROW) {

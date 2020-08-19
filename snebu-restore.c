@@ -541,7 +541,7 @@ int restore(int argc, char **argv)
 	    }
 	}
 
-	if (((in_ftype == '0' || in_ftype == 'S' || in_ftype == 'E') && fs.filesize > 0) ||
+	if (((in_ftype == '0' || in_ftype == 'S') && fs.filesize > 0) || in_ftype == 'E' ||
 	    getpaxvar(fs.xheader, fs.xheaderlen, "TC.sparse", &paxdata, &paxdatalen) == 0) {
 	    if (sha1filepath != NULL)
 		sha1filepath[0] = '\0';

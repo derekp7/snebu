@@ -645,8 +645,8 @@ do_remote_backup()
         rpcsh -h ${clientname} -u "${rmtuser}" -m "cat >${includetmp}"
 
     # Now create a tar file and send it to Snebu
-    rpcsh -h ${clientname} -u "${rmtuser}" -v "TARCRYPT keyfile" -f "tartest do_tarencrypt" -m "tar --one-file-system --no-recursion $(tartest) -S -P  -T ${includetmp} -cf - |${tarfilter}" |\
-        $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
+    rpcsh -h ${clientname} -u "${rmtuser}" -v "TARCRYPT keyfile" -f "tartest do_tarencrypt" -m "tar --one-file-system --no-recursion $(tartest) -S -P  -T ${includetmp} -cf - |${tarfilter} |lzop" |\
+        lzop -d |$SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
     rpcsh -h ${clientname} -u "${rmtuser}" -m "rm -f ${includetmp}"
     
@@ -680,7 +680,8 @@ do_remote_restore()
         tarargs=( "${tarargs[@]}" -C $tgtdirectory )
     fi
     $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${@}" </dev/null |\
-    rpcsh -h ${clientname} -u "${rmtuser}" -v "TARCRYPT" -m "${rtarfilter} |tar ${tarargs[*]} $(tartest) -xvf -"
+    rtarfilter |\
+    rpcsh -h ${clientname} -u "${rmtuser}" -m "tar ${tarargs[*]} $(tartest) -xvf -"
 
 }
 

@@ -68,7 +68,6 @@ int tarencrypt(int argc, char **argv)
     struct hmac_file *hmacf;
     struct lzop_file *lzf;
     struct rsa_file *rcf;
-//    struct key_st *keys;
     struct key_st *keys = NULL;
     int numkeys = 0;
     EVP_PKEY **evp_keypair;// = EVP_PKEY_new();
@@ -86,7 +85,6 @@ int tarencrypt(int argc, char **argv)
     unsigned char **hmac_keys;
     int *hmac_keysz;
 
-//    memset(hmac, 0, EVP_MAX_MD_SIZE);
     while ((optc = getopt_long(argc, argv, "k:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'k':
@@ -111,7 +109,6 @@ int tarencrypt(int argc, char **argv)
     fsinit(&fs2);
     fsinit(&gh);
 
-//    keys = load_keyfile(keyfilename);
     gh.ftype = 'g';
     strncpya0(&(gh.filename), "././@xheader", 12);
 
@@ -119,7 +116,6 @@ int tarencrypt(int argc, char **argv)
     if (numkeys > 1) {
 	char paxhdr_varstring[64];
 	strncpya0(&numkeys_string, itoa(itoabuf1, numkeys), 0);
-//	asprintf(&numkeys_string, "%d", numkeys);
 	setpaxvar(&(gh.xheader), &(gh.xheaderlen), "TC.numkeys", numkeys_string, strlen(numkeys_string));
 	numkeys_string[0] = '\0';
 	for (keynum = 0; keynum < numkeys; keynum++) {
@@ -137,11 +133,9 @@ int tarencrypt(int argc, char **argv)
 	    EVP_DecodeBlock(keys[keynum].hmac_key, (unsigned char *) keys[keynum].hmac_key_b64, 44);
 	    if (numkeys_string[0] == '\0')
 		strncpya0(&numkeys_string, itoa(itoabuf1, keynum), 0);
-//		asprintf(&numkeys_string, "%d", keynum);
 	    else {
 		strcata(&numkeys_string, "|");
 		strcata(&numkeys_string, itoa(itoabuf1, keynum));
-//		asprintf(&numkeys_string, "%s|%d", numkeys_string, keynum);
 	    }
 	    free(pubkey_fp);
 	}
@@ -309,7 +303,6 @@ int tardecrypt()
     unsigned char hmac[EVP_MAX_MD_SIZE];
     unsigned char *hmacp = hmac;
     unsigned int hmac_len;
-//    int EVP_MAX_MD_SIZE_b64 = ((int)((EVP_MAX_MD_SIZE + 2) / 3)) * 4 + 1;
     unsigned char hmac_b64[EVP_MAX_MD_SIZE_b64];
     unsigned char in_hmac_b64[EVP_MAX_MD_SIZE_b64];
 
@@ -394,7 +387,6 @@ int tardecrypt()
 			strncpya0(&required_keys_str, "0", 1);
 			parse(required_keys_str, &required_keys_group, '|');
 			decode_privkey(rsa_keys, required_keys_group);
-//			load_pkey(&rsa_keys, 0, pubkey_fingerprint, eprivkey, keycomment, hmachash);
 		    }
 		}
 	    }
@@ -404,7 +396,7 @@ int tardecrypt()
 	    getpaxvar(fs.xheader, fs.xheaderlen, "TC.cipher", &paxdata, &paxdatalen) == 0 ||
 	    getpaxvar(fs.xheader, fs.xheaderlen, "TC.compression", &paxdata, &paxdatalen) == 0) {
 
-	    if (fs.filesize == 0) {
+	    if (fs.filesize == 0 && fs.ftype != '5') {
 		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.compression");
 		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.cipher");
 		delpaxvar(&(fs.xheader), &(fs.xheaderlen), "TC.original.size");
@@ -529,6 +521,18 @@ int tardecrypt()
 		getpaxvar(fs.xheader, fs.xheaderlen, "TC.sparse.original.size", &paxdata, &paxdatalen);
 		fs2.sparse_realsize = strtoull(paxdata, 0, 10);
 		delpaxvar(&(fs2.xheader), &(fs2.xheaderlen), "TC.sparse.original.size");
+
+#if 0
+		unsigned long int sparsehdrsz;
+		sparsehdrsz = ilog10(fs2.n_sparsedata) + 2;
+		for (int i = 0; i < fs2.n_sparsedata; i++) {
+		    sparsehdrsz += ilog10(fs2.sparsedata[i].offset) + 2;
+		    sparsehdrsz += ilog10(fs2.sparsedata[i].size) + 2;
+		}
+		sparsehdrsz += (512 - ((sparsehdrsz - 1) % 512 + 1));
+		fs2.filesize += sparsehdrsz;
+#endif
+
 	    }
 	    else
 		sizeremaining = fs2.filesize;

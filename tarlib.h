@@ -73,7 +73,6 @@ struct filespec {
     int ngid;
     unsigned long long int filesize;
     unsigned long long int sparse_realsize;
-    unsigned long long int tarcrypt_realsize;
     time_t modtime;
     char *filename;
     char *linktarget;
@@ -82,10 +81,6 @@ struct filespec {
     struct sparsedata *sparsedata;
     int n_sparsedata;
     int pax;
-//    size_t (*c_fwrite)();
-//    void *c_write_handle;
-//    size_t (*c_fread)();
-//    void *c_read_handle;
 };
 
 struct sparsedata {
