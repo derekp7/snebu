@@ -9,6 +9,7 @@
 #include <sqlite3.h>
 #include <errno.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "tarlib.h"
 
@@ -20,6 +21,7 @@ void stresc_free(char **target);
 struct ringbuf *rbinit(size_t s);
 size_t rbwrite(void *buf, size_t b, size_t c, struct ringbuf *r);
 size_t rbread(void *buf, size_t b, size_t c, struct ringbuf *r);
+size_t rbrewind(struct ringbuf *r, size_t c);
 size_t rbsize(struct ringbuf *r);
 size_t rbused(struct ringbuf *r);
 size_t rbavail(struct ringbuf *r);
@@ -34,12 +36,13 @@ extern struct {
 } config;
 char *EncodeBlock2(char *out, char *in, int m, int *n);
 char *DecodeBlock2(char *out, char *in, int m, int *n);
+double ftime();
 int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     unsigned long long est_size,  unsigned long long *bytes_read);
 int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid);
 sqlite3 *opendb();
 long int strtoln(char *nptr, char **endptr, int base, int len);
-void update_status(unsigned long long total_bytes_received, unsigned long long est_size, char *cur_filename, time_t cur_time, time_t start_time, int is_flushing);
+void update_status(unsigned long long total_bytes_received, unsigned long long est_size, char *cur_filename, time_t cur_time, time_t start_time, char indicator);
 
 struct {
     unsigned long long unit;
@@ -54,8 +57,8 @@ struct {
 
 int submitfiles(int argc, char **argv)
 {
-    int in;
-    int out;
+    int in = -1;
+    int out = -1;
     char *inbuf = NULL;
     size_t len = 0;
     int optc;
@@ -215,10 +218,10 @@ int submitfiles(int argc, char **argv)
 
     int inlen = 0;
     unsigned long long  total_bytes_received = 0;
-    time_t start_time = time(NULL);
-    time_t lastupdate_time = 0;
-    time_t lastflush_time = start_time;
-    time_t curtime = time(NULL);
+    double start_time = ftime();
+    double lastupdate_time = 0;
+    double lastflush_time = start_time;
+    double curtime = ftime();
 
     if (verbose >= 1)
 	fprintf(stderr, "Transfering files\n");
@@ -357,17 +360,24 @@ int submitfiles(int argc, char **argv)
             sqlite3_reset(inbfrec);
 	    // Update status line
 
-	    if ((curtime = time(NULL)) > lastupdate_time + 1 || lastupdate_time == 0) {
+	    if ((curtime = ftime()) > lastupdate_time + 1 || lastupdate_time == 0) {
 		lastupdate_time = curtime;
-		if ((curtime = time(NULL)) > lastflush_time + 5) {
+		if ((curtime = ftime()) > lastflush_time + 5) {
 		    if (verbose >= 1)
-			update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, 1);
+			update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, '*');
 		    flush_received_files(bkcatalog, verbose, bkid, est_size, &linkedfiles_bytes);
 		    total_bytes_received += linkedfiles_bytes;
 		    lastflush_time = curtime;
 		}
 		if (verbose >= 1)
-		    update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, 0);
+		    update_status(total_bytes_received, est_size, mdfields[10], curtime, start_time, ' ');
+	    }
+	}
+	else if (strcmp(mdfields[0], "2") == 0) {
+	    if ((curtime = ftime()) > lastupdate_time + 1 || lastupdate_time == 0) {
+		lastupdate_time = curtime;
+		    if (verbose >= 1)
+			update_status(total_bytes_received + atoll(mdfields[2]), est_size, mdfields[1], curtime, start_time, '+');
 	    }
 	}
 	inbuf[0] = '\0';
@@ -390,11 +400,11 @@ int submitfiles(int argc, char **argv)
     dfree(linknameu);
     sqlite3_finalize(inbfrec);
     if (verbose >= 1)
-	update_status(total_bytes_received, est_size, "Completed", curtime, start_time, 1);
+	update_status(total_bytes_received, est_size, "Completed", curtime, start_time, '*');
     flush_received_files(bkcatalog, verbose, bkid, est_size, &linkedfiles_bytes);
     total_bytes_received += linkedfiles_bytes;
     if (verbose >= 1) {
-	update_status(total_bytes_received, est_size, "Completed", curtime, start_time, 0);
+	update_status(total_bytes_received, est_size, "Completed", curtime, start_time, ' ');
 	fprintf(stderr, "\n");
     }
     if (verbose >= 1)
@@ -607,6 +617,7 @@ int submitfiles2(int out_h)
 		int is_ciphered = 0;
 		size_t (*c_fwrite)();
 		void *c_handle;
+		unsigned long long int filesize = fs.filesize;
 
 		sprintf(tmpfilepath, "%s/tbXXXXXX", tmpfiledir);
 		curtmpfile = mkstemp(tmpfilepath);
@@ -661,11 +672,19 @@ int submitfiles2(int out_h)
 			sparsetext[0] = '\0';
 		    stlen = gen_sparse_data_string(&fs, &sparsetext);
 		    c_fwrite(sparsetext, 1, stlen, c_handle);
+		    filesize = fs.sparse_realsize;
 		}
+		double curtime = ftime();
+		double lastupdate_time = curtime;
+		size_t tot_size = 0;
 		while (sizeremaining > 0) {
 		    c = fread(databuf, 1, sizeremaining < bufsize ? sizeremaining : bufsize, stdin);
 		    c_fwrite(databuf, 1, c, c_handle);
 		    sizeremaining -= c;
+		    tot_size += c;
+		    if ((curtime = ftime()) > lastupdate_time + 1) {
+			fprintf(out, "2\t%s\t%lu\n", stresc(fs.filename, &escfname), tot_size);
+		    }
 		}
 		if (use_hmac == 0)
 		    lzop_finalize_w(lzf);
@@ -680,7 +699,6 @@ int submitfiles2(int out_h)
 		    if (dmalloc_size(escxheader) < ((int)((fs.xheaderlen + 2) / 3)) * 4 + 1)
 			escxheader = drealloc(escxheader, ((int)((fs.xheaderlen + 2) / 3)) * 4 + 1);
 
-		unsigned long long int filesize = fs.filesize;
 
 		if (is_ciphered == 1) { 
 		    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.original.size", &paxdata, &paxdatalen) == 0) {
@@ -775,14 +793,20 @@ int pipebuf(int *in, int *out)
     int pipeout[2];
     pid_t child;
 
-    pipe(pipein);
-    pipe(pipeout);
+    if (*in < 0)
+	pipe(pipein);
+    if (*out < 0)
+	pipe(pipeout);
 
     if ((child = fork()) > 0) {
-	close(pipein[0]);
-	close(pipeout[1]);
-	*in = pipein[1];
-	*out = pipeout[0];
+	if (*in < 0) {
+	    close(pipein[0]);
+	    *in = pipein[1];
+	}
+	if (*out < 0) {
+	    close(pipeout[1]);
+	    *out = pipeout[0];
+	}
 	return(0);
     }
     else {
@@ -790,27 +814,32 @@ int pipebuf(int *in, int *out)
 
 	struct timeval s_tm;
 
-	int bufsize = 1024 * 1024 * 64;
-	char *buf = malloc(bufsize);
-//	char buf[bufsize];
+	int bufsize = 4096;
+	char buf[bufsize];
 	ssize_t n;
 	ssize_t o;
 	int ateof = 0;
 	fclose(stdout);
-	close(pipein[1]);
-	close(pipeout[0]);
-	r = rbinit(bufsize);
+	if (*in < 0)
+	    close(pipein[1]);
+	else
+	    pipein[0] = *in;
+	if (*out < 0)
+	    close(pipeout[0]);
+	else
+	    pipeout[1] = *out;
+
+	r = rbinit(1024 * 1024 * 1024);
 	fd_set s_in;
 	fd_set s_out;
 	free(config.vault);
 	free(config.meta);
 
-	fcntl(pipein[0], F_SETFL, O_NONBLOCK);
-	fcntl(pipeout[1], F_SETFL, O_NONBLOCK);
+//	fcntl(pipein[0], F_SETFL, O_NONBLOCK);
+//	fcntl(pipeout[1], F_SETFL, O_NONBLOCK);
 	while (1) {
 	    if (rbused(r) == 0 && ateof == 1) {
 		rbfree(r);
-		free(buf);
 		exit(0);
 	    }
 	    // if the buffer is empty, then wait for input and see if output will block
@@ -825,14 +854,15 @@ int pipebuf(int *in, int *out)
 		FD_SET(pipeout[1], &s_out);
 		select(1024, NULL, &s_out, NULL, &s_tm);
 
-		n = read(pipein[0], buf, 1024);
-		if (n <= 0)
+		n = read(pipein[0], buf, bufsize);
+		if (n <= 0) {
 		    ateof = 1;
+		}
 		if (FD_ISSET(pipeout[1], &s_out)) {
 		    o = write(pipeout[1], buf, n);
 		    if (o < n) {
 			fprintf(stderr, "Short write a of %lu, wanted %lu, putting %lu bytes back in buffer\n", o, n, n - o);
-			rbwrite(buf + o, 1, n - o, r);
+			rbrewind(r, n - o);
 		    }
 		}
 		else {
@@ -849,14 +879,14 @@ int pipebuf(int *in, int *out)
 
 		// flush ring buffer until output blocks
 		while (FD_ISSET(pipeout[1], &s_out) && rbused(r) > 0) {
-		    n = rbread(buf, 1, 1024, r);
+		    n = rbread(buf, 1, bufsize, r);
 		    if (n <= 0)
 			fprintf(stderr, "Error 1 -- n is %lu\n", n);
 		    o = write(pipeout[1], buf, n);
 		    // if not all written, put remainder back in ring buffer
 		    if (o < n) {
 			fprintf(stderr, "Short write b of %lu, wanted %lu, putting %lu bytes back in buffer\n", o, n, n - o);
-			rbwrite(buf + o, 1, n - o, r);
+			rbrewind(r, n - o);
 		    }
 		    s_tm.tv_sec = 0;
 		    s_tm.tv_usec = 0;
@@ -865,14 +895,15 @@ int pipebuf(int *in, int *out)
 		    select(1024, NULL, &s_out, NULL, &s_tm);
 		}
 		if (ateof == 0) {
-		    n = read(pipein[0], buf, 1024);
-		    if (n <= 0)
+		    n = read(pipein[0], buf, bufsize);
+		    if (n <= 0) {
 			ateof = 1;
+		    }
 		    if (rbused(r) == 0) {
 			o = write(pipeout[1], buf, n);
 			if (o < n) {
 			    fprintf(stderr, "Short write c of %lu, wanted %lu, putting %lu bytes back in buffer\n", o, n, n - o);
-			    rbwrite(buf + o, 1, n - o, r);
+			    rbrewind(r, n - o);
 			}
 		    }
 		    else {
@@ -888,14 +919,14 @@ int pipebuf(int *in, int *out)
 
 		// flush ring buffer until output blocks
 		while (FD_ISSET(pipeout[1], &s_out) && rbused(r) > 0) {
-		    n = rbread(buf, 1, 1024, r);
+		    n = rbread(buf, 1, bufsize, r);
 		    if (n <= 0)
 			fprintf(stderr, "Error 1 -- n is %lu\n", n);
 		    o = write(pipeout[1], buf, n);
 		    // if not all written, put remainder back in ring buffer
 		    if (o < n) {
 			fprintf(stderr, "Short write d of %lu, wanted %lu, putting %lu bytes back in buffer\n", o, n, n - o);
-			rbwrite(buf + o, 1, n - o, r);
+			rbrewind(r, n - o);
 		    }
 		    FD_ZERO(&s_out);
 		    FD_SET(pipeout[1], &s_out);
@@ -903,13 +934,11 @@ int pipebuf(int *in, int *out)
 		}
 	    }
 	}
-	fprintf(stderr, "Exiting pipebuf 2\n");
-
 	exit(0);
     }
 }
 
-void update_status(unsigned long long total_bytes_received, unsigned long long est_size, char *cur_filename, time_t curtime, time_t start_time, int is_flushing)
+void update_status(unsigned long long total_bytes_received, unsigned long long est_size, char *cur_filename, time_t curtime, time_t start_time, char indicator)
 {
     //figure out display unit (KB, MB, etc)
     int b_received_unit = sizeof(display_units) / sizeof(*display_units) - 1;
@@ -937,7 +966,7 @@ void update_status(unsigned long long total_bytes_received, unsigned long long e
 	if (BPS >= display_units[i].unit)
 	    BPS_unit = i;
 
-    pct = (int) est_size == 0 ? 100 : (((double) total_bytes_received / est_size) * 100);
+    pct = (int) est_size == 0 ? 100 : (((double) total_bytes_received / est_size) * 100 + .5);
     pctstr_len = sprintf(pct_str, "%d%%", pct);
     dots_before = (int) ((scalelen - pctstr_len) * ((double) pct / 100));
     dots_after = scalelen - pctstr_len - dots_before;
@@ -956,7 +985,7 @@ void update_status(unsigned long long total_bytes_received, unsigned long long e
     fname_len = 76 - curbytes_len;
     sprintf(statusline_fmtstr, "%%-%d.%ds %%s\r", fname_len, fname_len);
     sprintf(statusline, statusline_fmtstr, cur_filename, curbytes);
-    fprintf(stderr, "%c %s", is_flushing == 1 ? '*' : ' ', statusline);
+    fprintf(stderr, "%c %s", indicator, statusline);
     fflush(stderr);
 }
 
@@ -1060,6 +1089,13 @@ void stresc_free(char **target)
     dfree(*target);
 }
 
+double ftime()
+{
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    return(t.tv_sec + (double) t.tv_usec / 1000000);
+}
+
 struct ringbuf {
     void *buf;	// buffer
     void *h;	// head
@@ -1067,8 +1103,6 @@ struct ringbuf {
     size_t s;	// size
     int w;	// wrap
 };
-
-
 
 struct ringbuf *rbinit(size_t s)
 {
@@ -1168,6 +1202,29 @@ size_t rbread(void *buf, size_t b, size_t c, struct ringbuf *r)
 	}
     }
     return(a);
+}
+size_t rbrewind(struct ringbuf *r, size_t c)
+{
+    size_t n = 0;
+    if (rbavail(r) > c) {
+	if (r->w == 0) {
+	    n = (r->h - r->buf >= c ? c : r->h - r->buf);
+	    if (n == c)
+		r->h -= c;
+	    else {
+		r->h -= n;
+		r->w = 1;
+		n = c - n;
+		r->h = r->buf + r->s - n;
+	    }
+	}
+	else {
+	    r->h -= c;
+	}
+	return(c);
+    }
+    else
+	return(0);
 }
 
 size_t rbavail(struct ringbuf *r)

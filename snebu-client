@@ -610,7 +610,7 @@ do_backup()
 	$tarfilter |\
         $SNEBU submitfiles --name ${backupname} --datestamp ${datestamp} "${submitfilesopts[@]}"
 
-#    rm -f ${includetmp}
+    rm -f ${includetmp}
     [ -n "${pluginpost}" ] && $pluginpost
     if [ "${bkrepeat}" != 1 ]
     then

@@ -475,7 +475,7 @@ int newbackup(int argc, char **argv)
     }
     logaction(bkcatalog, bkid, 1, "Finished processing snapshot manifest");
     if (verbose >= 1)
-	fprintf(stderr, "Returning list of required files\n");
+	fprintf(stderr, "Returning delta snapshot file manifest\n");
     sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"select n.infilename from needed_file_entities n "
 	"join inbound_file_entities i "
