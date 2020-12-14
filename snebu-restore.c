@@ -153,9 +153,9 @@ int restore(int argc, char **argv)
 	filespec[0] = 0;
 	for (i = optind; i < argc; i++) {
 	    if (i == optind)
-		strcat(filespec, " and (f.filename glob ");
+		strcat(filespec, " and (filename glob ");
 	    else
-		strcat(filespec, " or f.filename glob ");
+		strcat(filespec, " or filename glob ");
 	    strcat(filespec, (sqlstmt = sqlite3_mprintf("'%q'", argv[i])));
 	    sqlite3_free(sqlstmt);
 	  
@@ -250,81 +250,41 @@ int restore(int argc, char **argv)
 	"insert or ignore into restore_file_entities  "
 	"(file_id, ftype, permission, device_id, inode, user_name, user_id,  "
 	"group_name, group_id, size, sha1, datestamp, filename, extdata, xheader, serial)  "
-	"select file_id, ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, f.filename, extdata, xheader, "
-	"MAX(serial) from file_entities_bd f %s where name = '%q' and serial >= %d "
-	"and serial <= %d%s group by f.filename order by f.filename, serial",
+	"select file_id, ftype, permission, device_id, inode, user_name, user_id,  group_name, "
+	"group_id, size, sha1, datestamp, f.filename, extdata, xheader, f.serial "
+	"from ( "
+	"select filename, max(serial) as serial "
+	"from file_entities_bd "
+	"%s "
+	"where %sname = '%q' "
+	"and %sserial >= %d and serial <= %d"
+	"%s "
+	"group by filename) as f "
+	"inner join file_entities_bd as m "
+	"on m.filename = f.filename "
+	"and m.serial = f.serial ",
 	join_files_from_sql != NULL ? join_files_from_sql : "",
-	bkname, bdatestamp, edatestamp, filespec != 0 ?  filespec : ""), 0, 0, &sqlerr);
+	filespec != NULL ? "+" : "",
+	bkname, filespec != NULL ? "+" : "",
+	bdatestamp, edatestamp, filespec != 0 ?  filespec : ""), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s %s\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
     sqlite3_free(sqlstmt);
-
-    // Get key groupings
-    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"create temporary table if not exists temp_keygroup ( "
-//	"create table if not exists temp_keygroup ( "
-	"file_id	integer, "
-	"keygroup	char, "
-	"constraint temp_keygroupc1 unique ( "
-	"file_id))")), 0, 0, &sqlerr);
+    sqlite3_exec(bkcatalog,
+        "create index if not exists restore_file_entitiesi1 on restore_file_entities (  \n"
+        "    file_id)", 0, 0, &sqlerr);
     if (sqlerr != 0) {
-	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
+	fprintf(stderr, "%s\n\n\n",sqlerr);
 	sqlite3_free(sqlerr);
     }
-    sqlite3_free(sqlstmt);
-
-
-
-    {
-	int lastfileid = 0;
-	int step_result;
-	int lastresult = 0;
-	char *keygroup = NULL;
-	sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	    "select c.file_id, c.keynum from cipher_detail c "
-	    "join restore_file_entities r on "
-	    "c.file_id = r.file_id order by c.file_id, c.keynum")), -1, &sqlres, 0);
-	sqlite3_free(sqlstmt);
-	for (int rownum = 0; (step_result = sqlite3_step(sqlres)) == SQLITE_ROW || lastresult == 0; rownum++) {
-	    int fileid;
-	    int keynum;
-	    char keynumstr[32];
-
-	    if (step_result != SQLITE_ROW)
-		lastresult = 1;
-	    if (lastresult == 0) {
-		fileid = sqlite3_column_int(sqlres, 0);
-		keynum = sqlite3_column_int(sqlres, 1);
-	    }
-
-	    if (rownum > 0 && (lastresult == 1 || fileid != lastfileid)) {
-		keygroup[strlen(keygroup) - 1] = '\0';
-		sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		    "insert or ignore into temp_keygroup(file_id, keygroup) "
-		    "values (%d, '%q')",
-		    lastfileid, keygroup)), 0, 0, &sqlerr);
-		if (sqlerr != 0) {
-		    fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
-		    sqlite3_free(sqlerr);
-		}
-		sqlite3_free(sqlstmt);
-		keygroup[0] = '\0';
-	    }
-
-	    if (lastresult == 0) {
-		sprintf(keynumstr, "%d", keynum);
-		strcata(&keygroup, keynumstr);
-		strcata(&keygroup, "|");
-		lastfileid = fileid;
-	    }
-	    else
-	        break;
-	}
-	dfree(keygroup);
-	sqlite3_finalize(sqlres);
+    sqlite3_exec(bkcatalog,
+        "create index if not exists restore_file_entitiesi2 on restore_file_entities (  \n"
+        "    filename)", 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n\n\n",sqlerr);
+	sqlite3_free(sqlerr);
     }
 
 // Create temp db to tar key ID map
