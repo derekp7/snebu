@@ -553,8 +553,16 @@ int submitfiles2(int out_h)
 		    strncata0(&ciphertype, paxdata, paxdatalen - 1);
 		}
 		fprintf(curfile, "%s\n", ciphertype);
+
+		double curtime = ftime();
+		double lastupdate_time = curtime;
+		size_t tot_size = 0;
 		while ((c = tarsplit_read(databuf, 1, bufsize, tsf)) > 0) {
 		    fwrite(databuf, 1, c, curfile);
+		    tot_size += c;
+		    if ((curtime = ftime()) > lastupdate_time + 1) {
+			fprintf(out, "2\t%s\t%lu\n", stresc(fs.filename, &escfname), tot_size);
+		    }
 		}
 		if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.cipher", &paxdata, &paxdatalen) == 0) {
 		   for (int i = 0; i < numkeys; i++) {
