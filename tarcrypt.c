@@ -607,6 +607,7 @@ int tardecrypt()
     if (evp_keypair != NULL)
 	EVP_PKEY_free(evp_keypair);
     fwrite(padblock, 1, 512, stdout);
+    fwrite(padblock, 1, 512, stdout);
     return(0);
 }
 

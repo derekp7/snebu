@@ -634,6 +634,7 @@ int restore(int argc, char **argv)
     dfree(sha1filepath);
     memset(buf, 0, 512);
     fwrite(buf, 1, 512, stdout);
+    fwrite(buf, 1, 512, stdout);
     if (c_hdrbuf != NULL)
 	free(c_hdrbuf);
 
