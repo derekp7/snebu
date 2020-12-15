@@ -1,0 +1,29 @@
+.na
+.TH SNEBU-CLIENT-LISTBACKUPS "1" "December 2020" "snebu-client listbackups" "User Commands"
+.SH NAME
+snebu-client listbackups \- manual page for snebu-client listbackups
+.SH SYNOPSIS
+.B snebu-client
+\fI\,listbackups \/\fR[ \fI\,-n hostname \/\fR[ \fI\,-d datestamp \/\fR]] [ \fI\,file_list\/\fR... ]
+.SH DESCRIPTION
+With no arguments specified, "listbackups" will return a list of all
+systems that are contained in the backup catalog.  Otherwise, when
+specifying the \fB\-n\fR parameter, a list of backup sets for that host is
+returned.
+.SH OPTIONS
+.TP
+\fB\-c\fR, \fB\-\-config\fR config_file
+Name of the configuration file.
+Default is \fI\,/etc/snebu\-client.conf\/\fP.
+.TP
+\fB\-n\fR, \fB\-\-name\fR backupname
+Name of the backup.
+Usually set to the server name that you are backing up.
+.TP
+\fB\-d\fR, \fB\-\-date\fR datestamp
+Date stamp for this backup set.
+The format is in time_t format,
+sames as the output of the "date +%s" command.
+.TP
+[ file\-list ]
+List of files to restore.  Defaults to all.

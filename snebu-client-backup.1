@@ -1,0 +1,86 @@
+.na
+.TH SNEBU-CLIENT-BACKUP "1" "December 2020" "snebu-client backup" "User Commands"
+.SH NAME
+snebu-client backup \- manual page for snebu-client backup
+.SH SYNOPSIS
+.B snebu-client
+\fI\,backup \/\fR[ \fI\,-n backupname \/\fR] [ \fI\,-d datestamp \/\fR] [ \fI\,-r schedule \/\fR]
+[ file\-list ]
+.SH DESCRIPTION
+Initiates a system backup.
+By default, it will back up the local host to a local snebu install.
+You can also use this command to back up to a remote backup server,
+back up a remote host to either a local snebu instalation,
+or back up a remote host to another remote backup server,
+depending on which options are chosen.
+.SH OPTIONS
+.TP
+\fB\-c\fR, \fB\-\-config\fR config_file
+Name of the configuration file.  Default is
+\fI\,/etc/snebu\-client.conf\/\fP.
+.TP
+\fB\-n\fR, \fB\-\-name\fR backupname
+Name of the backup.  Usually set to the server
+name that you are backing up.
+.TP
+\fB\-d\fR, \fB\-\-date\fR datestamp
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+.TP
+\fB\-r\fR, \fB\-\-retention\fR schedule
+Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".
+.TP
+\fB\-k\fR, \fB\-\-encryption\-key\fR keyfile
+Turns on encryption, and specifies encryption
+key location.  May be specified more than once to
+encrypt with multiple keys.
+.IP
+The program "tarcrypt" needs to be present on the
+client for this option.  Keys are generated with
+the command:
+.IP
+\fBtarcrypt genkey \-f keyfile\fR [ -c comment]
+.TP
+\fB\-C\fR, \fB\-\-changedir\fR path
+Changes to the given directory path before backing up.
+.TP
+\fB\-\-graft\fR /path/name/=/new/name/
+Re\-write path names beginning with "/path/name/"
+to "/new/name/"
+.TP
+\fB\-f\fR, \fB\-\-force\-full\fR
+Force a full backup
+.TP
+\fB\-\-remote\-client\fR hostname
+Host name / IP address of remote host.  Used to
+backup a remote host to local backup server.
+.TP
+\fB\-\-remote\-user\fR userid
+User ID for remote remote\-client.  Defaults to
+root.
+.TP
+\fB\-\-sudo\fR userid
+Initial login User ID for remote remote\-client.
+This ID uses sudo to switch to remote\-user once
+logged in.
+.TP
+\fB\-\-backup\-server\fR hostname
+Host name / IP address of backup server.  Used to
+backup to a remote server.
+.TP
+\fB\-\-backup\-user\fR userid
+User ID for remote backup\-server.
+.TP
+\fB\-\-plugin\fR scriptname
+Specifies an optional plug in script.  Usually
+used to perform database\-specific operations
+(such as enabling hot backup mode) for systems
+with a DB installed.
+.TP
+[ file\-list ]
+List of files to backup.
+Overrides default specified in snebu-client.conf file.
+.SH "SEE ALSO"
+\fBtarcrypt\fR(1)

@@ -1,0 +1,58 @@
+.na
+.TH SNEBU-CLIENT-VALIDATE "1" "December 2020" "snebu-client validate" "User Commands"
+.SH NAME
+snebu-client validate \- manual page for snebu-client validate
+.SH SYNOPSIS
+.B snebu-client
+\fI\,validate \/\fR[ \fI\,-n backupname \/\fR] [ \fI\,-d datestamp \/\fR] [ \fI\,file-list \/\fR]
+.SH DESCRIPTION
+Compares the contents a given backup session identified by "\-n" and "\-d"
+parameters, to what is on the client.  Use the "listbackups" subcommand to
+get a list of available
+backup sessions.
+.SH OPTIONS
+.TP
+\fB\-c\fR, \fB\-\-config\fR config_file
+Name of the configuration file.  Default is
+\fI\,/etc/snebu\-client.conf\/\fP.
+.TP
+\fB\-n\fR, \fB\-\-name\fR backupname
+Name of the backup.  Usually set to the server
+name that you are backing up.
+.TP
+\fB\-d\fR, \fB\-\-date\fR datestamp
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+.TP
+\fB\-\-decrypt\fR
+Turns on decryption.  Requires "tarcrypt" to be
+on the client.  Password(s) will be prompted for
+during restore.
+.TP
+\fB\-C\fR, \fB\-\-changedir\fR path
+Changes to the given directory path before
+validating
+.TP
+\fB\-\-remote\-client\fR hostname
+Host name / IP address of remote host.  Used to
+backup a remote host to local backup server.
+.TP
+\fB\-\-remote\-user\fR userid
+User ID for remote remote\-client.  Defaults to
+root.
+.TP
+\fB\-\-sudo\fR userid
+Initial login User ID for remote remote\-client.
+This ID uses sudo to switch to remote\-user once
+logged in.
+.TP
+\fB\-\-backup\-server\fR hostname
+Host name / IP address of backup server.  Used to
+backup to a remote server.
+.TP
+\fB\-\-backup\-user\fR userid
+User ID for remote backup\-server.
+.TP
+[ file\-list ]
+List of files to validate.  Defaults to all.
