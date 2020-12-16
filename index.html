@@ -760,14 +760,14 @@ table.tableblock.grid-all { -webkit-border-radius: 0; border-radius: 0; }
 <div class="title">Source</div>
 <ul>
 <li>
-<p>Download <a href="https://github.com/derekp7/snebu/releases/download/v1.04/snebu-1.04.tar.gz">snebu-1.04.tar.gz</a></p>
+<p>Download <a href="https://github.com/derekp7/snebu/releases/download/v1.1pre1/snebu-1.1pre1.tar.gz">snebu-1.1pre1.tar.gz</a></p>
 </li>
 <li>
 <p>Extract the tar file, and run make / make install</p>
 <div class="listingblock">
 <div class="content">
-<pre>tar -zxvf snebu-1.04.tar.gz
-cd snebu-1.04
+<pre>tar -zxvf snebu-1.1pre1.tar.gz
+cd snebu-1.1pre1
 make
 make install</pre>
 </div>
@@ -779,7 +779,7 @@ make install</pre>
 <div class="title">RPM (Fedora / RHEL)</div>
 <ul>
 <li>
-<p>Download <a href="https://github.com/derekp7/snebu/releases/download/v1.04/snebu-1.04-1.src.rpm">snebu-1.04-1.src.rpm</a></p>
+<p>Download <a href="https://github.com/derekp7/snebu/releases/download/v1.1pre1/snebu-1.1pre1-1.src.rpm">snebu-1.1pre1-1.src.rpm</a></p>
 </li>
 <li>
 <p>Make sure you have the prerequisite packages installed</p>
@@ -793,8 +793,8 @@ make install</pre>
 <p>Build and install the binary RPM</p>
 <div class="listingblock">
 <div class="content">
-<pre>rpmbuild --rebuild snebu-1.04-1.src.rpm
-yum install snebu-1.04-1.rpm</pre>
+<pre>rpmbuild --rebuild snebu-1.1pre1-1.src.rpm
+yum install snebu-1.1pre1-1.rpm</pre>
 </div>
 </div>
 </li>
@@ -833,6 +833,8 @@ yum install snebu-1.04-1.rpm</pre>
 <li>
 <p>Built using standard tools and protocols.  File metadata gathering is provided by the <code>find</code> command (GNU find is required), files are transfered using <code>tar</code> format, the backup catalog is in an SQLite database file, and files are stored in the disk-based vault compressed with the LZO library, and compatible with the <code>lzop</code> compression program.</p>
 </li>
+<li>
+<p>*NEW* Client-side public key encryption is now supported using the included <code>tarcrypt</code> command.
 </ul>
 </div>
 </div>
@@ -979,6 +981,28 @@ mkdir -p /media/backups/vault</pre>
 </div>
 <div class="paragraph">
 <p>This will by default place the files starting in the directory you are currently sitting in.  So, if you are in /tmp, and restore /home/bob/resume.txt, it will be placed in /tmp/home/bob/resume.txt.  See the detailed documentation section for additional parameters, such as <code>-C</code> which will specify an alternate target directory, or <code>--graft</code> which will allow you to rename parts of the file path.</p>
+</div>
+</li>
+<li>
+<p>To create encrypted backups, first generate a key on the client using <code>tarcrypt genkey</code>
+<div class="listingblock">
+<div class="content">
+<pre>tarcrypt genkey -f /etc/zeus-backup.key</pre>
+</div>
+</div>
+<p>Then, when performing any backup operation, include the <code>-k</code> flag followed by the stored encryption key
+<div class="listingblock">
+<div class="content">
+<pre>snebu-client backup -v -k /etc/zeus-backup.key</pre>
+</div>
+</div>
+<div calss="paragraph">
+<p>When restoring, include the <code>--decrypt</code> flag</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>snebu-client restore --decrypt --name zeus --datestamp 1389677695 '/path/to/file'</pre>
+</div>
 </div>
 </li>
 </ol>
