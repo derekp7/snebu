@@ -1,11 +1,14 @@
 .na
 .TH SNEBU-CLIENT-BACKUP "1" "December 2020" "snebu-client backup" "User Commands"
 .SH NAME
-snebu-client backup \- manual page for snebu-client backup
+snebu-client backup \- Initiates a backup
 .SH SYNOPSIS
 .B snebu-client
-\fI\,backup \/\fR[ \fI\,-n backupname \/\fR] [ \fI\,-d datestamp \/\fR] [ \fI\,-r schedule \/\fR]
-[ file\-list ]
+\fB\,backup \/\fR
+[ \fB-n\fR \fIbackupname\fR ]
+[ \fB-d\fR \fIdatestamp\fR ]
+[ \fB-r\fR \fIschedule\fR ]
+[ \fIfile\-list\fR ]
 .SH DESCRIPTION
 Initiates a system backup.
 By default, it will back up the local host to a local snebu install.
@@ -15,24 +18,23 @@ or back up a remote host to another remote backup server,
 depending on which options are chosen.
 .SH OPTIONS
 .TP
-\fB\-c\fR, \fB\-\-config\fR config_file
+\fB\-c\fR, \fB\-\-config\fR \fIconfig_file\fR
 Name of the configuration file.  Default is
 \fI\,/etc/snebu\-client.conf\/\fP.
 .TP
-\fB\-n\fR, \fB\-\-name\fR backupname
+\fB\-n\fR, \fB\-\-name\fR \fIbackupname\fR
 Name of the backup.  Usually set to the server
 name that you are backing up.
 .TP
-\fB\-d\fR, \fB\-\-date\fR datestamp
+\fB\-d\fR, \fB\-\-date\fR \fIdatestamp\fR
 Date stamp for this backup set.  The format is in
-time_t format, sames as the output of the "date
-+%s" command.
+time_t format, sames as the output of the "date\~+%s" command.
 .TP
-\fB\-r\fR, \fB\-\-retention\fR schedule
+\fB\-r\fR, \fB\-\-retention\fR \fIschedule\fR
 Retention schedule for this backup set.  Typical
 values are "daily", "weekly", "monthly", "yearly".
 .TP
-\fB\-k\fR, \fB\-\-encryption\-key\fR keyfile
+\fB\-k\fR, \fB\-\-encryption\-key\fR \fIkeyfile\fR
 Turns on encryption, and specifies encryption
 key location.  May be specified more than once to
 encrypt with multiple keys.
@@ -41,45 +43,45 @@ The program "tarcrypt" needs to be present on the
 client for this option.  Keys are generated with
 the command:
 .IP
-\fBtarcrypt genkey \-f keyfile\fR [ -c comment]
+\fBtarcrypt genkey \-f\fR \fIkeyfile\fR [ \fB-c\fR \fIcomment\fR ]
 .TP
-\fB\-C\fR, \fB\-\-changedir\fR path
+\fB\-C\fR, \fB\-\-changedir\fR \fIpath\fR
 Changes to the given directory path before backing up.
 .TP
-\fB\-\-graft\fR /path/name/=/new/name/
-Re\-write path names beginning with "/path/name/"
-to "/new/name/"
+\fB\-\-graft\fR \fI/path/name/\fR\fB=\fR\fI/new/name/\fR
+Re\-write path names beginning with "\fI/path/name/\fR"
+to "\fI/new/name/\fR"
 .TP
 \fB\-f\fR, \fB\-\-force\-full\fR
 Force a full backup
 .TP
-\fB\-\-remote\-client\fR hostname
+\fB\-\-remote\-client\fR \fIhostname\fR
 Host name / IP address of remote host.  Used to
 backup a remote host to local backup server.
 .TP
-\fB\-\-remote\-user\fR userid
+\fB\-\-remote\-user\fR \fIuserid\fR
 User ID for remote remote\-client.  Defaults to
 root.
 .TP
-\fB\-\-sudo\fR userid
+\fB\-\-sudo\fR \fIuserid\fR
 Initial login User ID for remote remote\-client.
 This ID uses sudo to switch to remote\-user once
 logged in.
 .TP
-\fB\-\-backup\-server\fR hostname
+\fB\-\-backup\-server\fR \fIhostname\fR
 Host name / IP address of backup server.  Used to
 backup to a remote server.
 .TP
-\fB\-\-backup\-user\fR userid
+\fB\-\-backup\-user\fR \fIuserid\fR
 User ID for remote backup\-server.
 .TP
-\fB\-\-plugin\fR scriptname
+\fB\-\-plugin\fR \fIscriptname\fR
 Specifies an optional plug in script.  Usually
 used to perform database\-specific operations
 (such as enabling hot backup mode) for systems
 with a DB installed.
 .TP
-[ file\-list ]
+[ \fIfile\-list\fR ]
 List of files to backup.
 Overrides default specified in snebu-client.conf file.
 .SH "SEE ALSO"

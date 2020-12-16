@@ -1,0 +1,75 @@
+.na
+.TH SNEBU-PERMISSIONS "1" "December 2020" "snebu-permissions" "User Commands"
+.SH NAME
+snebu-permissions \- Set permissions for Snebu when used in multi-user mode
+.SH SYNOPSIS
+.B snebu
+\fB\,permissions\fR
+[ \fB-l\fR | \fB-a\fR | \fB-r\fR ]
+\fB-c\fR \fIcommand\fR
+\fB-n\fR \fIhostname\fR
+\fB-u\fR \fIuser\fR
+.SH DESCRIPTION
+.TP
+The \fIpermissions\fR command lists, adds, or removes user permissions.
+These permissions are applied when the "snebu" command is installed setuid, and run
+by a OS different user.
+.SH OPTIONS
+.TP
+\fB\-l\fR, \fB\-\-list\fR
+Lists all installed permissions.  If the \fB\-c\fR, \fB\-n\fR, or
+\fB\-u\fR options are given, this list is restricted to
+those subcommands, hostnames, or users respectively.
+.TP
+\fB\-a\fR, \fB\-\-add\fR
+Adds permissions for the specified subcommand [\-c],
+hostname [\-n], and user [\-u].
+.TP
+\fB\-r\fR, \fB\-\-remove\fR
+Removes permissions for the specified subcommand
+[\-c], hostname [\-n], and user [\-u].
+.TP
+\fB\-c\fR, \fB\-\-command\fR \fIsubcommand\fR
+The subcommand that this permission command applies to.
+.TP
+\fB\-n\fR, \fB\-\-name\fR \fIhostname\fR
+The host name that this permission command applies to.
+.TP
+\fB\-u\fR, \fB\-\-user\fR \fIusername\fR
+The user that this permission command applies to.
+.PP
+Available subcomands that work with permissions are:
+.RS 4
+.sp
+\fBbackup\fR (covers both newbackup and submitfiles functions)
+.sp
+\fBrestore\fR
+.sp
+\fBlistbackups\fR
+.sp
+\fBexpire\fR
+.sp
+\fBpurge\fR
+.sp
+\fBpermissions\fR
+.PP
+.RE
+Note, that since the purge subcommand doesn't take a list of hostnames, along
+with the permissions subcommand, and the expire subcommand when run with the
+\fB\-\-age\fR option, you must specify the hostname '*' to give access to a specific
+user.
+.PP
+To grant permissions, this command must be run as the user that snebu is
+installed under, or the user must be granted access to the \fIpermissions\fR
+subcommand
+.SH "SEE ALSO"
+.hy 0
+\fBsnebu\fR(1),
+\fBsnebu\-newbackup\fR(1),
+\fBsnebu\-submitfiles\fR(1),
+\fBsnebu\-restore\fR(1),
+\fBsnebu\-listbackups\fR(1),
+\fBsnebu\-expire\fR(1),
+\fBsnebu\-purge\fR(1),
+\fBsnebu\-client\fR(1)
+.PP

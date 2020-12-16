@@ -1,0 +1,35 @@
+.na
+.TH SNEBU-SUBMITFILES "1" "December 2020" "snebu-submitfiles" "User Commands"
+.SH NAME
+snebu submitfiles \- Recieves tar file contents to complete a backup
+.SH SYNOPSIS
+.B snebu
+\fBsubmitfiles\fR
+\fB-n\fR \fIbackupname\fR
+\fB-d\fR \fIdatestamp\fR
+.SH DESCRIPTION
+The "submitfiles" sub command is called after running \fIsnebu\~newbackup\fR,
+and is used to submit a tar file containing the files from the snapshot manifest returned by \fInewbackup\fR.
+.SH OPTIONS
+.TP
+\fB\-n\fR, \fB\-\-name\fR \fIbackupname\fR
+Name of the backup.
+Typically set to the server name that you are backing up.
+.TP
+\fB\-d\fR, \fB\-\-date\fR \fIdatestamp\fR
+Date stamp for this backup set.
+The format is in time_t format, sames as the output of the "date\~+%s" command.
+.TP
+\fB\-v\fR
+Verbose output
+.SH "SEE ALSO"
+.hy 0
+\fBsnebu\fR(1),
+\fBsnebu\-newbackup\fR(1),
+\fBsnebu\-restore\fR(1),
+\fBsnebu\-listbackups\fR(1),
+\fBsnebu\-expire\fR(1),
+\fBsnebu\-purge\fR(1),
+\fBsnebu\-permissions\fR(1),
+\fBsnebu\-client\fR(1)
+.PP

@@ -1,0 +1,51 @@
+.na
+.TH SNEBU-EXPIRE "1" "December 2020" "snebu-expire" "User Commands"
+.SH NAME
+snebu-expire \- Expire a given backup set or range of backups
+.SH SYNOPSIS
+.B snebu
+\fBexpire\fR [ \fB-n\fR \fIhostname\fR
+\fB-d\fR \fIdatestamp\fR ] or
+[ \fB-a\fR \fIdays\fR
+\fB-r\fR \fIschedule\fR
+[ \fB\-n\fR \fIhostname\fR ]]
+.SH DESCRIPTION
+Removes backup sessions from the snebu backup catalog database.
+A specific backup session can be purged by providing the \fB\-n\fR and \fB\-d\fR
+options, or all backups that are part of a given retention schedule
+(specified with \fB\-r\fR, and optionally from a given host, with the \fB\-n\fR
+option) that are older than a given number of days (\fB\-a\fR) are removed.
+.SH OPTIONS
+.TP
+\fB\-n\fR, \fB\-\-name\fR \fIbackupname\fR
+Name of the backup.  Usually set to the server
+name that you are backing up.
+.TP
+\fB\-d\fR, \fB\-\-date\fR \fIdatestamp\fR
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+.TP
+\fB\-r\fR, \fB\-\-retention\fR \fIschedule\fR
+Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".
+.TP
+\fB\-a\fR, \fB\-\-age\fR \fI#days\fR
+Expire backups older than #days.
+.TP
+\fB\-m\fR, \fB\-\-min\-keep\fR \fI#backups\fR
+When expiring with the \fB\-a\fR flag, keep at least
+this many of the most recent backups for a given
+hostname/retention schedule.
+Defaults to 3 days.
+.SH "SEE ALSO"
+.hy 0
+\fBsnebu\fR(1),
+\fBsnebu\-newbackup\fR(1),
+\fBsnebu\-submitfiles\fR(1),
+\fBsnebu\-restore\fR(1),
+\fBsnebu\-listbackups\fR(1),
+\fBsnebu\-purge\fR(1),
+\fBsnebu\-permissions\fR(1),
+\fBsnebu\-client\fR(1)
+.PP

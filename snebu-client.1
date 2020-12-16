@@ -1,7 +1,7 @@
 .na
 .TH SNEBU-CLIENT "1" "December 2020" "snebu-client" "User Commands"
 .SH NAME
-snebu-client \- manual page for snebu-client
+snebu-client \- Front-end client for the snebu backup system
 .SH SYNOPSIS
 .B snebu-client
 [ \fI\,subcommand \/\fR] [ \fI\,options \/\fR]
@@ -14,28 +14,31 @@ following subcommands.
 .SS "Sub commands are as follows:"
 .PP
 \fBbackup\fR
-[ \fB\-n\fR backupname ] [ \fB\-d\fR datestamp ] [ \fB\-r\fR schedule ]
+[ \fB\-n\fR \fIbackupname\fR ]
+[ \fB\-d\fR \fIdatestamp\fR ]
+[ \fB\-r\fR \fIschedule\fR ]
 .RS 4
 Initiates a backup.
 .RE
 .PP
 \fBrestore\fR
-[ \fB\-n\fR backupname ] [ \fB\-d\fR datestamp ]
+[ \fB\-n\fR \fIbackupname\fR ] [ \fB\-d\fR \fIdatestamp\fR ]
 .RS 4
 Initates a restore.
 .RE
 .PP
-\fBlistbackups\fR [ \fB\-n\fR backupname [ \fB\-d\fR datestamp ]] [ file_list... ]
+\fBlistbackups\fR [ \fB\-n\fR \fIbackupname\fR [ \fB\-d\fR \fIdatestamp\fR ]]
+[ \fIfile_list\fR... ]
 .RS 4
 List backed up hosts, backupsets within a host, or files within a backupset.
 .RE
 .PP
-\fBvalidate\fR \fB\-n\fR backupname \fB\-d\fR datestamp
+\fBvalidate\fR \fB\-n\fR \fIbackupname\fR \fB\-d\fR \fIdatestamp\fR
 .RS 4
 Validates a given backup.
 .RE
 .PP
-\fBhelp\fR [subcommand]
+\fBhelp\fR [ \fIsubcommand\fR ]
 .RS 4
 Displays help page of subcommand
 .RE

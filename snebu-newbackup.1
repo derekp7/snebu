@@ -1,0 +1,118 @@
+.na
+.TH SNEBU-NEWBACKUP "1" "December 2020" "snebu newbackup" "User Commands"
+.SH NAME
+snebu newbackup \- Submits manifest for a new backup
+.SH SYNOPSIS
+.B snebu
+\fBnewbackup\fR
+\fB-n\fR \fIbackupname\fR
+\fB-d\fR \fIdatestamp\fR
+\fB-r\fR \fIschedule\fR
+.SH DESCRIPTION
+The "newbackup" command creates a new backup set, by consuming a
+tab\-delimited list of file names (along with associated meta data) to
+include in the backup.  It then compares this list to the backup
+catalog database to determine which files are new, and which ones are
+already contained on the backup media.  A list of new / changed files
+is returned (the snapshot manifest), which can then be passed along to 
+"tar" to generate the input for the "submitfiles" subcommand.
+.SH OPTIONS
+.TP
+\fB\-n\fR, \fB\-\-name\fR \fIbackupname\fR
+Name of the backup.  Usually set to the server
+name that you are backing up.
+.TP
+\fB\-d\fR, \fB\-\-date\fR \fIdatestamp\fR
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+.TP
+\fB\-r\fR, \fB\-\-retention\fR \fIschedule\fR
+Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".
+.TP
+\fB\-T\fR, \fB\-\-files\-from\fR \fIFILE\fR
+Read list of filenames (with meta data) to backup
+from the named file, instead of standard input.
+.TP
+\fB\-\-null\fR
+Inbound backup manifest (\fB\-T\fR, or standard input)
+is null terminated
+.TP
+\fB\-\-not\-null\fR
+Inbound backup manifest (\fB\-T\fR, or standard input)
+is newline terminated
+.TP
+\fB\-\-null\-output\fR
+Generate snapshot manifest with null-terminated lines.
+.TP
+\fB\-\-not\-null\-output\fR
+Generate snapshot with newline-terminated lines.
+.TP
+\fB\-f\fR, \fB\-\-force\-full\fR
+Force a full backup
+.TP
+\fB\-\-graft\fR \fI/path/name/\fR\fB=\fR\fI/new/name/\fR
+Re\-write path names beginning with "\fI/path/name/\fR"
+to "\fI/new/name/\fR"
+.TP
+\fB\-v\fR
+Turn on verbose output.
+.SS Input Manifest format
+The input manifest contains a list of files to include in this backup set.
+The format is a delimited list of file names and file metadata, with the following fields:
+.BP
+.PP
+.TS
+l l l.
+Field	Name	Description
+.T&
+l l l.
+_
+1	FType	Values are one of "f", "d", "l", "c", "b"
+2	Mode	File mode in octal
+3	Device	Device number of filesystem
+4	Inode	Inode number of file
+5	UName	User name
+6	UID	User ID number
+7	GName	User's Group Name
+8	GID	User's Group Number
+9	Size	File size in bytes
+10	Hash	File Hash (future use, set to "0")
+11	CTime	File Inode's last change time
+12	MTime	File Content's last modififed time
+13	Path	Full file path
+14	LTarget	Link target
+.TE
+.PP
+Field 14 (Link Target) is only present if the file type is "l" (symbolic link).
+.PP
+The fields are tab-delimited.  If the "--null" option is specified, then each line is null terminated, with an additional null character delimiting fields 13 and 14.  Otherwise if "--not-null" is specified, fields 13 and 14 are tab delimited, and the path names must have special characters escaped.
+.PP
+The input manifest can be created with the GNU \fIfind\fR command, with the following print formatting specification (suitable for the "--null" flag):
+.RS
+.PP
+.EX
+find [ parameters ] \\( -type f -o -type d \\) \\
+.br
+    -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\\0" \\
+.br
+    -o -type l -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\\0%l\\0"
+.EE
+.RE
+.SS Returned Snapshot manifest output
+.PP
+The manifest returned is either a null-delimited list of files (if "--null-output" is specified),
+or a newline-delimited list of files with special characters escaped (if "--not-null-output is specified).
+This is the list of files that are required to complete the snapshot (any file that hasn't changed from previous backups will be referenced from the backup server).  This list is suitable for passing into the \fItar\fR command.
+.SH "SEE ALSO"
+.hy 0
+\fBsnebu\fR(1),
+\fBsnebu\-submitfiles\fR(1),
+\fBsnebu\-restore\fR(1),
+\fBsnebu\-listbackups\fR(1),
+\fBsnebu\-expire\fR(1),
+\fBsnebu\-purge\fR(1),
+\fBsnebu\-permissions\fR(1),
+\fBsnebu\-client\fR(1)
+.PP

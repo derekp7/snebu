@@ -1,0 +1,39 @@
+.na
+.TH SNEBU-RESTORE "1" "December 2020" "snebu-restore" "User Commands"
+.SH NAME
+snebu restore \- Generates tar file from backup
+.SH SYNOPSIS
+.B snebu
+\fBrestore\fR \fB-n\fR \fIbackupname\fR
+\fB-d\fR \fIdatestamp\fR
+[ \fIfile_list\fR... ]
+.SH DESCRIPTION
+Generates a tar file containing files from a given backup set.
+Pipe the output of this command into \fItar\fR to restore files.
+.SH OPTIONS
+.TP
+\fB\-n\fR, \fB\-\-name\fR \fIbackupname\fR
+Name of the backup, as specified in the \fInewbackup\fR subcommand.
+Typically is the name of the server that was backed up.
+.TP
+\fB\-d\fR, \fB\-\-date\fR \fIdatestamp\fR
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date\~+%s" command.
+.TP
+\fB\-\-graft\fR \fI/path/name/\fR\fB=\fR\fI/new/name/\fR
+Re\-write path names beginning with "\fI/path/name/\fR" to "\fI/new/name/\fR".
+This allows you to restore a file to a different location.
+.TP
+[ \fIfile\-list\fR ]
+List of files to restore.  Defaults to all.
+.SH "SEE ALSO"
+.hy 0
+\fBsnebu\fR(1),
+\fBsnebu\-newbackup\fR(1),
+\fBsnebu\-submitfiles\fR(1),
+\fBsnebu\-listbackups\fR(1),
+\fBsnebu\-expire\fR(1),
+\fBsnebu\-purge\fR(1),
+\fBsnebu\-permissions\fR(1),
+\fBsnebu\-client\fR(1)
+.PP

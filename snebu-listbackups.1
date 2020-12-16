@@ -1,0 +1,38 @@
+.na
+.TH SNEBU-LISTBACKUPS "1" "December 2020" "snebu-listbackups" "User Commands"
+.SH NAME
+snebu listbackups \- Lists backed up systems, backup sets, and file names
+.SH SYNOPSIS
+.B snebu 
+\fBlistbackups\fR
+[ \fB-n\fR \fIhostname\fR ] [ \fB-d\fR \fIdatestamp\fR ]]
+[ \fIfile_list\fR... ]
+.SH DESCRIPTION
+With no arguments specified, \fIlistbackups\fR will return a list of all
+systems that are contained in the backup catalog.  Otherwise, when
+specifying the \fB\-n\fR parameter, a list of backup sets for that host is
+returned.
+.SH OPTIONS
+.TP
+\fB\-n\fR, \fB\-\-name\fR \fIbackupname\fR
+Name of the backup.  Usually set to the server
+name that you are backing up.
+.TP
+\fB\-d\fR, \fB\-\-date\fR \fIdatestamp\fR
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+.TP
+[ \fIfile\-list\fR ]
+List of files or file pattern(s)
+.SH "SEE ALSO"
+.hy 0
+\fBsnebu\fR(1),
+\fBsnebu\-newbackup\fR(1),
+\fBsnebu\-submitfiles\fR(1),
+\fBsnebu\-restore\fR(1),
+\fBsnebu\-expire\fR(1),
+\fBsnebu\-purge\fR(1),
+\fBsnebu\-permissions\fR(1),
+\fBsnebu\-client\fR(1)
+.PP
