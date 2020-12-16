@@ -24,7 +24,8 @@ install: $(PROGS) $(SCRIPTS) $(CONFIGS)
 	grep '^snebu:' /etc/passwd || useradd --system -m snebu
 	cp -f $(PROGS) $(SCRIPTS) $(DESTDIR)$(BINDIR)/
 	cp -f $(CONFIGS) $(DESTDIR)$(ETCDIR)/
-	cp -f snebu.1 snebu-*.1 tarcrypt.1 $(MANDIR)/man1/
+	mkdir -p $(DESTDIR)/$(MANDIR)/man1
+	cp -f snebu.1 snebu-*.1 tarcrypt.1 $(DESTDIR)$(MANDIR)/man1/
 
 clean:
 	rm -f $(PROGS) snebu-main.o snebu-newbackup.o tarlib.o snebu-submitfiles.o snebu-restore.o snebu-listbackups.o snebu-expire-purge.o snebu-permissions.o tarcrypt.o

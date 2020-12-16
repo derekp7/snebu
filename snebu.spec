@@ -17,6 +17,7 @@ programs.  Features a client-server architecture built around standard
 tools (find, tar, ssh), file-level deduplication and compression, and
 a backup catalog stored in an SQLite datbase file.
 
+%global debug_package %{nil}
 
 %prep
 %setup -q
@@ -33,9 +34,11 @@ make install PREFIX=/usr DESTDIR=%{buildroot}
 
 %files
 /usr/bin/snebu-client
+/usr/bin/tarcrypt
 %config /etc/snebu.conf
 %attr(4550, snebu, snebu) /usr/bin/snebu
 %doc readme.md COPYING.txt
+/usr/share/man/man1/
 
 %pre
 grep '^snebu:' /etc/passwd || useradd --system -m snebu
