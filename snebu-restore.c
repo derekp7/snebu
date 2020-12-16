@@ -28,7 +28,6 @@ int restore(int argc, char **argv)
 
     char bkname[128];
     char datestamp[128];
-    char retention[128];
 
     char graftfilename[8192];
     int optc;
@@ -49,7 +48,7 @@ int restore(int argc, char **argv)
     int filespeclen;
     char *sqlerr;
     int use_pax_header = 0;
-//    int verbose = 0;
+    int verbose = 0;
     char *(*graft)[2] = 0;
     int numgrafts = 0;
     int maxgrafts = 0;
@@ -76,7 +75,7 @@ int restore(int argc, char **argv)
 
     lendian = (unsigned int) (((unsigned char *)(&lendian))[0]); // little endian test
 
-    while ((optc = getopt_long(argc, argv, "n:d:T:", longopts, &longoptidx)) >= 0) {
+    while ((optc = getopt_long(argc, argv, "n:d:T:v", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
 	    case 'n':
 		strncpy(bkname, optarg, 127);
@@ -88,14 +87,8 @@ int restore(int argc, char **argv)
 		datestamp[127] = 0;
 		foundopts |= 2;
 		break;
-	    case 'r':
-		strncpy(retention, optarg, 127);
-		retention[127] = 0;
-		foundopts |= 4;
-		break;
 	    case 'v':
-//		verbose = 1;
-		foundopts |= 4;
+		verbose = 1;
 		break;
 	    case 0:
 		if (strcmp("pax", longopts[longoptidx].name) == 0)
@@ -207,6 +200,8 @@ int restore(int argc, char **argv)
 	join_files_from_sql = "join files_from r on f.filename = r.filename";
 
     }
+    if (verbose >= 1)
+	fprintf(stderr, "Gathering file metadata\n");
     sqlite3_exec(bkcatalog, 
 	"create temporary table if not exists restore_file_entities (  \n"
 //	"create table if not exists restore_file_entities (  \n"
@@ -288,6 +283,8 @@ int restore(int argc, char **argv)
     }
 
 // Create temp db to tar key ID map
+    if (verbose >= 1)
+	fprintf(stderr, "Checking if any files are encrypted\n");
     sqlite3_exec(bkcatalog,
         "create temporary table if not exists temp_keymap ( "
 //        "create table if not exists temp_keymap ( "
@@ -345,6 +342,8 @@ int restore(int argc, char **argv)
 
     int numkeys = 0;
     if (keygroups != NULL && strlen(keygroups) > 0) {
+	if (verbose >= 1)
+	    fprintf(stderr, "Building encrypted header\n");
 	struct filespec gh;
 	struct key_st *keys = NULL;
 	fsinit(&gh);
@@ -422,6 +421,8 @@ int restore(int argc, char **argv)
 
     }
 
+    if (verbose >= 1)
+	fprintf(stderr, "Sorting files\n");
     sqlite3_prepare_v2(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"select a.file_id, "
 	"case when b.file_id not null and a.file_id != b.file_id  "
