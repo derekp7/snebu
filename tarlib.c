@@ -1517,6 +1517,8 @@ int genkey(int argc, char **argv)
     gethostname(hostname, 63);
     hostname[63] = '\0';
     comment[0] = '\0';
+    time_t curtime = time(NULL);
+    struct tm loctime =  *localtime(&curtime);
 
     while ((optc = getopt_long(argc, argv, "f:c:", longopts, &longoptidx)) >= 0) {
 	switch (optc) {
@@ -1584,9 +1586,11 @@ int genkey(int argc, char **argv)
     BIO_printf(rsakeyfile, "%s\n", hmac_hash_b64);
     BIO_printf(rsakeyfile, "-----END HMAC HASH-----\n");
     BIO_printf(rsakeyfile, "-----BEGIN COMMENT-----\n");
-    BIO_printf(rsakeyfile, "%s@%s\n", pw->pw_name, hostname);
+    BIO_printf(rsakeyfile, "Source: %s@%s\n", pw->pw_name, hostname);
+    BIO_printf(rsakeyfile, "Date: %d/%02d/%02d %02d:%02d:%02d\n", loctime.tm_year + 1900, loctime.tm_mon + 1, loctime.tm_mday,
+	loctime.tm_hour, loctime.tm_min, loctime.tm_sec);
     if (comment[0] != '\0')
-	BIO_printf(rsakeyfile, "==== %s ====\n", comment);
+	BIO_printf(rsakeyfile, "Comment: %s\n", comment);
     BIO_printf(rsakeyfile, "-----END COMMENT-----\n");
     EVP_CIPHER_CTX_cleanup(ctx);
 
@@ -1829,7 +1833,7 @@ int load_keyfile(char *keyfilename, struct key_st *key_st)
     key_st->hmac_hash_b64 = (strchr(key_st->hmac_hash_b64, '\n') + 1);
     *(strchr(key_st->hmac_hash_b64, '\n')) = '\0';
     key_st->comment = (strchr(key_st->comment, '\n') + 1);
-    *(strchr(key_st->comment, '\n')) = '\0';
+    *(strstr(key_st->comment, "-----END COMMENT-----")) = '\0';
     key_st->evp_keypair = NULL;
 
     return(0);
@@ -1901,11 +1905,10 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
 	int n = atoi(required_keys_group[i]);
 	if (n < rsa_keys->numkeys && rsa_keys->keys[n].evp_keypair == NULL) {
 	    nkeys++;
-	    strcata(&msg2, "  ");
+	    strcata(&msg2, "Fingerprint: ");
 	    strcata(&msg2, rsa_keys->keys[n].fingerprint);
 	    if (msg2[strlen(msg2) - 1] != '\n')
 		strcata(&msg2, "\n");
-	    strcata(&msg2, "    ");
 	    strcata(&msg2, rsa_keys->keys[n].comment);
 	    strcata(&msg2, "\n");
 	}
