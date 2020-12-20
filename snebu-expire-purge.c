@@ -29,9 +29,9 @@ int expire(int argc, char **argv)
     char retention[128];
     char bkname[128];
     char datestamp[128];
-    int age = 0;
+    long age = 0;
     int bkid;
-    int min = 3;
+    long min = 3;
     int foundopts = 0;
     sqlite3_stmt *sqlres;
     char *sqlstmt = NULL;
@@ -62,11 +62,11 @@ int expire(int argc, char **argv)
 		foundopts |= 2;
 		break;
 	    case 'a':
-		age = atoi(optarg);
+		age = strtol(optarg, NULL, 10);
 		foundopts |= 4;
 		break;
 	    case 'm':
-		min = atoi(optarg);
+		min = strtol(optarg, NULL, 10);
 		foundopts |= 8;
 		break;
 	    case 'd':

@@ -162,17 +162,17 @@ int restore(int argc, char **argv)
     if (range != NULL) {
 	*range = '\0';
 	if (*datestamp != '\0')
-	    bdatestamp = atoi(datestamp);
+	    bdatestamp = strtol(datestamp, NULL, 10);
 	else
 	    bdatestamp = 0;
 	if (*(range + 1) != '\0')
-	    edatestamp = atoi(range + 1);
+	    edatestamp = strtol(range + 1, NULL, 10);
 	else
 	    edatestamp = INT32_MAX;
     }
     else {
-	bdatestamp = atoi(datestamp);
-	edatestamp = atoi(datestamp);
+	bdatestamp = strtol(datestamp, NULL, 10);
+	edatestamp = strtol(datestamp, NULL, 10);
     }
 
     if (FILES_FROM != NULL) {

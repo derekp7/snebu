@@ -201,6 +201,7 @@ void dfree(void *b);
 void *drealloc(void *b, size_t size) ;
 size_t dmalloc_size(void *b);
 char *strncpya0(char **dest, const char *src, size_t n);
+char *strncpy0(char *dest, const char *src, size_t n);
 char *strcata(char **dest, const char *src);
 char *strncata0(char **dest, const char *src, size_t n);
 void *memcpya(void **dest, void *src, size_t n);

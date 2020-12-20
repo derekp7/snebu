@@ -258,18 +258,18 @@ int newbackup(int argc, char **argv)
 	strncpy(fs.devid, filespecsl[2], 32);
 	strncpy(fs.inode, filespecsl[3], 32);
 	strncpy(fs.auid, filespecsl[4], 32);
-	fs.nuid = atoi(filespecsl[5]);
+	fs.nuid = strtol(filespecsl[5], NULL, 10);
 	strncpy(fs.agid, filespecsl[6], 32);
-	fs.ngid = atoi(filespecsl[7]);
+	fs.ngid = strtol(filespecsl[7], NULL, 10);
 	fs.filesize = strtoull(filespecsl[8], NULL, 10);
 	strncpy(fs.sha1, filespecsl[9], 32);
 	// Handle input datestamp of xxxxx.xxxxx
 	if (strchr(filespecsl[10], '.') != NULL)
 	    *(strchr(filespecsl[10], '.')) = '\0';
-	fs.cmodtime = atoi(filespecsl[10]);
+	fs.cmodtime = strtol(filespecsl[10], NULL, 10);
 	if (strchr(filespecsl[11], '.') != NULL)
 	    *(strchr(filespecsl[11], '.')) = '\0';
-	fs.modtime = atoi(filespecsl[11]);
+	fs.modtime = strtol(filespecsl[11], NULL, 10);
 	fs.filename = filespecsl[12];
 
 	if (fs.filename[strlen(fs.filename) - 1] == '\n')

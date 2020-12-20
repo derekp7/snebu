@@ -19,6 +19,9 @@
 #include <sys/time.h>
 #include "tarlib.h"
 
+void *safe_malloc(size_t size);
+#define malloc(SIZE) safe_malloc(SIZE)
+
 char *itoa(char *s, int n);
 
 int main(int argc, char **argv)
@@ -315,7 +318,7 @@ int tardecrypt()
 	    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.numkeys", &paxdata, &paxdatalen) == 0) {
 		strncpy(numkeys_a, paxdata, paxdatalen <=15 ? paxdatalen : 15);
 		numkeys_a[paxdatalen < 15 ? paxdatalen : 15] = '\0';
-		numkeys = atoi(numkeys_a);
+		numkeys = strtol(numkeys_a, NULL, 10);
 		if (rsa_keys != NULL) {
 		    if (rsa_keys->keys != NULL)
 			free(rsa_keys->keys);
@@ -448,8 +451,8 @@ int tardecrypt()
 		    parse(required_keys_str, &required_keys_group, '|');
 		    keynum = -1;
 		    for (int i = 0; required_keys_group[i] != NULL; i++) {
-			if (rsa_keys->keys[atoi(required_keys_group[i])].evp_keypair != NULL) {
-			    keynum = atoi(required_keys_group[i]);
+			if (rsa_keys->keys[strtol(required_keys_group[i], NULL, 10)].evp_keypair != NULL) {
+			    keynum = strtol(required_keys_group[i], NULL, 10);
 			    break;
 			}
 		    }

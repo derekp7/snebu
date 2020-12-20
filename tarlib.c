@@ -28,6 +28,9 @@ int HMAC_CTX_reset(HMAC_CTX *ctx);
 static void *OPENSSL_zalloc(size_t num);
 #endif
 
+void *safe_malloc(size_t size);
+#define malloc(SIZE) safe_malloc(SIZE)
+
 int tar_get_next_hdr(struct filespec *fs)
 {
     struct tarhead tarhead;
@@ -196,9 +199,9 @@ int tar_get_next_hdr(struct filespec *fs)
 	    fs->modtime=strtol(tarhead.modtime, 0, 8);
 
 	    if (strlen(tarhead.auid) == 0)
-		sprintf(tarhead.auid, "%d", fs->nuid);
+		snprintf(tarhead.auid, 32, "%d", fs->nuid);
 	    if (strlen(tarhead.agid) == 0)
-		sprintf(tarhead.agid, "%d", fs->ngid);
+		snprintf(tarhead.agid, 32, "%d", fs->ngid);
 
 	    strncpy(fs->auid, tarhead.auid, 32);
 	    fs->auid[32] = 0;
@@ -234,7 +237,7 @@ int tar_get_next_hdr(struct filespec *fs)
 		fs->ftype = '0';
 		paxsparsehdrsz = 0;
 		paxsparsehdrsz += getline(&paxsparsesegt, &paxsparsesegtn, stdin);
-		paxsparsenseg = atoi(paxsparsesegt);
+		paxsparsenseg = strtol(paxsparsesegt, NULL, 10);
 		fs->n_sparsedata = 0;
 		if (dmalloc_size(fs->sparsedata) < paxsparsenseg * sizeof(struct sparsedata))
 		    fs->sparsedata = drealloc(fs->sparsedata, paxsparsenseg * sizeof(struct sparsedata));
@@ -275,9 +278,9 @@ int tar_get_next_hdr(struct filespec *fs)
 		strncpya0(&(fs->linktarget), tarhead.linktarget, 100);
 
 	    if (strlen(tarhead.auid) == 0)
-		sprintf(tarhead.auid, "%d", fs->nuid);
+		snprintf(tarhead.auid, 32, "%d", fs->nuid);
 	    if (strlen(tarhead.agid) == 0)
-		sprintf(tarhead.agid, "%d", fs->ngid);
+		snprintf(tarhead.agid, 32, "%d", fs->ngid);
 
 	    strncpy(fs->auid, tarhead.auid, 32);
 	    fs->auid[32] = 0;
@@ -330,21 +333,21 @@ int tar_write_next_hdr(struct filespec *fs) {
     if (gnulonglinktarget == 1) {
 	// generate and output gnu long filename header
 	memset(&tarhead, 0, 512);
-	strcpy(tarhead.filename, "././@LongLink");
+	strncpy(tarhead.filename, "././@LongLink", 100);
 	*(tarhead.ftype) = 'K';
-	strcpy(tarhead.nuid, "0000000");
-	strcpy(tarhead.ngid, "0000000");
-	strcpy(tarhead.mode, "0000000");
-	sprintf(tarhead.size, "%11.11o", (unsigned int) strlen(fs->linktarget));
-	strcpy(tarhead.modtime, "00000000000");
+	strncpy(tarhead.nuid, "0000000", 8);
+	strncpy(tarhead.ngid, "0000000", 8);
+	strncpy(tarhead.mode, "0000000", 8);
+	snprintf(tarhead.size, 12, "%11.11o", (unsigned int) strlen(fs->linktarget));
+	strncpy(tarhead.modtime, "00000000000", 12);
 	memcpy(tarhead.ustar, "ustar ", 6);
-	strcpy(tarhead.auid, "root");
-	strcpy(tarhead.agid, "root");
+	strncpy(tarhead.auid, "root", 32);
+	strncpy(tarhead.agid, "root", 32);
 	memcpy(tarhead.chksum, "        ", 8);
 	for (tmpchksum = 0, p = (char *) (&tarhead), i = 512;
 	    i != 0; --i, ++p)
 	    tmpchksum += 0xFF & *p;
-	sprintf(tarhead.chksum, "%6.6o", tmpchksum);
+	snprintf(tarhead.chksum, 8, "%6.6o", tmpchksum);
 	fwrite(&tarhead, 1, 512, stdout);  // write out long file name header
 	for (i = 0; i < strlen(fs->linktarget); i += 512) {
 	    memset(curblock, 0, 512);
@@ -357,16 +360,16 @@ int tar_write_next_hdr(struct filespec *fs) {
     if (gnulongfilename == 1) {
 	// generate and output gnu long filename header
 	memset(&tarhead, 0, 512);
-	strcpy(tarhead.filename, "././@LongFilename");
+	strncpy(tarhead.filename, "././@LongFilename", 100);
 	*(tarhead.ftype) = 'L';
-	strcpy(tarhead.nuid, "0000000");
-	strcpy(tarhead.ngid, "0000000");
-	strcpy(tarhead.mode, "0000000");
-	sprintf(tarhead.size, "%11.11o", (unsigned int) strlen(fs->filename));
-	strcpy(tarhead.modtime, "00000000000");
+	strncpy(tarhead.nuid, "0000000", 8);
+	strncpy(tarhead.ngid, "0000000", 8);
+	strncpy(tarhead.mode, "0000000", 8);
+	snprintf(tarhead.size, 12, "%11.11o", (unsigned int) strlen(fs->filename));
+	strncpy(tarhead.modtime, "00000000000", 12);
 	memcpy(tarhead.ustar, "ustar ", 6);
-	strcpy(tarhead.auid, "root");
-	strcpy(tarhead.agid, "root");
+	strncpy(tarhead.auid, "root", 32);
+	strncpy(tarhead.agid, "root", 32);
 	memcpy(tarhead.chksum, "        ", 8);
 	for (tmpchksum = 0, p = (char *) (&tarhead), i = 512;
 	    i != 0; --i, ++p)
@@ -407,7 +410,7 @@ int tar_write_next_hdr(struct filespec *fs) {
 	strcpy(tarhead.auid, "root");
 	strcpy(tarhead.agid, "root");
 	if (fs->n_sparsedata > 0) {
-	    sprintf(pax_size, "%lld", fs->sparse_realsize);
+	    snprintf(pax_size, 16, "%llu", fs->sparse_realsize);
 	    setpaxvar(&(fs->xheader), &(fs->xheaderlen), "GNU.sparse.major", "1", 1);
 	    setpaxvar(&(fs->xheader), &(fs->xheaderlen), "GNU.sparse.minor", "0", 1);
 	    setpaxvar(&(fs->xheader), &(fs->xheaderlen), "GNU.sparse.name", (char *) fs->filename, strlen(fs->filename));
@@ -516,7 +519,7 @@ int tar_write_next_hdr(struct filespec *fs) {
     }
     if (genpax == 1 && fs->n_sparsedata > 0) {
 	paxsparsehdrsz = 0;
-	paxsparsehdrsz += fprintf(stdout, "%d\n", (unsigned int) fs->n_sparsedata);
+	paxsparsehdrsz += fprintf(stdout, "%u\n", (unsigned int) fs->n_sparsedata);
 	for (int i = 0; i < fs->n_sparsedata; i++) {
 	    paxsparsehdrsz += fprintf(stdout, "%llu\n", fs->sparsedata[i].offset);
 	    paxsparsehdrsz += fprintf(stdout, "%llu\n", fs->sparsedata[i].size);
@@ -590,7 +593,7 @@ int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int inva
 
     innvplen = innamelen + invaluelen + 3 + (ilog10(innamelen + invaluelen + 3 + (ilog10( innamelen + invaluelen + 3)) + 1)) + 1;
     nvpline = malloc(innvplen + 1);
-    sprintf(nvpline, "%d %s=%s\n", innvplen, inname, invalue);
+    snprintf(nvpline, innvplen + 1, "%d %s=%s\n", innvplen, inname, invalue);
 
     while (*paxdata + cnvp < *paxdata + *paxlen) {
 	cnvplen = strtol(*paxdata + cnvp, &cname, 10);
@@ -763,15 +766,23 @@ char *strncpya0(char **dest, const char *src, size_t n)
     return(*dest);
 }
 
+char *strncpy0(char *dest, const char *src, size_t n)
+{
+    strncpy(dest, src, n);
+    (dest)[n] = '\0';
+    return(dest);
+}
+
 char *strcata(char **dest, const char *src)
 {
+    int sz = 0;
     if (*dest == NULL) {
 	*dest = dmalloc(strlen(src) + 1);
 	((char *)(*dest))[0] = 0;
     }
     if (dmalloc_size(*dest) < strlen(*dest) + strlen(src) + 1)
-	*dest = drealloc(*dest, strlen(*dest) + strlen(src) + 1);
-    strcat(*dest, src);
+	*dest = drealloc(*dest, sz = (strlen(*dest) + strlen(src) + 1));
+    strncat(*dest, src, sz);
     return(*dest);
 }
 
@@ -908,15 +919,17 @@ char *ulli2g(unsigned long long int v, char *p)
     int lendian = 1;
     lendian = (unsigned int) (((unsigned char *)(&lendian))[0]); // little endian test
 
+    memset(p, 0, 12);
     if (v <= 077777777777LL)
-	sprintf(p, "%11.11llo", (unsigned long long int) v);
+        sprintf(p, "%11.11llo", (unsigned long long int) v);
     else {
-	p[0] = 0x80;
-	for (int i = 0; i < sizeof(v); i++)
-	    if (lendian)
-		p[11 - i] = ((char *) (&(v)))[i];
-	    else
-		p[11 - sizeof(v) + i] = ((char *) (&(v)))[i];
+        p[0] = 0x80;
+        char *x = (char *) &v;
+        for (int i = 0; i < sizeof(v); i++)
+            if (lendian)
+                p[11 - i] = x[i];
+            else
+                p[11 - i] = x[sizeof(v) - i - 1];
     }
     return(p);
 }
@@ -1224,10 +1237,9 @@ struct tarsplit_file *tarsplit_init_w(size_t (*c_fwrite)(), void *c_handle, char
     tsf->bufsize = bufsize;
     tsf->c_fwrite = c_fwrite;
     tsf->c_handle = c_handle;
-    tsf->basename_path = malloc(strlen(basename_path) + 1);
     tsf->segn = 0;
     tsf->orig_fs = fs;
-    strcpy(tsf->basename_path, basename_path);
+    strncpya0(&(tsf->basename_path), basename_path, strlen(basename_path) + 1);
     memset(tsf->buf, 0, bufsize);
     tsf->xheader = dmalloc(100);
     tsf->xheaderlen = 0;
@@ -1349,7 +1361,7 @@ int tarsplit_finalize_w(struct tarsplit_file *tsf)
 {
     tarsplit_write(NULL, 0, 0, tsf);
     free(tsf->buf);
-    free(tsf->basename_path);
+    dfree(tsf->basename_path);
     dfree(tsf->xheader);
     fsfree(tsf->tmp_fs);
     free(tsf->tmp_fs);
@@ -1427,7 +1439,7 @@ size_t tarsplit_read(void *buf, size_t sz, size_t count, struct tarsplit_file *t
 		}
 		tar_get_next_hdr(fs);
 		if (getpaxvar(fs->xheader, fs->xheaderlen, "TC.segmented.final", &paxdata, &paxdatalen) == 0) {
-		    tsf->finalseg = atoi(paxdata);
+		    tsf->finalseg = strtol(paxdata, NULL, 10);
 		}
                 if (tsf->nk > 1) {
 		    for (int i = 0; i < tsf->nk; i++) {
@@ -1902,7 +1914,7 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
     unsigned char tmp_hmac_hash_b64[((int)((EVP_MAX_MD_SIZE + 2) / 3)) * 4 + 1];
 
     for (int i = 0; required_keys_group[i] != NULL; i++) {
-	int n = atoi(required_keys_group[i]);
+	long n = strtol(required_keys_group[i], NULL, 10);
 	if (n < rsa_keys->numkeys && rsa_keys->keys[n].evp_keypair == NULL) {
 	    nkeys++;
 	    strcata(&msg2, "Fingerprint: ");
@@ -1955,7 +1967,7 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
 		}
 		// check the required keys, see if password worked for any of them
 		for (int i = 0; required_keys_group[i] != NULL; i++) {
-		    int n = atoi(required_keys_group[i]);
+		    int n = strtol(required_keys_group[i], NULL, 10);
 		    if (rsa_keys->keys[n].evp_keypair != NULL) {
 			UI_free(prompt);
 			dfree(msg1);
@@ -2138,7 +2150,7 @@ int c_fread_sparsedata(size_t (*c_ffunc)(), void *c_handle, struct filespec *fs)
     char tmpbuf[16];
     char *tmpbufp = tmpbuf;
     char *sparsetext = NULL;
-    int sparsetext_len = 0;
+    long sparsetext_len = 0;
     int sparsetext_leni = 0;
     char **sparsetext_tokens = NULL;
     int n_sparsetext_tokens = 0;
@@ -2155,7 +2167,11 @@ int c_fread_sparsedata(size_t (*c_ffunc)(), void *c_handle, struct filespec *fs)
 	    return(i);
 	}
     }
-    sparsetext_len = atoi(tmpbuf);
+    sparsetext_len = strtol(tmpbuf, NULL, 10);
+    if (sparsetext_len == 0) {
+	fprintf(stderr, "Sparse file header corrupted\n");
+	exit(1);
+    }
     sparsetext = malloc(sparsetext_len);
     memset(sparsetext, 0, sparsetext_len);
     c_ffunc(sparsetext, 1, sparsetext_len, c_handle);
@@ -2164,8 +2180,6 @@ int c_fread_sparsedata(size_t (*c_ffunc)(), void *c_handle, struct filespec *fs)
     n_sparsetext_tokens = parse(sparsetext, &sparsetext_tokens, ':');
     if (n_sparsetext_tokens == 0) {
 	fprintf(stderr, "Sparse file header corrupted\n");
-	if (sparsetext != NULL)
-	    free(sparsetext);
 	exit(1);
     }
     fs->n_sparsedata = (n_sparsetext_tokens - 1) / 2;
@@ -2177,8 +2191,7 @@ int c_fread_sparsedata(size_t (*c_ffunc)(), void *c_handle, struct filespec *fs)
     sparsetext_leni = strtoull(sparsetext_tokens[0], 0, 10);
     if (sparsetext != NULL)
 	free(sparsetext);
-    if (sparsetext_tokens != NULL)
-	dfree(sparsetext_tokens);
+    dfree(sparsetext_tokens);
     return(sparsetext_leni);
 }
 
@@ -2299,7 +2312,11 @@ int parse(char *in, char ***out, char t)
 {
     int i;
     int c = 0;
-    int l = strlen(in);
+    int l;
+
+    if (in == NULL)
+	return(0);
+    l = strlen(in);
     for (i = 0; i < strlen(in); i++)
 	if (in[i] == t)
 	    c++;
@@ -2420,3 +2437,17 @@ static void *OPENSSL_zalloc(size_t num)
 }
 
 #endif
+
+#undef malloc
+void *safe_malloc(size_t SIZE)
+{
+    void *p;
+    p = malloc(SIZE);
+    if (p == NULL) {
+	fprintf(stderr, "Malloc error\n");
+	exit(1);
+    }
+    else
+	return(p);
+
+}

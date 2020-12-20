@@ -44,6 +44,9 @@ sqlite3 *opendb();
 long int strtoln(char *nptr, char **endptr, int base, int len);
 void update_status(unsigned long long total_bytes_received, unsigned long long est_size, char *cur_filename, time_t cur_time, time_t start_time, char indicator);
 
+void *safe_malloc(size_t size);
+#define malloc(SIZE) safe_malloc(SIZE)
+
 struct {
     unsigned long long unit;
     char *label;
@@ -239,8 +242,8 @@ int submitfiles(int argc, char **argv)
 	parse(inbuf, &mdfields, '\t');
 	// Record encryption key data from global header
 	if (strcmp(mdfields[0], "0") == 0) {
-	    if (atoi(mdfields[1]) + 1 > numkeys)
-		numkeys = atoi(mdfields[1]) + 1;
+	    if (strtol(mdfields[1], NULL, 10) + 1 > numkeys)
+		numkeys = strtol(mdfields[1], NULL, 10) + 1;
 	    strunesc(mdfields[3], &eprvkeyu);
 	    strunesc(mdfields[4], &pubkeyu);
 	    strunesc(mdfields[6], &commentu);
@@ -272,7 +275,7 @@ int submitfiles(int argc, char **argv)
 	    // temporary map of inbound key number and recorded key
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 		"insert or ignore into temp_key_map (keyposition, id)"
-		"values (%d, %d)", atoi(mdfields[1]), cipherid)), 0, 0, 0);
+		"values (%d, %d)", strtol(mdfields[1], NULL, 10), cipherid)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
 	    if (numkeys > cryptinfo_n) {
 		if (cryptinfo == NULL)
@@ -298,13 +301,13 @@ int submitfiles(int argc, char **argv)
 		cpypaxvarstr(xattru, xattrn, "TC.keygroup", &keygroups);
 		parse(keygroups, &keygroupsp, '|');
 		for (int i = 0; keygroupsp[i] != NULL; i++) {
-		    int n = atoi(keygroupsp[i]);
+		    int n = strtol(keygroupsp[i], NULL, 10);
 		    if (n < numkeys) {
 			cryptinfo[n].keynum = n;
 			if (numkeys > 1)
-			    sprintf(xattr_varstring, "TC.hmac.%d", n);
+			    snprintf(xattr_varstring, 1024, "TC.hmac.%d", n);
 			else
-			    sprintf(xattr_varstring, "TC.hmac");
+			    snprintf(xattr_varstring, 1024, "TC.hmac");
 			cpypaxvarstr(xattru, xattrn, xattr_varstring, &(cryptinfo[n].hmac));
 			delpaxvar(&xattru, &xattrn, xattr_varstring);
 		    }
@@ -316,12 +319,12 @@ int submitfiles(int argc, char **argv)
             sqlite3_bind_text(inbfrec, 2, mdfields[1], -1, SQLITE_STATIC);
             sqlite3_bind_text(inbfrec, 3, mdfields[2], -1, SQLITE_STATIC);
             sqlite3_bind_text(inbfrec, 4, mdfields[3], -1, SQLITE_STATIC);
-            sqlite3_bind_int(inbfrec, 5, atoi(mdfields[4]));
+            sqlite3_bind_int(inbfrec, 5, strtol(mdfields[4], NULL, 10));
             sqlite3_bind_text(inbfrec, 6, mdfields[5], -1, SQLITE_STATIC);
-            sqlite3_bind_int(inbfrec, 7, atoi(mdfields[6]));
+            sqlite3_bind_int(inbfrec, 7, strtol(mdfields[6], NULL, 10));
             sqlite3_bind_int64(inbfrec, 8, atoll(mdfields[7]));
             sqlite3_bind_text(inbfrec, 9, mdfields[8], -1, SQLITE_STATIC);
-            sqlite3_bind_int(inbfrec, 10, atoi(mdfields[9]));
+            sqlite3_bind_int(inbfrec, 10, strtol(mdfields[9], NULL, 10));
             strunesc(mdfields[10], &filenameu);
             sqlite3_bind_text(inbfrec, 11, filenameu, -1, SQLITE_STATIC);
             strunesc(mdfields[11], &linknameu);
@@ -345,7 +348,7 @@ int submitfiles(int argc, char **argv)
 	    sqlite3_free(sqlstmt);
 	    if (cipher_record == 1) {
 		for (int i = 0; keygroupsp[i] != NULL; i++) {
-		    int n = atoi(keygroupsp[i]);
+		    int n = strtol(keygroupsp[i], NULL, 10);
 		    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 			"insert or ignore into temp_cipher_detail (file_id, keynum, hmac) "
 			"values (%d, %d, '%q')", fileid,  cryptinfo[n].keynum,
@@ -480,7 +483,7 @@ int submitfiles2(int out_h)
 		    char *esccomment= NULL;
 		    if (getpaxvar(fs.xheader, fs.xheaderlen, "TC.numkeys", &paxdata, &paxdatalen) == 0) {
 			strncpya0(&paxdatacpy, paxdata, paxdatalen);
-			numkeys = atoi(paxdatacpy);
+			numkeys = strtol(paxdatacpy, NULL, 10);
 		    }
 		    else
 			numkeys = 1;
@@ -494,15 +497,15 @@ int submitfiles2(int out_h)
 		    }
 		    for (int i = 0; i < numkeys; i++) {
 			if (numkeys > 1) {
-			    sprintf(paxhdr_varstring, "TC.pubkey.fingerprint.%d", i);
+			    snprintf(paxhdr_varstring, 1024, "TC.pubkey.fingerprint.%d", i);
 			    cpypaxvarstr(fs.xheader, fs.xheaderlen, paxhdr_varstring, &(keys[i].fingerprint));
-			    sprintf(paxhdr_varstring, "TC.eprivkey.%d", i);
+			    snprintf(paxhdr_varstring, 1024, "TC.eprivkey.%d", i);
 			    cpypaxvarstr(fs.xheader, fs.xheaderlen, paxhdr_varstring, &(keys[i].eprvkey));
-			    sprintf(paxhdr_varstring, "TC.pubkey.%d", i);
+			    snprintf(paxhdr_varstring, 1024, "TC.pubkey.%d", i);
 			    cpypaxvarstr(fs.xheader, fs.xheaderlen, paxhdr_varstring, &(keys[i].pubkey));
-			    sprintf(paxhdr_varstring, "TC.hmackeyhash.%d", i);
+			    snprintf(paxhdr_varstring, 1024, "TC.hmackeyhash.%d", i);
 			    cpypaxvarstr(fs.xheader, fs.xheaderlen, paxhdr_varstring, &(keys[i].hmac_hash_b64));
-			    sprintf(paxhdr_varstring, "TC.keyfile.comment.%d", i);
+			    snprintf(paxhdr_varstring, 1024, "TC.keyfile.comment.%d", i);
 			    cpypaxvarstr(fs.xheader, fs.xheaderlen, paxhdr_varstring, &(keys[i].comment));
 			}
 			else {
@@ -539,7 +542,7 @@ int submitfiles2(int out_h)
 	    else if (fs.ftype == '5' && getpaxvar(fs.xheader, fs.xheaderlen, "TC.segmented.header",
 		&paxdata, &paxdatalen) == 0) {
 
-		sprintf(tmpfilepath, "%s/tbXXXXXX", tmpfiledir);
+		snprintf(tmpfilepath, 1024, "%s/tbXXXXXX", tmpfiledir);
 		curtmpfile = mkstemp(tmpfilepath);
 		curfile = fdopen(curtmpfile, "w");
 		tsf = tarsplit_init_r(fread, stdin, numkeys);
@@ -573,7 +576,7 @@ int submitfiles2(int out_h)
 		   }
 		   if (use_hmac == 1) {
 			unsigned char *tmphash;
-			strcpy((char *) hmac, (char *) (tmphash = sha256_hex(ciphertype)));
+			strncpy0((char *) hmac, (char *) (tmphash = sha256_hex(ciphertype)),SHA_DIGEST_LENGTH * 2 + 1);
 			free(tmphash);
 		   }
 #if 0
@@ -587,7 +590,7 @@ int submitfiles2(int out_h)
 #endif
 		   if (numkeys > 1) {
 			for (int i = 0; i < numkeys; i++) {
-			    sprintf(paxhdr_varstring, "TC.hmac.%d", i);
+			    snprintf(paxhdr_varstring, 1024, "TC.hmac.%d", i);
 			    setpaxvar(&(fs.xheader), &(fs.xheaderlen), paxhdr_varstring, (char *) tsf->hmac[i], strlen((char *) tsf->hmac[i]));
 			}
 		    }
@@ -627,7 +630,7 @@ int submitfiles2(int out_h)
 		void *c_handle;
 		unsigned long long int filesize = fs.filesize;
 
-		sprintf(tmpfilepath, "%s/tbXXXXXX", tmpfiledir);
+		snprintf(tmpfilepath, 1024, "%s/tbXXXXXX", tmpfiledir);
 		curtmpfile = mkstemp(tmpfilepath);
 		curfile = fdopen(curtmpfile, "w");
 		if (ciphertype != NULL)
@@ -648,7 +651,7 @@ int submitfiles2(int out_h)
 		    is_ciphered = 1;
 		    if (numkeys > 1)
 			for (int i = 0; i < numkeys; i++) {
-			    sprintf(paxhdr_varstring, "TC.hmac.%d", i);
+			    snprintf(paxhdr_varstring, 1024, "TC.hmac.%d", i);
 			    if (getpaxvar(fs.xheader, fs.xheaderlen, paxhdr_varstring, &paxdata, &paxdatalen) == 0) {
 				strncata0(&ciphertype, paxdata, paxdatalen - 1);
 				use_hmac = 1;
@@ -975,7 +978,7 @@ void update_status(unsigned long long total_bytes_received, unsigned long long e
 	    BPS_unit = i;
 
     pct = (int) est_size == 0 ? 100 : (((double) total_bytes_received / est_size) * 100 + .5);
-    pctstr_len = sprintf(pct_str, "%d%%", pct);
+    pctstr_len = snprintf(pct_str, 16, "%d%%", pct);
     dots_before = (int) ((scalelen - pctstr_len) * ((double) pct / 100));
     dots_after = scalelen - pctstr_len - dots_before;
     progress_scale[0] = '\0';
@@ -985,14 +988,14 @@ void update_status(unsigned long long total_bytes_received, unsigned long long e
     for (int j = 0; j < dots_after; j++)
 	strcat(progress_scale, ".");
 
-    sprintf(curbytes, "[%s] %6.2f%c / %6.2f %s/s", progress_scale, (double) total_bytes_received /
+    snprintf(curbytes, 128, "[%s] %6.2f%c / %6.2f %s/s", progress_scale, (double) total_bytes_received /
 	display_units[b_received_unit].unit, *(display_units[b_received_unit].label), 
 	(double) BPS / display_units[BPS_unit].unit, display_units[BPS_unit].label);
 
     curbytes_len = strlen(curbytes);
     fname_len = 76 - curbytes_len;
-    sprintf(statusline_fmtstr, "%%-%d.%ds %%s\r", fname_len, fname_len);
-    sprintf(statusline, statusline_fmtstr, cur_filename, curbytes);
+    snprintf(statusline_fmtstr, 128, "%%-%d.%ds %%s\r", fname_len, fname_len);
+    snprintf(statusline, 256, statusline_fmtstr, cur_filename, curbytes);
     fprintf(stderr, "%c %s", indicator, statusline);
     fflush(stderr);
 }
@@ -1024,7 +1027,7 @@ char *stresc(char *src, char **target)
             ;
         strncat(*target, src + j, i - j);
         if (i < len) {
-            sprintf((*target) + strlen(*target), "\\%3.3o",
+            snprintf((*target) + strlen(*target), 5, "\\%3.3o",
                 (unsigned char) src[i]);
             i++;
         }
@@ -1056,7 +1059,7 @@ char *strescb(char *src, char **target, int len)
         strncat(p, src + j, i - j);
         if (i < len) {
             p += strlen(p);
-            sprintf((p), "\\%3.3o",
+            snprintf((p), 5, "\\%3.3o",
                 (unsigned char) src[i]);
             p += 4;
             i++;
