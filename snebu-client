@@ -432,7 +432,9 @@ start_agent() {
     fi
 }
 autoinclude() {
-    mount |awk '$5 ~ /^ext[234]$|^btrfs$|^xfs$/ { print $3 }'
+    mount -t $(
+	grep -v '^nodev' /proc/filesystems |awk '{printf("%s%s", NR != 1 ? "," : "", $NF)}'
+    ) |awk '{print $3}'
 }
 
 # rpcsh -- Runs a function on a remote host
