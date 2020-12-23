@@ -336,8 +336,8 @@ int submitfiles(int argc, char **argv)
 	    tot_files++;
 
             sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-                "insert or ignore into diskfiles_t (sha1, extension)  "
-                "values ('%q', '%q')", mdfields[8], strcmp(mdfields[1], "E") == 0 ? "enc" : strcmp(mdfields[1], "0") == 0 || strcmp(mdfields[1], "S") == 0 ? "lzo" : "" )), 0, 0, &sqlerr);
+                "insert or ignore into diskfiles_t (sha1)  "
+                "values ('%q')", mdfields[8])), 0, 0, &sqlerr);
             if (sqlerr != 0) {
                 fprintf(stderr, "%s\n", sqlerr);
                 sqlite3_free(sqlerr);

@@ -241,7 +241,6 @@ int initdb(sqlite3 *bkcatalog)
     err = sqlite3_exec(bkcatalog,
 	"create table if not exists diskfiles ( \n"
 	"    sha1          char, \n"
-	"    extension     char, \n"
 	"constraint diskfilesc1 unique ( \n"
 	"    sha1))", 0, 0, &sqlerr);
     if (sqlerr != 0) {
