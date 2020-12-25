@@ -26,8 +26,13 @@ process_cmdline()
         exit
     fi
 
-    verbose=0
-    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,help,sudo:,encryption-key:,decrypt" -o "c:n:r:d:fvC:hk:" -- "$@")")
+    if [ \( "${target}" = "backup" -o "${target}" = "restore" \) -a -t 1 ]
+    then
+        verbose=1
+    else
+	verbose=0
+    fi
+    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,quiet,help,sudo:,encryption-key:,decrypt" -o "c:n:r:d:fqvC:hk:" -- "$@")")
     then
         usage target
         exit 1
@@ -50,6 +55,7 @@ process_cmdline()
 	    --plugin) plugin=$2; shift; shift;;
 	    -h|--help) shift; usage $target;;
 	    -v|--verbose) verbose=$((${verbose} + 1)); shift;;
+	    -q|--quiet) verbose=0; shift;;
 	    --sudo) sudousr=$2; shift; shift;;
 	    -k|--encryption-key) keyfile=( "${keyfile[@]}" "$2"); shift; shift;;
 	    --decrypt) decrypt=1; shift;;
@@ -140,7 +146,7 @@ defaults()
     fi
     if [ -n "${bksvrname}" -a -z "${bkuser}" ]
     then
-        bkuser="backup"
+        bkuser="snebu"
     fi
     if [ -n "${snebu_sshagent_env}" ]
     then
