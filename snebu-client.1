@@ -1,10 +1,10 @@
-.na
 .TH SNEBU-CLIENT "1" "December 2020" "snebu-client" "User Commands"
+.na
 .SH NAME
 snebu-client \- Front-end client for the snebu backup system
 .SH SYNOPSIS
 .B snebu-client
-[ \fI\,subcommand \/\fR] [ \fI\,options \/\fR]
+[ \fIsubcommand \/\fR] [ \fIoptions \/\fR]
 .SH DESCRIPTION
 snebu\-client is the client front end for snebu.
 Use it to easily
@@ -12,34 +12,20 @@ back up a local or remote host, to either local a local storage
 device, or to a remote backup server.  Use it with one of the
 following subcommands.
 .SS "Sub commands are as follows:"
-.PP
-\fBbackup\fR
-[ \fB\-n\fR \fIbackupname\fR ]
-[ \fB\-d\fR \fIdatestamp\fR ]
-[ \fB\-r\fR \fIschedule\fR ]
-.RS 4
+.TP
+\fBbackup\fR [ \fB\-n\fR \fIbackupname\fR ] [ \fB\-d\fR \fIdatestamp\fR ] [ \fB\-r\fR \fIschedule\fR ]
 Initiates a backup.
-.RE
-.PP
-\fBrestore\fR
-[ \fB\-n\fR \fIbackupname\fR ] [ \fB\-d\fR \fIdatestamp\fR ]
-.RS 4
+.TP
+\fBrestore\fR [ \fB\-n\fR \fIbackupname\fR ] [ \fB\-d\fR \fIdatestamp\fR ]
 Initates a restore.
-.RE
-.PP
-\fBlistbackups\fR [ \fB\-n\fR \fIbackupname\fR [ \fB\-d\fR \fIdatestamp\fR ]]
-[ \fIfile_list\fR... ]
-.RS 4
+.TP
+\fBlistbackups\fR [ \fB\-n\fR \fIbackupname\fR [ \fB\-d\fR \fIdatestamp\fR ]] [ \fIfile_list\fR... ]
 List backed up hosts, backupsets within a host, or files within a backupset.
-.RE
-.PP
+.TP
 \fBvalidate\fR \fB\-n\fR \fIbackupname\fR \fB\-d\fR \fIdatestamp\fR
-.RS 4
 Validates a given backup.
-.RE
-.PP
+.TP
 \fBhelp\fR [ \fIsubcommand\fR ]
-.RS 4
 Displays help page of subcommand
 .RE
 .SH "SEE ALSO"

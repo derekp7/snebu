@@ -1,73 +1,50 @@
+.TH SNEBU "1" "December 2020" "snebu" "User Commands"
 .na
-.TH SNEBU "1" "December 2020" "snebu-client" "User Commands"
 .SH NAME
 snebu \- The simple network backup system
 .SH SYNOPSIS
 .B snebu
-[ \fB\,-c\fR | \fB\,--config\fR \fIfilepath\fR ]
-\fI\,subcommand \/\fR[ \fI\,options \/\fR]
+[ \fB-c\fR | \fB--config\fR \fIfilepath\fR ]
+\fIsubcommand \/\fR[ \fIoptions \/\fR]
 .SH DESCRIPTION
 The \fIsnebu\fR command is a backup tool which manages storing data from
 backup sessions on disk-based storage, utilizing a simple database
-for tracking backup sets and meta data.  Typically it is called via a
+for tracking backup sets and meta data.  With the exception of administrative
+sub commands (expire, purge, permissions), it is typically it is called via a
 front end script (such as the included "snebu-client" shell script).
-Documentation is provided here if you need to create a custom backup
-client script.  The subcommands are listed below along with the most
-common options.  Details on each command are given in each command's
-individual man page.
+The subcommands are listed below along with the most common options.
+Details on each command are given in each command's individual man page.
 
 .SS "Sub commands are as follows:"
-.PP
-\fBnewbackup\fR
-\fB\-n\fR \fIbackupname\fR \fB\-d\fR \fIdatestamp\fR \fB\-r\fR \fIschedule\fR
-.RS 4
+.TP
+\fBnewbackup\fR \fB\-n\fR \fIbackupname\fR \fB\-d\fR \fIdatestamp\fR \fB\-r\fR \fIschedule\fR
 Initiates a new backup set, taking in the full backup manifest,
 returning a snapshot manifest.
-.RE
-.PP
-\fBsubmitfiles\fR
-\fB\-n\fR \fIbackupname\fR \fB\-d\fR \fIdatestamp\fR
-.RS 4
+.TP
+\fBsubmitfiles\fR \fB\-n\fR \fIbackupname\fR \fB\-d\fR \fIdatestamp\fR
 Receives a backup in TAR format that fulfills the snapshot manifest returned from newbackup
-.RE
-.PP
-\fBrestore\fR
-\fB\-n\fR \fIbackupname\fR \fB\-d\fR \fIdatestamp\fR [ \fIfile_list...\fR ]
-.RS 4
+.TP
+\fBrestore\fR \fB\-n\fR \fIbackupname\fR \fB\-d\fR \fIdatestamp\fR [ \fIfile_list...\fR ]
 Generates a tar file containing the specified backup set.
-.RE
-.PP
+.TP
 \fBlistbackups\fR [ \fB\-n\fR \fIbackupname\fR [ \fB\-d\fR \fIdatestamp\fR ]] [ \fIfile_list...\fR ]
-.RS 4
 List backed up hosts, backupsets within a host, or files within a backupset.
-.RE
-.PP
-\fBexpire\fR
-[ \fB\-n\fR \fIbackupname\fR \fB\-d\fR \fIdatestamp\fR ]
-or
-[ \fB\-a\fR \fIdays\fR \fB\-r\fR \fIschedule\fR [ \fB-n\fR \fIhostname\fR ]]
-.RS 4
+.TP
+\fBexpire\fR [ \fB\-n\fR \fIbackupname\fR \fB\-d\fR \fIdatestamp\fR ] or [ \fB\-a\fR \fIdays\fR \fB\-r\fR \fIschedule\fR [ \fB-n\fR \fIhostname\fR ]]
 Expires (removes) the given backup set, or backups matching the given criteria
-.RE
-.PP
+.TP
 \fBpurge\fR
-.RS 4
 Purges backing files from the vault that are part of expired backups
-.RE
-.PP
+.TP
 \fBpermissions\fR
 [ \fB-l\fR | \fB-a\fR | \fB-r\fR ]
 \fB-c\fR \fIcommand\fR
 \fB-n\fR \fIhostname\fR
 \fB-u\fR \fIuser\fR
-.RS 4
 Defines permissions for a given user, when snebu is run in multi-user mode.
-.RE
-.PP
+.TP
 \fBhelp\fR [subcommand]
-.RS 4
 Displays help page of subcommand
-.RE
 .SH "SEE ALSO"
 .hy 0
 \fBsnebu\-newbackup\fR(1),
