@@ -32,7 +32,7 @@ process_cmdline()
     else
 	verbose=0
     fi
-    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,graft:,plugin:,verbose,quiet,help,sudo:,encryption-key:,decrypt" -o "c:n:r:d:fqvC:hk:" -- "$@")")
+    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,exclude:,xmatch:,graft:,plugin:,verbose,quiet,help,sudo:,encryption-key:,decrypt" -o "c:n:r:d:fqvC:x:m:hk:" -- "$@")")
     then
         usage target
         exit 1
@@ -52,6 +52,8 @@ process_cmdline()
 	    -f|--force-full) force_full=1; shift;;
 	    -C|--changedir) tgtdirectory=$2; shift; shift;;
 	    --graft) graftdir=$2; shift; shift;;
+	    -x|--exclude) EXCLUDE=( "$2" ); shift; shift;;
+	    -m|--xmatch) EXCLUDEMATCH=( "$2" ); shift; shift;;
 	    --plugin) plugin=$2; shift; shift;;
 	    -h|--help) shift; usage $target;;
 	    -v|--verbose) verbose=$((${verbose} + 1)); shift;;
@@ -66,7 +68,7 @@ process_cmdline()
 
     # Command line variables trump environment variables, which trump config
     # file vars, which trump defaults. Therefore, save cmdline vars for later.
-    savevars="$(declare -p backupname clientname bksvrname retention datestamp force_full tgtdirectory graftdir plugin 2>/dev/null)"
+    savevars="$(declare -p backupname clientname bksvrname retention datestamp force_full tgtdirectory INCLUDE EXCLUDE EXCLUDEMATCH graftdir plugin 2>/dev/null)"
 }
 
 defaults()
@@ -351,6 +353,10 @@ usage()
 
 	 -C, --changedir path       Changes to the given directory path before
 	                            validating
+
+	 -x, --exclude "path"       Excludes the given path(s)
+
+	 -m, --xmatch "pattern"     Excludes files matching pattern(s)
 	
 	     --remote-client hostname
 	                            Host name / IP address of remote host.  Used to
@@ -574,7 +580,7 @@ FINDCMD() {
     do
         findexclude=( "${findexclude[@]}" -path "$(echo "$i" |sed "s/\/$//")" -prune -o )
     done
-    for i in "${EXCLUDEPAT[@]}"
+    for i in "${EXCLUDEMATCH[@]}"
     do
         findexclude=( "${findexclude[@]}" -path "$i" -o )
     done
@@ -609,6 +615,7 @@ do_backup()
     # Call autoinclude function if INCLUDE is not set
     [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(autoinclude) )
 
+    bkrepeat=0
     while :
     do
     [ -n "${pluginpre}" ] && $pluginpre
@@ -652,7 +659,7 @@ do_remote_backup()
 
     rpcsh -h ${clientname} -u "${rmtuser}" -f 'make_include_tempfile' \
         -r 'includetmp' -m 'make_include_tempfile'
-    rpcsh -h ${clientname} -u "${rmtuser}" -f FINDCMD -v "INCLUDE EXCLUDE EXCLUDEPAT" -m FINDCMD |\
+    rpcsh -h ${clientname} -u "${rmtuser}" -f FINDCMD -v "INCLUDE EXCLUDE EXCLUDEMATCH" -m FINDCMD |\
 	$SNEBU newbackup --name ${backupname} --retention ${retention} \
         --datestamp ${datestamp} --null --not-null-output "${newbackupopts[@]}" |\
         rpcsh -h ${clientname} -u "${rmtuser}" -m "cat >${includetmp}"
