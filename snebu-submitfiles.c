@@ -231,11 +231,12 @@ int submitfiles(int argc, char **argv)
 	    display_units[b_total_unit].label);
 
     while ((inlen = getline(&inbuf, &len, metadata)) > 0) {
-	for (int i = inlen - 1; i > 0; i--)
-	    if (inbuf[i] == '\n') {
-		inbuf[i] = '\0';
-		break;
-	    }
+	if (inbuf[inlen - 1] == '\n')
+	    inbuf[inlen - 1] = '\0';
+	else {
+	    fprintf(stderr, "Metadata recording error\n");
+	    exit(1);
+	}
 	parse(inbuf, &mdfields, '\t');
 	// Record encryption key data from global header
 	if (strcmp(mdfields[0], "0") == 0) {
@@ -611,15 +612,19 @@ int submitfiles2(int out_h)
 		    filesize = strtoull(paxdata, 0, 10);
 		}
 
-		fprintf(out, "1\t%c\t%4.4o\t%s\t%d\t%s\t%d\t%lld\t%s\t%lu\t%s\t%s\t%d\t%s\n",
+		fprintf(out, "1\t%c\t%4.4o\t%s\t%d\t%s\t%d\t%lld\t%s\t%lu\t%s\t%s\t%d\t%s",
 		    'E', fs.mode, fs.auid, fs.nuid, fs.agid, fs.ngid, filesize,
 			use_hmac == 0 ? cfsha1x : hmac, fs.modtime, stresc(fs.filename, &escfname),
 			stresc(fs.linktarget == 0 ? "" : fs.linktarget, &esclname), fs.xheaderlen,
 			fs.xheaderlen == 0 ? "" : EncodeBlock2(escxheader, fs.xheader, fs.xheaderlen, NULL)
 		    );
 		tarsplit_finalize_r(tsf);
-		fclose(curfile);
-		wrote_file = 1;
+		if (fclose(curfile) == 0)
+		    wrote_file = 1;
+		else {
+		    fprintf(stderr, "Error writing file, aborting\n");
+		    exit(1);
+		}
 	    }
 	    else if (fs.filesize > 0 || fs.n_sparsedata > 0) {
 		int is_ciphered = 0;
@@ -698,7 +703,12 @@ int submitfiles2(int out_h)
 		    lzop_finalize_w(lzf);
 		sha1_finalize_w(s1f, cfsha1);
 		encode_block_16(cfsha1x, cfsha1, SHA_DIGEST_LENGTH);
-		fclose(curfile);
+		if (fclose(curfile) == 0)
+		    wrote_file = 1;
+		else {
+		    fprintf(stderr, "Error writing file, aborting\n");
+		    exit(1);
+		}
 		while (padding > 0)
 		    padding -= fread(databuf, 1, padding < bufsize ? padding : bufsize, stdin);
 		if (escxheader == NULL)
@@ -718,7 +728,7 @@ int submitfiles2(int out_h)
 		    }
 		}
 
-		fprintf(out, "1\t%c\t%4.4o\t%s\t%d\t%s\t%d\t%lld\t%s\t%lu\t%s\t%s\t%d\t%s\n",
+		fprintf(out, "1\t%c\t%4.4o\t%s\t%d\t%s\t%d\t%lld\t%s\t%lu\t%s\t%s\t%d\t%s",
 		    is_ciphered == 1 ? 'E' : fs.n_sparsedata > 0 ? 'S' : fs.ftype, fs.mode,
 		    fs.auid, fs.nuid, fs.agid, fs.ngid, filesize, use_hmac == 0 ? cfsha1x : hmac,
 		    fs.modtime, stresc(fs.filename, &escfname),
@@ -744,7 +754,6 @@ int submitfiles2(int out_h)
 		    );
 	    }
 
-	    fsclear(&fs);
 	    if (wrote_file == 1) {
 		if (use_hmac == 0) {
 		    strncpy(destdir2, (char *) cfsha1x, 2);
@@ -765,11 +774,17 @@ int submitfiles2(int out_h)
 		    }
 		}
 		if (stat(targetpath, &tmpfstat) != 0 || utime(targetpath, NULL) != 0) {
-		    rename(tmpfilepath, targetpath);
+		    if (rename(tmpfilepath, targetpath) == 0) {
+		    }
+		    else {
+			fprintf(stderr, "Error moving file to vault, aborting\n");
+			exit(1);
+		    }
 		}
 		else {
 		    unlink(tmpfilepath);
 		}
+		fprintf(out, "\n");
 	    }
 	    fsclear(&fs);
 	}
