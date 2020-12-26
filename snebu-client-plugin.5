@@ -1,0 +1,149 @@
+.TH SNEBU-CLIENT-PLUGIN "5" "December 2020" "snebu-client-plugin" "File Formats"
+.na
+.SH NAME
+snebu-client plugins - Defines pre-backup and post-backup scripts to run on a client.
+.SH DESCRIPTION
+Specifying the \fB--plugin\fR argument when executing a snebu-client backup operation will cause the specified plugin script to be incorporated into the backup process.  The plugin script defines at least two shell script functions -- -fBpluginpre()\fR, which executes prior to the backup, and \fBpluginpost()\R which executes after the backup has completed.
+
+This allows performing operations such as mounting a filesystem snapshot prior to a backup and removing the snapshot afterwards, or placing a database in hot backup mode at the beginning of the backup.  In the case of backing up a database, often times the backup will need to be completed in multiple stages -- place the DB in hot backup mode, gather a list of database files, back them up, take the DB out of hot backup mode, gather a list of files containing transaction logs that were created during the backup, and finally backing up those files.
+
+To facilitate these type of backup steps, the \fBpluginpre\fR function can save the contents of the file include/exclude variables \fBINCLUDE\fR, \fBEXCLUDE\fR, and \fBEXCLUDEMATCH\fR.  Then set the variable \fBbkrepeat=1\fR, along with setting any other housekeeping variables used inside the plugin script.  Once it has completed the last stage, it can then restore the include/exclude variables, let the rest of the backup process continue, and then set \fBbkrepeat=0\fR to finish off the backup.
+.SS
+.B Functions and Variables
+.TP
+\fBpluginpre()\fR
+Shell script code containing pre-backup procedures.
+.PP
+.TP
+\fBpluginpost()\fR
+Shell script code containing post-backup procedures.
+.PP
+.TP
+\fBbkrepeat\fR
+Set bkrepeat=1 to repeat the backup with modifications to the include/exclude list.  Everytime the backup repeats, the backup set is ammended with the new file set.
+.PP
+.TP
+\fBINCLUDE\fR
+Shell array containing file include list (see \fBsnebu-client.conf(5)\fR)
+.PP
+.TP
+\fBEXCLUDE\fR
+Shell array containing file exclude list (see \fBsnebu-client.conf(5)\fR)
+.PP
+.TP
+\fBEXCLUDEMATCH\fR
+Shell array containing file exclude file pattern list (see \fBsnebu-client.conf(5)\fR)
+
+.SH EXAMPLES
+The following is a template that can be used when backing up a server containing a database.  In this case, the include/exclude list initially includes files to back up the entire server.  So this script does a hot backup of the database first, then adds to the exclude list the dbf files that were backed up initially, and then backs up the rest of the system.
+
+The Since these functions get called at various times from the snebu-client script, the order of the various code fragments can become a bit confusing.  Pay attention to the "(Step x)" labels for the actual execution order in each fragment.
+
+.RS
+.nf
+### Snebu backup plugin template for databases
+
+# Initialize an internal housekeeping variable
+# \fI(Step 0)\fR
+dbstage=0
+
+# Define the pre-backup script
+pluginpre() {
+    # Stage 0 => haven't backed up the DB yet
+    if [ "${dbstage}" = 0 ]
+    then
+	# \fI(Step 1)\fR
+	# Save the current include/exclude list
+	OLD_INCLUDE=( "${INCLUDE[@]}" )
+	OLD_EXCLUDE=( "${EXCLUDE[@]}" )
+	OLD_EXCLUDEMATCH=( "${EXCLUDEMATCH[@]}" )
+
+	# Zero out exclude list
+	EXCLUDE=( )
+	EXCLUDEMATCH=( )
+
+	# Set the include list to include database files
+	DBF_FILES=( "$(
+	    # Function to list database filenames to standard output
+	    print_dbf_filenames
+	)" )
+	INCLUDE=( "${DBF_FILES[@]}" )
+
+	# Place DB in hot backup mode
+	begin_db_backup
+
+	# After this, snebu-client-backup takes over and backs up
+	# the above set include list.  Then control jumps to
+	# pluginpost() with dbstage still set to 0
+    elif [ "${dbstage}" = 1 ]
+    then
+	# \fI(Step 3)\fR
+	DBF_LOG_FILES=( "$(
+	    # Function to list archived transaction logs
+	    print_dbf_log_filenames
+	)" )
+	INCLUDE=( "${DBF_LOG_FILES[@]}" )
+
+	# Back to the backup with the new include list, then
+	# off to pluginpost again with dbstage set to 1
+    fi
+}
+
+pluginpost() {
+    if [ "${dbstage}" = 0 ]
+    then
+	# \fI(Step 2)\fR
+	# Take DB out of hot backup mode
+	end_db_backup
+	
+	# Define the next stage, and repeat the backup
+	dbstage=1
+	bkrepeat=1
+
+	# Now control jumps back to pluginpre() with dbstage=1
+    elif [ "${dbstage}" = 1 ]
+    then
+	# \fI(Step 4)\fR
+	# Restore the original include/exclude list, with the
+	# database files added to the exclude list.
+	INCLUDE=( "${OLD_INCLUDE[@]}" )
+	EXCLUDE=( "${OLD_EXCLUDE[@]}" "${DBF_FILES[@]}" \\
+	"${DBF_LOG_FILES[@]}"
+	EXCLUDEMATCH=( "${OLD_EXCLUDEMATCH[@]}" )
+
+	# Define the next stage, and repeat the backup
+	dbstage=2
+	bkrepeat=1
+
+	# Control jumps back to pluginpre(), however no more pre-
+	# processing is needed for stage 2, so the backup begins
+	# again with the original client include/exclude (plus the
+	# above database files added to the exclude).
+    elif [ "${dbstage}" = 2 ]
+    then
+	# \fI(Step 5)\fR
+	# Break the cycle, backup is completed for this host.
+	bkrepeat=0
+    fi
+}
+
+# Also, don't forget to fill in the functions referenced above:
+
+begin_db_backup() {
+    ### Steps to place DB in hot backup mode
+}
+
+end_db_backup() {
+    ### Steps to DB out of hot backup mode
+}
+
+print_dbf_filenames() {
+    ### Output list of dbf file names
+}
+
+print_dbf_log_filenames() {
+    ### Output list of archived transaction log file names
+}
+.fi
+.RE
+.PP
