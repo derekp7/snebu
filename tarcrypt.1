@@ -34,7 +34,7 @@ in order to validate each file contents as it is begin decrypted.
 .SH OPTIONS
 .TP
 \fBencrypt\fR
-Reads the tar command output on standard input, outputing an encrypted tar file.
+Reads the tar command output on standard input, outputting an encrypted tar file.
 .RS
 \fBParameters\fR:
 .TP
@@ -46,7 +46,7 @@ Multiple key files may be specified by repeating this parameter.
 .TP
 \fBdecrypt\fR
 Reads an encrypted tar file on standard input, prompts for the passphrase,
-decrypts and verifies contents outputing a standard tar file.
+decrypts and verifies contents outputting a standard tar file.
 .TP
 \fBgenkey\fR
 Generates a key file used by the \fIencrypt\fR function.
@@ -63,7 +63,7 @@ Specifies a comment to include in the keyfile.
 Public Key cryptography splits up a key into two parts -- an encryption (public) key, and a decryption (private) key.
 The public key isn't considered sensitive -- it is designed so that one party can send encrypted data to another party,
 by using the other party's public key.  The private key, however, needs to be kept confidential by the receiving party.
-Typically the private key is stored encrypted with a symetric algorithim (one where the same password is used to both encrypt
+Typically the private key is stored encrypted with a symmetric algorithm (one where the same password is used to both encrypt
 and decrypt the data) to provide additional security.
 .PP
 In the case of tarcrypt, the sending and receiving party is the same entity,
@@ -78,7 +78,7 @@ However, the keyfile also contains a secret HMAC key used to authenticate the co
 tar file.  Therefore if authenticity is needed, then the keyfile must be kept confidential
 (i.e., stored with appropriate file system permissions to be accessed only by the backup process).
 .SH NOTES
-The tarcrypt file format is an extention of the PAX TAR format, with custom values in the PAX header.
+The tarcrypt file format is an extension of the PAX TAR format, with custom values in the PAX header.
 If used in conjunction with a backup tool which expects the TAR format as input,
 then the backup tool may need some modifications in order to handle the extensions.
 If the tool stores the tar file intact, and if it doesn't choke on the custom header fields,

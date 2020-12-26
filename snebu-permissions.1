@@ -19,18 +19,18 @@ by a OS different user.
 \fB\-l\fR, \fB\-\-list\fR
 Lists all installed permissions.  If the \fB\-c\fR, \fB\-n\fR, or
 \fB\-u\fR options are given, this list is restricted to
-those subcommands, hostnames, or users respectively.
+those sub commands, hostnames, or users respectively.
 .TP
 \fB\-a\fR, \fB\-\-add\fR
-Adds permissions for the specified subcommand [\-c],
+Adds permissions for the specified sub command [\-c],
 hostname [\-n], and user [\-u].
 .TP
 \fB\-r\fR, \fB\-\-remove\fR
-Removes permissions for the specified subcommand
+Removes permissions for the specified sub command
 [\-c], hostname [\-n], and user [\-u].
 .TP
-\fB\-c\fR, \fB\-\-command\fR \fIsubcommand\fR
-The subcommand that this permission command applies to.
+\fB\-c\fR, \fB\-\-command\fR \fIsub command\fR
+The sub command that this permission command applies to.
 .TP
 \fB\-n\fR, \fB\-\-name\fR \fIhostname\fR
 The host name that this permission command applies to.
@@ -54,14 +54,11 @@ Available subcomands that work with permissions are:
 \fBpermissions\fR
 .PP
 .RE
-Note, that since the purge subcommand doesn't take a list of hostnames, along
-with the permissions subcommand, and the expire subcommand when run with the
-\fB\-\-age\fR option, you must specify the hostname '*' to give access to a specific
-user.
+Note that in the case of functions that aren't host specific (such as \fIpermissions\fR) or affect all hosts (\fIsnebu purge\fR, or \fIsnebu expire -a ...\fR), users will need to be granted permission to all hosts by specifying \fB-h '*'\fR in order to be granted access to those specific functions).
 .PP
 To grant permissions, this command must be run as the user that snebu is
 installed under, or the user must be granted access to the \fIpermissions\fR
-subcommand
+sub command
 .SH "SEE ALSO"
 .hy 0
 \fBsnebu\fR(1),

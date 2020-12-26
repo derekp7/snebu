@@ -5,13 +5,12 @@ snebu-client.conf - Configuration file for snebu-client front end
 .SH DESCRIPTION
 The sneub-client.conf is used to specify a number of default parameters for snebu-client, such as default include / exclude specifications.  The contents are read in and executed as shell script commands by snebu-client, so in addition to specifying parameters it is possible to include standard shell scripting logic.  This also means that parameters are specified without a space between the name and value.
 
-.SS
-.B Parametrs
+.SS Parameters
 .TP
 \fBINCLUDE\fR=( \fIpath\fR ... )
 Specifies the directories to include in the backup.  By default, all mounted storage-based file systems are included -- that is, file systems that are of type "NODEV" (which includes virtual file systems such as /proc, /sys, anything mounted as "tmpdir") are not included.
 
-Also note that file system boundries are not crossed automatically.  For example, if "/home" is a separate mount point from "/" then you will need to specify both "/" and "/home".  Mount points are specified explicitly to prevent virtaul filesystems (i.e., "/proc") from being inadvertantly included.
+Also note that file system boundaries are not crossed automatically.  For example, if "/home" is a separate mount point from "/" then you will need to specify both "/" and "/home".  Mount points are specified explicitly to prevent virtual file systems (i.e., "/proc") from being inadvertently included.
 
 .TP
 \fBEXCLUDE\fR=( \fIpath\fR ...)
@@ -25,12 +24,10 @@ Similar to EXCLUDE, however works with files matching a given pattern (processin
 \fBbackupname\fR=\fIname-of-backup\fR
 Give the backup the given name instead of defaulting to the hostname.
 .PP
-.SS
-Server-initiated backup notes
+.SS Server-initiated backup notes
 If running backups from a backup server, the parameters will by default apply to all clients.  To target parameters for specific clients, you can wrap them in a shell scripting conditional clause (if-then-else, or case statement).
 
-.SH
-EXAMPLES:
+.SH EXAMPLES:
 To include specified directories:
 .RS
 .PP
@@ -55,7 +52,7 @@ EXCLUDEMATCH=( "*.tmp" "*.dbf" )
 .fi
 .RE
 .PP
-On a server backuping multiple clients -- to exclude all database ".dbf" files only on the database server "erp-database", include the following:
+On a server backing up multiple clients -- to exclude all database ".dbf" files only on the database server "erp-database", include the following:
 .RS
 .PP
 .nf

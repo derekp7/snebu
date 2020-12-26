@@ -5,11 +5,10 @@ snebu-client plugins - Defines pre-backup and post-backup scripts to run on a cl
 .SH DESCRIPTION
 Specifying the \fB--plugin\fR argument when executing a snebu-client backup operation will cause the specified plugin script to be incorporated into the backup process.  The plugin script defines at least two shell script functions -- -fBpluginpre()\fR, which executes prior to the backup, and \fBpluginpost()\R which executes after the backup has completed.
 
-This allows performing operations such as mounting a filesystem snapshot prior to a backup and removing the snapshot afterwards, or placing a database in hot backup mode at the beginning of the backup.  In the case of backing up a database, often times the backup will need to be completed in multiple stages -- place the DB in hot backup mode, gather a list of database files, back them up, take the DB out of hot backup mode, gather a list of files containing transaction logs that were created during the backup, and finally backing up those files.
+This allows performing operations such as mounting a file system snapshot prior to a backup and removing the snapshot afterwards, or placing a database in hot backup mode at the beginning of the backup.  In the case of backing up a database, often times the backup will need to be completed in multiple stages -- place the DB in hot backup mode, gather a list of database files, back them up, take the DB out of hot backup mode, gather a list of files containing transaction logs that were created during the backup, and finally backing up those files.
 
 To facilitate these type of backup steps, the \fBpluginpre\fR function can save the contents of the file include/exclude variables \fBINCLUDE\fR, \fBEXCLUDE\fR, and \fBEXCLUDEMATCH\fR.  Then set the variable \fBbkrepeat=1\fR, along with setting any other housekeeping variables used inside the plugin script.  Once it has completed the last stage, it can then restore the include/exclude variables, let the rest of the backup process continue, and then set \fBbkrepeat=0\fR to finish off the backup.
-.SS
-.B Functions and Variables
+.SS Functions and Variables
 .TP
 \fBpluginpre()\fR
 Shell script code containing pre-backup procedures.
@@ -20,7 +19,7 @@ Shell script code containing post-backup procedures.
 .PP
 .TP
 \fBbkrepeat\fR
-Set bkrepeat=1 to repeat the backup with modifications to the include/exclude list.  Everytime the backup repeats, the backup set is ammended with the new file set.
+Set bkrepeat=1 to repeat the backup with modifications to the include/exclude list.  Every time the backup repeats, the backup set is amended with the new file set.
 .PP
 .TP
 \fBINCLUDE\fR
