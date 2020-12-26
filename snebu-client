@@ -613,7 +613,18 @@ do_backup()
     for i in $(seq 1 "${verbose}"); do newbackupopts=( "${newbackupopts[@]}" -v ); done
 
     # Call autoinclude function if INCLUDE is not set
-    [ ${#INCLUDE[@]} = 0 ] && INCLUDE=( $(autoinclude) )
+    if [ ${#INCLUDE[@]} = 0 ]
+    then
+        INCLUDE=( $(autoinclude) )
+	# And add vault & data catalog directories to EXCLUDE
+	if [ ${#EXCLUDE[@]} = 0 -a -z "${clientname}" -a -z "${bksvrname}" ]
+	then
+	    EXCLUDE=( $(
+		cat /etc/snebu.conf |egrep '^vault|^meta' |cut -d= -f2 |sed 's/^[[:blank:]]*//;s/[[:blank:]]*$//'
+	    ) )
+
+	fi
+    fi
 
     bkrepeat=0
     while :
