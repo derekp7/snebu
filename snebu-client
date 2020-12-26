@@ -26,13 +26,13 @@ process_cmdline()
         exit
     fi
 
-    if [ \( "${target}" = "backup" -o "${target}" = "restore" \) -a -t 1 ]
+    if [ \( "${target}" = "do_backup" -o "${target}" = "do_restore" \) -a -t 1 ]
     then
         verbose=1
     else
 	verbose=0
     fi
-    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,exclude:,xmatch:,graft:,plugin:,verbose,quiet,help,sudo:,encryption-key:,decrypt" -o "c:n:r:d:fqvC:x:m:hk:" -- "$@")")
+    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,exclude:,xmatch:,graft:,plugin:,verbose,quiet,help,sudo:,encryption-key:,decrypt,nodecrypt" -o "c:n:r:d:fqvC:x:m:hk:" -- "$@")")
     then
         usage target
         exit 1
@@ -61,6 +61,7 @@ process_cmdline()
 	    --sudo) sudousr=$2; shift; shift;;
 	    -k|--encryption-key) keyfile=( "${keyfile[@]}" "$2"); shift; shift;;
 	    --decrypt) decrypt=1; shift;;
+	    --nodecrypt) nodecrypt=1; shift;;
             --) shift; break;;
         esac
     done
@@ -88,7 +89,12 @@ defaults()
     else
 	tarfilter=cat
     fi
-    if [ "${decrypt}" == 1 ]
+    if [ "${decrypt}" == 1 ] && ! type -P tarcrypt >/dev/null 2>&1
+    then
+	echo "Error -- decryption specified, but missing tarcrypt executable" >&2
+	exit 1
+    fi
+    if [ "${decrypt}" == 1 ] || ( type -P tarcrypt >/dev/null 2>&1 && [ -z "${nodecrypt}" ] )
     then
 	rtarfilter=do_tardecrypt
     else
@@ -350,6 +356,13 @@ usage()
 	     --decrypt              Turns on decryption.  Requires "tarcrypt" to be
 	                            on the client.  Password(s) will be promted for
 	                            during restore.
+
+	                            By default, tarcrypt will be called if available
+	                            which acts in passthrough mode when processing
+	                            unencrypted data.
+
+	     --nodecrypt            Turns off decryption.  Will cause unexpected
+	                            results if backup contains any encrypted files.
 
 	 -C, --changedir path       Changes to the given directory path before
 	                            validating

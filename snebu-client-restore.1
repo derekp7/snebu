@@ -31,6 +31,14 @@ time_t format, sames as the output of the "date
 Turns on decryption.  Requires "tarcrypt" to be
 on the client.  Password(s) will be prompted for
 during restore.
+.IP
+By default, tarcrypt will be called if available
+which acts in pass through mode when processing
+unencrypted data.
+.TP
+\fB\-\-nodecrypt\fR
+Turns off decryption.  Will cause unexpected
+results if backup contains any encrypted files.
 .TP
 \fB\-C\fR, \fB\-\-changedir\fR \fIpath\fR
 Changes to the given directory path before restoring.
