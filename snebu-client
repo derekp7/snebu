@@ -737,7 +737,8 @@ validate()
         tarargs=( "${tarargs[@]}" -C $tgtdirectory )
     fi
 
-    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${restoreopts[@]}" "${@}" </dev/null |${rtarfilter} |tar "${tarargs[@]}" $(tartest) -df -
+    $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${restoreopts[@]}" "${@}" </dev/null |${rtarfilter} |tar "${tarargs[@]}" $(tartest) -df - &&
+    echo "No errors found"
 }
 
 remote_validate()
@@ -748,7 +749,7 @@ remote_validate()
     fi
     $SNEBU restore --name ${backupname} --datestamp ${datestamp} "${@}" </dev/null |\
     rtarfilter |\
-    rpcsh -h ${clientname} -u "${rmtuser}" -f tartest -m "tar ${tarargs[*]} $(tartest) -df -"
+    rpcsh -h ${clientname} -u "${rmtuser}" -f tartest -m "tar ${tarargs[*]} $(tartest) -df - && echo \"No errors found\""
 
 }
 listbackups()

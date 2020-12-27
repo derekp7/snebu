@@ -27,5 +27,4 @@ rm -rf rpmbuild.tmp
 mkdir rpmbuild.tmp
 git archive --prefix snebu-${Version}/ ${tree} |gzip >rpmbuild.tmp/snebu-${Version}.tar.gz
 git cat-file -p ${tree}:snebu.spec |sed "s/_VERSION_/${Version}/g;s/_RELEASE_/${Release}/g" >rpmbuild.tmp/snebu.spec
-git cat-file -p ${tree}:Makefile-Fedora.patch >rpmbuild.tmp/Makefile-Fedora.patch
 rpmbuild --define "_sourcedir ./rpmbuild.tmp" --define "_srcrpmdir ./rpmbuild.tmp" -bs rpmbuild.tmp/snebu.spec
