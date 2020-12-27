@@ -1,692 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<meta name="generator" content="Asciidoctor 0.1.4">
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 2.0.10">
+<meta name="keywords" content="Snebu, Linux Backup, Snapshot, Encrypting">
 <title>SNEBU</title>
 <style>
-@import url(https://fonts.googleapis.com/css?family=Varela+Round|Open+Sans:400italic,700italic,400,700);
-/*! normalize.css v2.1.2 | MIT License | git.io/normalize */
-/* ========================================================================== HTML5 display definitions ========================================================================== */
-/** Correct `block` display not defined in IE 8/9. */
-article, aside, details, figcaption, figure, footer, header, hgroup, main, nav, section, summary { display: block; }
+/* Asciidoctor default stylesheet | MIT License | https://asciidoctor.org */
+
+@import url(//fonts.googleapis.com/css?family=Noto+Sans);
+@import url(https://cdn.jsdelivr.net/gh/asciidoctor/asciidoctor@2.0/data/stylesheets/asciidoctor-default.css); /* Default asciidoc style framework - important */
+
+/* CUSTOMISATIONS */
+/* Change the values in root for quick customisation. If you want even more fine grain... venture further. */
+:root{
+--maincolor:#FFFFFF;
+/*--primarycolor:#000000;*/
+--primarycolor:#556B2F;
+/*--secondarycolor:#AAAAAA;*/
+--secondarycolor:#222222;
+--tertiarycolor:#CCCCCC;
+/*--sidebarbackground:#CACACA;*/
+--sidebarbackground:#F0F0F0;
+--linkcolor:#0D47A1;
+--linkcoloralternate:#B71C1C;
+--white:#FFFFFF;
+--black:#676767;
+}
+
+/* Text styles */
+
+body{font-family: "Noto Sans",sans-serif;background-color: var(--maincolor);color:var(--black);}
+
+h1{color:var(--primarycolor) !important;font-family:"Noto Sans",sans-serif;}
+h2,h3,h4,h5,h6{color:var(--secondarycolor) !important;font-family:"Noto Sans",sans-serif;}
+.title{color:var(--black) !important;font-family:"Noto Sans",sans-serif;font-style: normal; font-weight: normal;}
+a{text-decoration: none;}
+p{font-family: "Noto Sans",sans-serif ! important}
+#toc.toc2 a:link{color:var(--linkcolor);}
+blockquote{color:var(--secondarycolor) !important}
+.quoteblock{color:var(--black)}
+.quoteblock blockquote:before{color:var(--black)}
+/*code{color:var(--white);background-color: var(--secondarycolor) !important}*/
+code{color:var(--secondarycolor);background-color: var(--maincolor) !important}
+mark{background-color: var(--tertiarycolor)} /* Text highlighting color */
+
+/* Table styles */
+th{background-color: var(--maincolor);color:var(--black) !important;}
+td{background-color: var(--maincolor);color: var(--black) !important}
+
+
+#toc.toc2{background-color:var(--sidebarbackground);}
+#toctitle{color:var(--primarycolor);}
+
+/* Responsiveness fixes */
+video {
+  max-width: 100%;
+}
+
+@media all and (max-width: 600px) {
+table {
+  width: 55vw!important;
+  font-size: 3vw;
+}
 
-/** Correct `inline-block` display not defined in IE 8/9. */
-audio, canvas, video { display: inline-block; }
-
-/** Prevent modern browsers from displaying `audio` without controls. Remove excess height in iOS 5 devices. */
-audio:not([controls]) { display: none; height: 0; }
-
-/** Address `[hidden]` styling not present in IE 8/9. Hide the `template` element in IE, Safari, and Firefox < 22. */
-[hidden], template { display: none; }
-
-script { display: none !important; }
-
-/* ========================================================================== Base ========================================================================== */
-/** 1. Set default font family to sans-serif. 2. Prevent iOS text size adjust after orientation change, without disabling user zoom. */
-html { font-family: sans-serif; /* 1 */ -ms-text-size-adjust: 100%; /* 2 */ -webkit-text-size-adjust: 100%; /* 2 */ }
-
-/** Remove default margin. */
-body { margin: 0; }
-
-/* ========================================================================== Links ========================================================================== */
-/** Remove the gray background color from active links in IE 10. */
-a { background: transparent; }
-
-/** Address `outline` inconsistency between Chrome and other browsers. */
-a:focus { outline: thin dotted; }
-
-/** Improve readability when focused and also mouse hovered in all browsers. */
-a:active, a:hover { outline: 0; }
-
-/* ========================================================================== Typography ========================================================================== */
-/** Address variable `h1` font-size and margin within `section` and `article` contexts in Firefox 4+, Safari 5, and Chrome. */
-h1 { font-size: 2em; margin: 0.67em 0; }
-
-/** Address styling not present in IE 8/9, Safari 5, and Chrome. */
-abbr[title] { border-bottom: 1px dotted; }
-
-/** Address style set to `bolder` in Firefox 4+, Safari 5, and Chrome. */
-b, strong { font-weight: bold; }
-
-/** Address styling not present in Safari 5 and Chrome. */
-dfn { font-style: italic; }
-
-/** Address differences between Firefox and other browsers. */
-hr { -moz-box-sizing: content-box; box-sizing: content-box; height: 0; }
-
-/** Address styling not present in IE 8/9. */
-mark { background: #ff0; color: #000; }
-
-/** Correct font family set oddly in Safari 5 and Chrome. */
-code, kbd, pre, samp { font-family: monospace, serif; font-size: 1em; }
-
-/** Improve readability of pre-formatted text in all browsers. */
-pre { white-space: pre-wrap; }
-
-/** Set consistent quote types. */
-q { quotes: "\201C" "\201D" "\2018" "\2019"; }
-
-/** Address inconsistent and variable font size in all browsers. */
-small { font-size: 80%; }
-
-/** Prevent `sub` and `sup` affecting `line-height` in all browsers. */
-sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline; }
-
-sup { top: -0.5em; }
-
-sub { bottom: -0.25em; }
-
-/* ========================================================================== Embedded content ========================================================================== */
-/** Remove border when inside `a` element in IE 8/9. */
-img { border: 0; }
-
-/** Correct overflow displayed oddly in IE 9. */
-svg:not(:root) { overflow: hidden; }
-
-/* ========================================================================== Figures ========================================================================== */
-/** Address margin not present in IE 8/9 and Safari 5. */
-figure { margin: 0; }
-
-/* ========================================================================== Forms ========================================================================== */
-/** Define consistent border, margin, and padding. */
-fieldset { border: 1px solid #c0c0c0; margin: 0 2px; padding: 0.35em 0.625em 0.75em; }
-
-/** 1. Correct `color` not being inherited in IE 8/9. 2. Remove padding so people aren't caught out if they zero out fieldsets. */
-legend { border: 0; /* 1 */ padding: 0; /* 2 */ }
-
-/** 1. Correct font family not being inherited in all browsers. 2. Correct font size not being inherited in all browsers. 3. Address margins set differently in Firefox 4+, Safari 5, and Chrome. */
-button, input, select, textarea { font-family: inherit; /* 1 */ font-size: 100%; /* 2 */ margin: 0; /* 3 */ }
-
-/** Address Firefox 4+ setting `line-height` on `input` using `!important` in the UA stylesheet. */
-button, input { line-height: normal; }
-
-/** Address inconsistent `text-transform` inheritance for `button` and `select`. All other form control elements do not inherit `text-transform` values. Correct `button` style inheritance in Chrome, Safari 5+, and IE 8+. Correct `select` style inheritance in Firefox 4+ and Opera. */
-button, select { text-transform: none; }
-
-/** 1. Avoid the WebKit bug in Android 4.0.* where (2) destroys native `audio` and `video` controls. 2. Correct inability to style clickable `input` types in iOS. 3. Improve usability and consistency of cursor style between image-type `input` and others. */
-button, html input[type="button"], input[type="reset"], input[type="submit"] { -webkit-appearance: button; /* 2 */ cursor: pointer; /* 3 */ }
-
-/** Re-set default cursor for disabled elements. */
-button[disabled], html input[disabled] { cursor: default; }
-
-/** 1. Address box sizing set to `content-box` in IE 8/9. 2. Remove excess padding in IE 8/9. */
-input[type="checkbox"], input[type="radio"] { box-sizing: border-box; /* 1 */ padding: 0; /* 2 */ }
-
-/** 1. Address `appearance` set to `searchfield` in Safari 5 and Chrome. 2. Address `box-sizing` set to `border-box` in Safari 5 and Chrome (include `-moz` to future-proof). */
-input[type="search"] { -webkit-appearance: textfield; /* 1 */ -moz-box-sizing: content-box; -webkit-box-sizing: content-box; /* 2 */ box-sizing: content-box; }
-
-/** Remove inner padding and search cancel button in Safari 5 and Chrome on OS X. */
-input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; }
-
-/** Remove inner padding and border in Firefox 4+. */
-button::-moz-focus-inner, input::-moz-focus-inner { border: 0; padding: 0; }
-
-/** 1. Remove default vertical scrollbar in IE 8/9. 2. Improve readability and alignment in all browsers. */
-textarea { overflow: auto; /* 1 */ vertical-align: top; /* 2 */ }
-
-/* ========================================================================== Tables ========================================================================== */
-/** Remove most spacing between table cells. */
-table { border-collapse: collapse; border-spacing: 0; }
-
-meta.foundation-mq-small { font-family: "only screen and (min-width: 768px)"; width: 768px; }
-
-meta.foundation-mq-medium { font-family: "only screen and (min-width:1280px)"; width: 1280px; }
-
-meta.foundation-mq-large { font-family: "only screen and (min-width:1440px)"; width: 1440px; }
-
-*, *:before, *:after { -moz-box-sizing: border-box; -webkit-box-sizing: border-box; box-sizing: border-box; }
-
-html, body { font-size: 100%; }
-
-body { background: white; color: #222222; padding: 0; margin: 0; font-family: "Helvetica Neue", "Helvetica", Helvetica, Arial, sans-serif; font-weight: normal; font-style: normal; line-height: 1; position: relative; cursor: auto; }
-
-a:hover { cursor: pointer; }
-
-img, object, embed { max-width: 100%; height: auto; }
-
-object, embed { height: 100%; }
-
-img { -ms-interpolation-mode: bicubic; }
-
-#map_canvas img, #map_canvas embed, #map_canvas object, .map_canvas img, .map_canvas embed, .map_canvas object { max-width: none !important; }
-
-.left { float: left !important; }
-
-.right { float: right !important; }
-
-.text-left { text-align: left !important; }
-
-.text-right { text-align: right !important; }
-
-.text-center { text-align: center !important; }
-
-.text-justify { text-align: justify !important; }
-
-.hide { display: none; }
-
-.antialiased, body { -webkit-font-smoothing: antialiased; }
-
-img { display: inline-block; vertical-align: middle; }
-
-textarea { height: auto; min-height: 50px; }
-
-select { width: 100%; }
-
-p.lead, .paragraph.lead > p, #preamble > .sectionbody > .paragraph:first-of-type p { font-size: 1.21875em; line-height: 1.6; }
-
-.subheader, #content #toctitle, .admonitionblock td.content > .title, .audioblock > .title, .exampleblock > .title, .imageblock > .title, .listingblock > .title, .literalblock > .title, .stemblock > .title, .openblock > .title, .paragraph > .title, .quoteblock > .title, table.tableblock > .title, .verseblock > .title, .videoblock > .title, .dlist > .title, .olist > .title, .ulist > .title, .qlist > .title, .hdlist > .title { line-height: 1.4; color: #385dbd; font-weight: 300; margin-top: 0.2em; margin-bottom: 0.5em; }
-
-/* Typography resets */
-div, dl, dt, dd, ul, ol, li, h1, h2, h3, #toctitle, .sidebarblock > .content > .title, h4, h5, h6, pre, form, p, blockquote, th, td { margin: 0; padding: 0; direction: ltr; }
-
-/* Default Link Styles */
-a { color: #095557; text-decoration: underline; line-height: inherit; }
-a:hover, a:focus { color: #042829; }
-a img { border: none; }
-
-/* Default paragraph styles */
-p { font-family: inherit; font-weight: normal; font-size: 1em; line-height: 1.6; margin-bottom: 1.25em; text-rendering: optimizeLegibility; }
-p aside { font-size: 0.875em; line-height: 1.35; font-style: italic; }
-
-/* Default header styles */
-h1, h2, h3, #toctitle, .sidebarblock > .content > .title, h4, h5, h6 { font-family: "Varela Round", Arial, sans-serif; font-weight: normal; font-style: normal; color: #152347; text-rendering: optimizeLegibility; margin-top: 0.8em; margin-bottom: 0.5em; line-height: 1.2125em; }
-h1 small, h2 small, h3 small, #toctitle small, .sidebarblock > .content > .title small, h4 small, h5 small, h6 small { font-size: 60%; color: #385dbd; line-height: 0; }
-
-h1 { font-size: 2.125em; }
-
-h2 { font-size: 1.6875em; }
-
-h3, #toctitle, .sidebarblock > .content > .title { font-size: 1.375em; }
-
-h4 { font-size: 1.125em; }
-
-h5 { font-size: 1.125em; }
-
-h6 { font-size: 1em; }
-
-hr { border: solid #dcd2c9; border-width: 1px 0 0; clear: both; margin: 1.25em 0 1.1875em; height: 0; }
-
-/* Helpful Typography Defaults */
-em, i { font-style: italic; line-height: inherit; }
-
-strong, b { font-weight: bold; line-height: inherit; }
-
-small { font-size: 60%; line-height: inherit; }
-
-code { font-family: Consolas, "Liberation Mono", Courier, monospace; font-weight: bold; color: #691816; }
-
-/* Lists */
-ul, ol, dl { font-size: 1em; line-height: 1.6; margin-bottom: 1.25em; list-style-position: outside; font-family: inherit; }
-
-ul, ol { margin-left: 1.5em; }
-ul.no-bullet, ol.no-bullet { margin-left: 1.5em; }
-
-/* Unordered Lists */
-ul li ul, ul li ol { margin-left: 1.25em; margin-bottom: 0; font-size: 1em; /* Override nested font-size change */ }
-ul.square li ul, ul.circle li ul, ul.disc li ul { list-style: inherit; }
-ul.square { list-style-type: square; }
-ul.circle { list-style-type: circle; }
-ul.disc { list-style-type: disc; }
-ul.no-bullet { list-style: none; }
-
-/* Ordered Lists */
-ol li ul, ol li ol { margin-left: 1.25em; margin-bottom: 0; }
-
-/* Definition Lists */
-dl dt { margin-bottom: 0.3125em; font-weight: bold; }
-dl dd { margin-bottom: 1.25em; }
-
-/* Abbreviations */
-abbr, acronym { text-transform: uppercase; font-size: 90%; color: #211306; border-bottom: 1px dotted #dddddd; cursor: help; }
-
-abbr { text-transform: none; }
-
-/* Blockquotes */
-blockquote { margin: 0 0 1.25em; padding: 0.5625em 1.25em 0 1.1875em; border-left: 1px solid #dddddd; }
-blockquote cite { display: block; font-size: 0.8125em; color: #655241; }
-blockquote cite:before { content: "\2014 \0020"; }
-blockquote cite a, blockquote cite a:visited { color: #655241; }
-
-blockquote, blockquote p { line-height: 1.6; color: #846b55; }
-
-/* Microformats */
-.vcard { display: inline-block; margin: 0 0 1.25em 0; border: 1px solid #dddddd; padding: 0.625em 0.75em; }
-.vcard li { margin: 0; display: block; }
-.vcard .fn { font-weight: bold; font-size: 0.9375em; }
-
-.vevent .summary { font-weight: bold; }
-.vevent abbr { cursor: auto; text-decoration: none; font-weight: bold; border: none; padding: 0 0.0625em; }
-
-@media only screen and (min-width: 768px) { h1, h2, h3, #toctitle, .sidebarblock > .content > .title, h4, h5, h6 { line-height: 1.4; }
-  h1 { font-size: 2.75em; }
-  h2 { font-size: 2.3125em; }
-  h3, #toctitle, .sidebarblock > .content > .title { font-size: 1.6875em; }
-  h4 { font-size: 1.4375em; } }
-/* Tables */
-table { background: white; margin-bottom: 1.25em; border: solid 1px #e4e7ef; }
-table thead, table tfoot { background: rgba(105, 60, 22, 0.25); font-weight: bold; }
-table thead tr th, table thead tr td, table tfoot tr th, table tfoot tr td { padding: 0.5em 0.625em 0.625em; font-size: inherit; color: #211306; text-align: left; }
-table tr th, table tr td { padding: 0.5625em 0.625em; font-size: inherit; color: #211306; }
-table tr.even, table tr.alt, table tr:nth-of-type(even) { background: #f4f5f8; }
-table thead tr th, table tfoot tr th, table tbody tr td, table tr td, table tfoot tr td { display: table-cell; line-height: 1.6; }
-
-.clearfix:before, .clearfix:after, .float-group:before, .float-group:after { content: " "; display: table; }
-.clearfix:after, .float-group:after { clear: both; }
-
-*:not(pre) > code { font-size: inherit; padding: 0; white-space: nowrap; background-color: inherit; border: 0 solid #dddddd; -webkit-border-radius: 6px; border-radius: 6px; text-shadow: none; line-height: inherit; }
-
-pre, pre > code { line-height: 1.4; color: black; font-family: monospace, serif; font-weight: normal; }
-
-.keyseq { color: #774417; }
-
-kbd:not(.keyseq) { display: inline-block; color: #211306; font-size: 0.75em; line-height: 1.4; background-color: #f7f7f7; border: 1px solid #ccc; -webkit-border-radius: 3px; border-radius: 3px; -webkit-box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 0 2px white inset; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 0 2px white inset; margin: -0.15em 0.15em 0 0.15em; padding: 0.2em 0.6em 0.2em 0.5em; vertical-align: middle; white-space: nowrap; }
-
-.keyseq kbd:first-child { margin-left: 0; }
-
-.keyseq kbd:last-child { margin-right: 0; }
-
-.menuseq, .menu { color: black; }
-
-b.button:before, b.button:after { position: relative; top: -1px; font-weight: normal; }
-
-b.button:before { content: "["; padding: 0 3px 0 2px; }
-
-b.button:after { content: "]"; padding: 0 2px 0 3px; }
-
-p a > code:hover { color: #541312; }
-
-#header, #content, #footnotes, #footer { width: 100%; margin-left: auto; margin-right: auto; margin-top: 0; margin-bottom: 0; max-width: 62.5em; *zoom: 1; position: relative; padding-left: 0.9375em; padding-right: 0.9375em; }
-#header:before, #header:after, #content:before, #content:after, #footnotes:before, #footnotes:after, #footer:before, #footer:after { content: " "; display: table; }
-#header:after, #content:after, #footnotes:after, #footer:after { clear: both; }
-
-#content:before { content: none; }
-
-#header { margin-bottom: 2.5em; }
-/*#header > h1 { color: #693c16; font-weight: normal; border-bottom: 1px solid #dcd2c9; margin-bottom: -28px; padding-bottom: 32px; } */
-#header > h1 { color: #333333; font-weight: normal; border-bottom: 1px solid #dcd2c9; margin-bottom: -28px; padding-bottom: 32px; }
-#header span { color: #846b55; }
-#header #revnumber { text-transform: capitalize; }
-#header br { display: none; }
-#header br + span { padding-left: 3px; }
-#header br + span:before { content: "\2013 \0020"; }
-#header br + span.author { padding-left: 0; }
-#header br + span.author:before { content: ", "; }
-
-#toc { border-bottom: 0 solid #dddddd; padding-top: 1em; padding-bottom: 1.25em; }
-#toc > ul { margin-left: 0.25em; }
-#toc ul.sectlevel0 > li > a { font-style: italic; }
-#toc ul.sectlevel0 ul.sectlevel1 { margin-left: 0; margin-top: 0.5em; margin-bottom: 0.5em; }
-#toc ul { font-family: "Varela Round", Arial, sans-serif; list-style-type: none; }
-#toc a { text-decoration: none; }
-#toc a:active { text-decoration: underline; }
-
-#toctitle { color: #385dbd; }
-
-@media only screen and (min-width: 768px) { body.toc2 { padding-left: 15em; padding-right: 0; }
-  #toc.toc2 { background-color: #f2f2f2; position: fixed; width: 15em; left: 0; top: 0; border-right: 1px solid #dddddd; border-bottom: 0; z-index: 1000; padding: 1.25em 1em; height: 100%; overflow: auto; }
-  #toc.toc2 #toctitle { margin-top: 0; font-size: 1.2em; }
-  #toc.toc2 > ul { font-size: .90em; margin-bottom: 0; }
-  #toc.toc2 ul ul { margin-left: 0; padding-left: 1em; }
-  #toc.toc2 ul.sectlevel0 ul.sectlevel1 { padding-left: 0; margin-top: 0.5em; margin-bottom: 0.5em; }
-  body.toc2.toc-right { padding-left: 0; padding-right: 15em; }
-  body.toc2.toc-right #toc.toc2 { border-right: 0; border-left: 1px solid #dddddd; left: auto; right: 0; } }
-@media only screen and (min-width: 1280px) { body.toc2 { padding-left: 20em; padding-right: 0; }
-  #toc.toc2 { width: 20em; }
-  #toc.toc2 #toctitle { font-size: 1.375em; }
-  #toc.toc2 > ul { font-size: 0.95em; }
-  #toc.toc2 ul ul { padding-left: 1.25em; }
-  body.toc2.toc-right { padding-left: 0; padding-right: 20em; } }
-#content #toc { border-style: solid; border-width: 1px; border-color: #d9d9d9; margin-bottom: 1.25em; padding: 1.25em; background: #f2f2f2; border-width: 0; -webkit-border-radius: 6px; border-radius: 6px; }
-#content #toc > :first-child { margin-top: 0; }
-#content #toc > :last-child { margin-bottom: 0; }
-
-#content #toctitle { font-size: 1.375em; }
-
-#footer { max-width: 100%; background-color: #23160c; padding: 1.25em; }
-
-#footer-text { color: #deecf9; line-height: 1.44; }
-
-.sect1 { padding-bottom: 1.25em; }
-
-.sect1 + .sect1 { border-top: 0 solid #dddddd; }
-
-#content h1 > a.anchor, h2 > a.anchor, h3 > a.anchor, #toctitle > a.anchor, .sidebarblock > .content > .title > a.anchor, h4 > a.anchor, h5 > a.anchor, h6 > a.anchor { position: absolute; width: 1em; margin-left: -1em; display: block; text-decoration: none; visibility: hidden; text-align: center; font-weight: normal; }
-#content h1 > a.anchor:before, h2 > a.anchor:before, h3 > a.anchor:before, #toctitle > a.anchor:before, .sidebarblock > .content > .title > a.anchor:before, h4 > a.anchor:before, h5 > a.anchor:before, h6 > a.anchor:before { content: '\00A7'; font-size: .85em; vertical-align: text-top; display: block; margin-top: 0.05em; }
-#content h1:hover > a.anchor, #content h1 > a.anchor:hover, h2:hover > a.anchor, h2 > a.anchor:hover, h3:hover > a.anchor, #toctitle:hover > a.anchor, .sidebarblock > .content > .title:hover > a.anchor, h3 > a.anchor:hover, #toctitle > a.anchor:hover, .sidebarblock > .content > .title > a.anchor:hover, h4:hover > a.anchor, h4 > a.anchor:hover, h5:hover > a.anchor, h5 > a.anchor:hover, h6:hover > a.anchor, h6 > a.anchor:hover { visibility: visible; }
-#content h1 > a.link, h2 > a.link, h3 > a.link, #toctitle > a.link, .sidebarblock > .content > .title > a.link, h4 > a.link, h5 > a.link, h6 > a.link { color: #152347; text-decoration: none; }
-#content h1 > a.link:hover, h2 > a.link:hover, h3 > a.link:hover, #toctitle > a.link:hover, .sidebarblock > .content > .title > a.link:hover, h4 > a.link:hover, h5 > a.link:hover, h6 > a.link:hover { color: #0f1933; }
-
-.audioblock, .imageblock, .literalblock, .listingblock, .stemblock, .verseblock, .videoblock { margin-bottom: 1.25em; }
-
-.admonitionblock td.content > .title, .audioblock > .title, .exampleblock > .title, .imageblock > .title, .listingblock > .title, .literalblock > .title, .stemblock > .title, .openblock > .title, .paragraph > .title, .quoteblock > .title, table.tableblock > .title, .verseblock > .title, .videoblock > .title, .dlist > .title, .olist > .title, .ulist > .title, .qlist > .title, .hdlist > .title { text-rendering: optimizeLegibility; text-align: left; font-weight: bold; }
-
-table.tableblock > caption.title { white-space: nowrap; overflow: visible; max-width: 0; }
-
-table.tableblock #preamble > .sectionbody > .paragraph:first-of-type p { font-size: inherit; }
-
-.admonitionblock > table { border: 0; background: none; width: 100%; }
-.admonitionblock > table td.icon { text-align: center; width: 80px; }
-.admonitionblock > table td.icon img { max-width: none; }
-.admonitionblock > table td.icon .title { font-weight: normal; text-transform: uppercase; }
-.admonitionblock > table td.content { padding-left: 1.125em; padding-right: 1.25em; border-left: 1px solid #dcd2c9; color: #846b55; }
-.admonitionblock > table td.content > :last-child > :last-child { margin-bottom: 0; }
-
-.exampleblock > .content { border-style: solid; border-width: 1px; border-color: #f3e0ce; margin-bottom: 1.25em; padding: 1.25em; background: #fdfaf7; -webkit-border-radius: 6px; border-radius: 6px; }
-.exampleblock > .content > :first-child { margin-top: 0; }
-.exampleblock > .content > :last-child { margin-bottom: 0; }
-.exampleblock > .content h1, .exampleblock > .content h2, .exampleblock > .content h3, .exampleblock > .content #toctitle, .sidebarblock.exampleblock > .content > .title, .exampleblock > .content h4, .exampleblock > .content h5, .exampleblock > .content h6, .exampleblock > .content p { color: #333333; }
-.exampleblock > .content h1, .exampleblock > .content h2, .exampleblock > .content h3, .exampleblock > .content #toctitle, .sidebarblock.exampleblock > .content > .title, .exampleblock > .content h4, .exampleblock > .content h5, .exampleblock > .content h6 { line-height: 1; margin-bottom: 0.625em; }
-.exampleblock > .content h1.subheader, .exampleblock > .content h2.subheader, .exampleblock > .content h3.subheader, .exampleblock > .content .subheader#toctitle, .sidebarblock.exampleblock > .content > .subheader.title, .exampleblock > .content h4.subheader, .exampleblock > .content h5.subheader, .exampleblock > .content h6.subheader { line-height: 1.4; }
-
-.exampleblock.result > .content { -webkit-box-shadow: 0 1px 8px #d9d9d9; box-shadow: 0 1px 8px #d9d9d9; }
-
-.sidebarblock { border-style: solid; border-width: 1px; border-color: #d9d9d9; margin-bottom: 1.25em; padding: 1.25em; background: #f2f2f2; -webkit-border-radius: 6px; border-radius: 6px; }
-.sidebarblock > :first-child { margin-top: 0; }
-.sidebarblock > :last-child { margin-bottom: 0; }
-.sidebarblock h1, .sidebarblock h2, .sidebarblock h3, .sidebarblock #toctitle, .sidebarblock > .content > .title, .sidebarblock h4, .sidebarblock h5, .sidebarblock h6, .sidebarblock p { color: #333333; }
-.sidebarblock h1, .sidebarblock h2, .sidebarblock h3, .sidebarblock #toctitle, .sidebarblock > .content > .title, .sidebarblock h4, .sidebarblock h5, .sidebarblock h6 { line-height: 1; margin-bottom: 0.625em; }
-.sidebarblock h1.subheader, .sidebarblock h2.subheader, .sidebarblock h3.subheader, .sidebarblock .subheader#toctitle, .sidebarblock > .content > .subheader.title, .sidebarblock h4.subheader, .sidebarblock h5.subheader, .sidebarblock h6.subheader { line-height: 1.4; }
-.sidebarblock > .content > .title { color: #385dbd; margin-top: 0; line-height: 1.6; }
-
-.exampleblock > .content > :last-child > :last-child, .exampleblock > .content .olist > ol > li:last-child > :last-child, .exampleblock > .content .ulist > ul > li:last-child > :last-child, .exampleblock > .content .qlist > ol > li:last-child > :last-child, .sidebarblock > .content > :last-child > :last-child, .sidebarblock > .content .olist > ol > li:last-child > :last-child, .sidebarblock > .content .ulist > ul > li:last-child > :last-child, .sidebarblock > .content .qlist > ol > li:last-child > :last-child { margin-bottom: 0; }
-
-.literalblock pre:not([class]), .listingblock pre:not([class]) { background: url('../images/golo/pre-bg.png?1407350722'); }
-.literalblock pre, .literalblock pre[class], .listingblock pre, .listingblock pre[class] { border-width: 1px; border-style: solid; border-color: rgba(21, 35, 71, 0.1); -webkit-border-radius: 6px; border-radius: 6px; padding: 0.8em; word-wrap: break-word; }
-.literalblock pre.nowrap, .literalblock pre[class].nowrap, .listingblock pre.nowrap, .listingblock pre[class].nowrap { overflow-x: auto; white-space: pre; word-wrap: normal; }
-.literalblock pre > code, .literalblock pre[class] > code, .listingblock pre > code, .listingblock pre[class] > code { display: block; }
-@media only screen { .literalblock pre, .literalblock pre[class], .listingblock pre, .listingblock pre[class] { font-size: 0.72em; } }
-@media only screen and (min-width: 768px) { .literalblock pre, .literalblock pre[class], .listingblock pre, .listingblock pre[class] { font-size: 0.81em; } }
-@media only screen and (min-width: 1280px) { .literalblock pre, .literalblock pre[class], .listingblock pre, .listingblock pre[class] { font-size: 0.9em; } }
-
-.listingblock pre.highlight { padding: 0; }
-.listingblock pre.highlight > code { padding: 0.8em; }
-
-.listingblock > .content { position: relative; }
-
-.listingblock:hover code[class*=" language-"]:before { text-transform: uppercase; font-size: 0.9em; color: #999; position: absolute; top: 0.375em; right: 0.375em; }
-
-.listingblock:hover code.asciidoc:before { content: "asciidoc"; }
-.listingblock:hover code.clojure:before { content: "clojure"; }
-.listingblock:hover code.css:before { content: "css"; }
-.listingblock:hover code.go:before { content: "go"; }
-.listingblock:hover code.groovy:before { content: "groovy"; }
-.listingblock:hover code.html:before { content: "html"; }
-.listingblock:hover code.java:before { content: "java"; }
-.listingblock:hover code.javascript:before { content: "javascript"; }
-.listingblock:hover code.python:before { content: "python"; }
-.listingblock:hover code.ruby:before { content: "ruby"; }
-.listingblock:hover code.sass:before { content: "sass"; }
-.listingblock:hover code.scss:before { content: "scss"; }
-.listingblock:hover code.xml:before { content: "xml"; }
-.listingblock:hover code.yaml:before { content: "yaml"; }
-
-.listingblock.terminal pre .command:before { content: attr(data-prompt); padding-right: 0.5em; color: #999; }
-
-.listingblock.terminal pre .command:not([data-prompt]):before { content: '$'; }
-
-table.pyhltable { border: 0; margin-bottom: 0; }
-
-table.pyhltable td { vertical-align: top; padding-top: 0; padding-bottom: 0; }
-
-table.pyhltable td.code { padding-left: .75em; padding-right: 0; }
-
-.highlight.pygments .lineno, table.pyhltable td:not(.code) { color: #999; padding-left: 0; padding-right: .5em; border-right: 1px solid #dcd2c9; }
-
-.highlight.pygments .lineno { display: inline-block; margin-right: .25em; }
-
-table.pyhltable .linenodiv { background-color: transparent !important; padding-right: 0 !important; }
-
-.quoteblock { margin: 0 0 1.25em 0; padding: 0.5625em 1.25em 0 1.1875em; border-left: 1px solid #dddddd; }
-.quoteblock blockquote { margin: 0 0 1.25em 0; padding: 0 0 0.625em 0; border: 0; }
-.quoteblock blockquote > .paragraph:last-child p { margin-bottom: 0; }
-.quoteblock .attribution { margin-top: -0.625em; padding-bottom: 0.625em; font-size: 0.8125em; color: #655241; line-height: 1.6; }
-.quoteblock .attribution br { display: none; }
-.quoteblock .attribution cite { display: block; }
-
-table.tableblock { max-width: 100%; }
-table.tableblock td .paragraph:last-child p > p:last-child, table.tableblock th > p:last-child, table.tableblock td > p:last-child { margin-bottom: 0; }
-
-table.spread { width: 100%; }
-
-table.tableblock, th.tableblock, td.tableblock { border: 0 solid #e4e7ef; }
-
-table.grid-all th.tableblock, table.grid-all td.tableblock { border-width: 0 1px 1px 0; }
-
-table.grid-all tfoot > tr > th.tableblock, table.grid-all tfoot > tr > td.tableblock { border-width: 1px 1px 0 0; }
-
-table.grid-cols th.tableblock, table.grid-cols td.tableblock { border-width: 0 1px 0 0; }
-
-table.grid-all * > tr > .tableblock:last-child, table.grid-cols * > tr > .tableblock:last-child { border-right-width: 0; }
-
-table.grid-rows th.tableblock, table.grid-rows td.tableblock { border-width: 0 0 1px 0; }
-
-table.grid-all tbody > tr:last-child > th.tableblock, table.grid-all tbody > tr:last-child > td.tableblock, table.grid-all thead:last-child > tr > th.tableblock, table.grid-rows tbody > tr:last-child > th.tableblock, table.grid-rows tbody > tr:last-child > td.tableblock, table.grid-rows thead:last-child > tr > th.tableblock { border-bottom-width: 0; }
-
-table.grid-rows tfoot > tr > th.tableblock, table.grid-rows tfoot > tr > td.tableblock { border-width: 1px 0 0 0; }
-
-table.frame-all { border-width: 1px; }
-
-table.frame-sides { border-width: 0 1px; }
-
-table.frame-topbot { border-width: 1px 0; }
-
-th.halign-left, td.halign-left { text-align: left; }
-
-th.halign-right, td.halign-right { text-align: right; }
-
-th.halign-center, td.halign-center { text-align: center; }
-
-th.valign-top, td.valign-top { vertical-align: top; }
-
-th.valign-bottom, td.valign-bottom { vertical-align: bottom; }
-
-th.valign-middle, td.valign-middle { vertical-align: middle; }
-
-table thead th, table tfoot th { font-weight: bold; }
-
-tbody tr th { display: table-cell; line-height: 1.6; background: rgba(105, 60, 22, 0.25); }
-
-tbody tr th, tbody tr th p, tfoot tr th, tfoot tr th p { color: #211306; font-weight: bold; }
-
-td > div.verse { white-space: pre; }
-
-ol { margin-left: 1.75em; }
-
-ul li ol { margin-left: 1.5em; }
-
-dl dd { margin-left: 1.125em; }
-
-dl dd:last-child, dl dd:last-child > :last-child { margin-bottom: 0; }
-
-ol > li p, ul > li p, ul dd, ol dd, .olist .olist, .ulist .ulist, .ulist .olist, .olist .ulist { margin-bottom: 0.625em; }
-
-ul.unstyled, ol.unnumbered, ul.checklist, ul.none { list-style-type: none; }
-
-ul.unstyled, ol.unnumbered, ul.checklist { margin-left: 0.625em; }
-
-ul.checklist li > p:first-child > .fa-check-square-o:first-child, ul.checklist li > p:first-child > input[type="checkbox"]:first-child { margin-right: 0.25em; }
-
-ul.checklist li > p:first-child > input[type="checkbox"]:first-child { position: relative; top: 1px; }
-
-ul.inline { margin: 0 auto 0.625em auto; margin-left: -1.375em; margin-right: 0; padding: 0; list-style: none; overflow: hidden; }
-ul.inline > li { list-style: none; float: left; margin-left: 1.375em; display: block; }
-ul.inline > li > * { display: block; }
-
-.unstyled dl dt { font-weight: normal; font-style: normal; }
-
-ol.arabic { list-style-type: decimal; }
-
-ol.decimal { list-style-type: decimal-leading-zero; }
-
-ol.loweralpha { list-style-type: lower-alpha; }
-
-ol.upperalpha { list-style-type: upper-alpha; }
-
-ol.lowerroman { list-style-type: lower-roman; }
-
-ol.upperroman { list-style-type: upper-roman; }
-
-ol.lowergreek { list-style-type: lower-greek; }
-
-.hdlist > table, .colist > table { border: 0; background: none; }
-.hdlist > table > tbody > tr, .colist > table > tbody > tr { background: none; }
-
-td.hdlist1 { padding-right: .75em; font-weight: bold; }
-
-td.hdlist1, td.hdlist2 { vertical-align: top; }
-
-.literalblock + .colist, .listingblock + .colist { margin-top: -0.5em; }
-
-.colist > table tr > td:first-of-type { padding: 0 .75em; line-height: 1; }
-.colist > table tr > td:last-of-type { padding: 0.25em 0; }
-
-.qanda > ol > li > p > em:only-child { color: #063f40; }
-
-.thumb, .th { line-height: 0; display: inline-block; border: solid 4px white; -webkit-box-shadow: 0 0 0 1px #dddddd; box-shadow: 0 0 0 1px #dddddd; }
-
-.imageblock.left, .imageblock[style*="float: left"] { margin: 0.25em 0.625em 1.25em 0; }
-.imageblock.right, .imageblock[style*="float: right"] { margin: 0.25em 0 1.25em 0.625em; }
-.imageblock > .title { margin-bottom: 0; }
-.imageblock.thumb, .imageblock.th { border-width: 6px; }
-.imageblock.thumb > .title, .imageblock.th > .title { padding: 0 0.125em; }
-
-.image.left, .image.right { margin-top: 0.25em; margin-bottom: 0.25em; display: inline-block; line-height: 0; }
-.image.left { margin-right: 0.625em; }
-.image.right { margin-left: 0.625em; }
-
-a.image { text-decoration: none; }
-
-span.footnote, span.footnoteref { vertical-align: super; font-size: 0.875em; }
-span.footnote a, span.footnoteref a { text-decoration: none; }
-span.footnote a:active, span.footnoteref a:active { text-decoration: underline; }
-
-#footnotes { padding-top: 0.75em; padding-bottom: 0.75em; margin-bottom: 0.625em; }
-#footnotes hr { width: 20%; min-width: 6.25em; margin: -.25em 0 .75em 0; border-width: 1px 0 0 0; }
-#footnotes .footnote { padding: 0 0.375em; line-height: 1.3; font-size: 0.875em; margin-left: 1.2em; text-indent: -1.2em; margin-bottom: .2em; }
-#footnotes .footnote a:first-of-type { font-weight: bold; text-decoration: none; }
-#footnotes .footnote:last-of-type { margin-bottom: 0; }
-
-#content #footnotes { margin-top: -0.625em; margin-bottom: 0; padding: 0.75em 0; }
-
-.gist .file-data > table { border: none; background: #fff; width: 100%; margin-bottom: 0; }
-.gist .file-data > table td.line-data { width: 99%; }
-
-div.unbreakable { page-break-inside: avoid; }
-
-.big { font-size: larger; }
-
-.small { font-size: smaller; }
-
-.underline { text-decoration: underline; }
-
-.overline { text-decoration: overline; }
-
-.line-through { text-decoration: line-through; }
-
-.aqua { color: #00bfbf; }
-
-.aqua-background { background-color: #00fafa; }
-
-.black { color: black; }
-
-.black-background { background-color: black; }
-
-.blue { color: #0000bf; }
-
-.blue-background { background-color: #0000fa; }
-
-.fuchsia { color: #bf00bf; }
-
-.fuchsia-background { background-color: #fa00fa; }
-
-.gray { color: #606060; }
-
-.gray-background { background-color: #7d7d7d; }
-
-.green { color: #006000; }
-
-.green-background { background-color: #007d00; }
-
-.lime { color: #00bf00; }
-
-.lime-background { background-color: #00fa00; }
-
-.maroon { color: #600000; }
-
-.maroon-background { background-color: #7d0000; }
-
-.navy { color: #000060; }
-
-.navy-background { background-color: #00007d; }
-
-.olive { color: #606000; }
-
-.olive-background { background-color: #7d7d00; }
-
-.purple { color: #600060; }
-
-.purple-background { background-color: #7d007d; }
-
-.red { color: #bf0000; }
-
-.red-background { background-color: #fa0000; }
-
-.silver { color: #909090; }
-
-.silver-background { background-color: #bcbcbc; }
-
-.teal { color: #006060; }
-
-.teal-background { background-color: #007d7d; }
-
-.white { color: #bfbfbf; }
-
-.white-background { background-color: #fafafa; }
-
-.yellow { color: #bfbf00; }
-
-.yellow-background { background-color: #fafa00; }
-
-span.icon > .fa { cursor: default; }
-
-.admonitionblock td.icon [class^="fa icon-"] { font-size: 2.5em; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); cursor: default; }
-.admonitionblock td.icon .icon-note:before { content: "\f05a"; color: #064042; }
-.admonitionblock td.icon .icon-tip:before { content: "\f0eb"; text-shadow: 1px 1px 2px rgba(155, 155, 0, 0.8); color: #111; }
-.admonitionblock td.icon .icon-warning:before { content: "\f071"; color: #bf6900; }
-.admonitionblock td.icon .icon-caution:before { content: "\f06d"; color: #bf3400; }
-.admonitionblock td.icon .icon-important:before { content: "\f06a"; color: #bf0000; }
-
-.conum[data-value] { display: inline-block; color: white !important; background-color: #211306; -webkit-border-radius: 100px; border-radius: 100px; text-align: center; width: 20px; height: 20px; font-size: 12px; line-height: 20px; font-family: "Open Sans", "Sans", sans-serif; font-style: normal; font-weight: bold; text-indent: -1px; }
-.conum[data-value] * { color: white !important; }
-.conum[data-value] + b { display: none; }
-.conum[data-value]:after { content: attr(data-value); }
-pre .conum[data-value] { position: relative; top: -2px; }
-
-b.conum * { color: inherit !important; }
-
-.conum:not([data-value]):empty { display: none; }
-
-body { background: url('../images/golo/body-bg.png?1407350722') #fdfaf7 repeat; }
-
-#toc.toc2 ul ul { list-style-type: circle; padding-left: 1.75em; }
-
-#toctitle { color: #152347; }
-
-#header h1 { font-weight: bold; position: relative; left: -0.0625em; }
-#header h1 span.lo { color: #dc9424; }
-
-#content h2, #content h3, #content #toctitle, #content .sidebarblock > .content > .title, #content h4, #content h5, #content #toctitle { font-weight: normal; position: relative; left: -0.0625em; }
-#content h2 { font-weight: bold; }
-
-.literalblock .content pre.highlight, .listingblock .content pre.highlight { background: url('../images/golo/pre-bg.png?1407350722'); }
-
-.admonitionblock > table td.content { border-color: #dddddd; }
-
-table.tableblock.grid-all { -webkit-border-radius: 0; border-radius: 0; }
-
-#footer { background-color: #23160c; }
 </style>
 </head>
 <body class="article toc2 toc-left">
@@ -695,904 +74,1735 @@ table.tableblock.grid-all { -webkit-border-radius: 0; border-radius: 0; }
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
 <ul class="sectlevel1">
-<li><a href="#_introduction">Introduction</a></li>
-<li>
+<li><a href="#_introduction">1. Introduction</a></li>
+<li><a href="#_quick_start">2. Quick start</a>
 <ul class="sectlevel2">
-<li><a href="#_audience">Audience</a></li>
+<li><a href="#_downloads_compiling_installation">2.1. Downloads / Compiling / Installation</a></li>
+<li><a href="#_sample_backup_and_restore_operation">2.2. Sample Backup and Restore Operation</a></li>
 </ul>
 </li>
-<li><a href="#_downloads_installation">Downloads / Installation</a></li>
-<li><a href="#_features">Features</a></li>
-<li><a href="#_quick_start_guide">Quick-start guide</a></li>
-<li>
+<li><a href="#_general_concepts">3. General concepts</a>
 <ul class="sectlevel2">
-<li><a href="#_concepts">Concepts</a></li>
-<li><a href="#_setting_up_a_local_backup">Setting up a local backup</a></li>
-<li><a href="#_backing_up_to_a_remote_server">Backing up to a remote server</a></li>
-<li><a href="#_backing_up_remote_clients_from_a_backup_server">Backing up remote clients from a backup server</a></li>
+<li><a href="#_components">3.1. Components</a></li>
+<li><a href="#_encryption_2">3.2. Encryption</a></li>
+<li><a href="#_other_security_features">3.3. Other security features</a></li>
 </ul>
 </li>
-<li><a href="#_daily_and_periodic_maintenance_tasks">Daily and periodic maintenance tasks</a></li>
-<li>
+<li><a href="#_reference">4. Reference</a>
 <ul class="sectlevel2">
-<li><a href="#_expiring_old_backups">Expiring old backups</a></li>
-</ul>
-</li>
-<li><a href="#_advanced_usage">Advanced usage</a></li>
-<li>
-<ul class="sectlevel2">
-<li><a href="#_creating_a_custom_snebu_client_script">Creating a custom snebu-client script</a></li>
-<li><a href="#_changing_file_locations">Changing file locations</a></li>
-<li><a href="#_forcing_a_full_backup">Forcing a full backup</a></li>
-<li><a href="#_plugins">Plugins</a></li>
-</ul>
-</li>
-<li><a href="#_command_reference">Command reference</a></li>
-<li>
-<ul class="sectlevel2">
-<li><a href="#_snebu_client_br">snebu-client<br></a></li>
-<li><a href="#_snebu">snebu</a></li>
-<li><a href="#_contact_info">Contact info</a></li>
+<li><a href="#_snebu_client1_front_end_client_for_the_snebu_backup_system">4.1. snebu-client(1) - Front-end client for the snebu backup system</a></li>
+<li><a href="#_snebu_client_backup1_initiates_a_backup">4.2. snebu-client-backup(1) - Initiates a backup</a></li>
+<li><a href="#_snebu_client_listbackups1_lists_backed_up_systems_backup_sets_and_file_names">4.3. snebu-client-listbackups(1) - Lists backed up systems, backup sets, and file names</a></li>
+<li><a href="#_snebu_client_validate1_compares_a_backup_to_file_system_contents">4.4. snebu-client-validate(1) - Compares a backup to file system contents</a></li>
+<li><a href="#_snebu_client_restore1_restores_a_backup">4.5. snebu-client-restore(1) - Restores a backup</a></li>
+<li><a href="#_snebu_client_conf5_configuration_file_for_snebu_client_front_end">4.6. snebu-client.conf(5) - Configuration file for snebu-client front end</a></li>
+<li><a href="#_snebu_client_plugin5_defines_pre_backup_and_post_backup_scripts_to_run_on_a_client">4.7. snebu-client-plugin(5) - Defines pre-backup and post-backup scripts to run on a client.</a></li>
+<li><a href="#_snebu1_the_simple_network_backup_system">4.8. snebu(1) - The simple network backup system</a></li>
+<li><a href="#_snebu_newbackup1_submits_manifest_for_a_new_backup">4.9. snebu-newbackup(1) - Submits manifest for a new backup</a></li>
+<li><a href="#_snebu_submitfiles1_recieves_tar_file_contents_to_complete_a_backup">4.10. snebu-submitfiles(1) - Recieves tar file contents to complete a backup</a></li>
+<li><a href="#_snebu_listbackups1_lists_backed_up_systems_backup_sets_and_file_names">4.11. snebu-listbackups(1) - Lists backed up systems, backup sets, and file names</a></li>
+<li><a href="#_snebu_restore1_generates_tar_file_from_backup">4.12. snebu-restore(1) - Generates tar file from backup</a></li>
+<li><a href="#_snebu_expire1_expire_a_given_backup_set_or_range_of_backups">4.13. snebu-expire(1) - Expire a given backup set or range of backups</a></li>
+<li><a href="#_snebu_purge1_remove_backing_files_from_expired_backups">4.14. snebu-purge(1) - Remove backing files from expired backups</a></li>
+<li><a href="#_snebu_permissions1_set_permissions_for_snebu_when_used_in_multi_user_mode">4.15. snebu-permissions(1) - Set permissions for Snebu when used in multi-user mode</a></li>
+<li><a href="#_tarcrypt1_compresses_and_encrypts_file_data_in_tar_files">4.16. tarcrypt(1) - Compresses and encrypts file data in TAR files</a></li>
 </ul>
 </li>
 </ul>
 </div>
 </div>
 <div id="content">
-<div class="sect1">
-<h2 id="_introduction">Introduction</h2>
+<div id="preamble">
 <div class="sectionbody">
-<div class="paragraph">
-<p>Simple Network Encrypting Backup Utility<br>
-Sleep Nominally, Everything's Backed Up
-<p>Snebu is an efficient incremental snapshot style client/server disk-based backup system for Unix / Linux systems.  Efficiency is provided by transferring only the needed files to complete a given backup set, along with compression and file-level de-duplication.  This de-duplication is effective for any files with the same contents, whether they come from the same backup instance, or are duplicated across past backups, or even across multiple systems.  Therefore you can backup the full OS on multiple servers using only minimal additional storage space.</p>
-</div>
-<div class="sect2">
-<h3 id="_audience">Audience</h3>
-<div class="paragraph">
-<p>Snebu is for those who either have no current backup strategy, and want to get something going quickly (either to a locally attached external drive, or to some storage on another server), or if you are currently using a simpler backup scheme (such as one of the rsync-based backup methods) and need to have some of the features of the more heavy weight backup systems (such as a compression, de-duplication, backup catalog DB, and scheduled data expiration).</p>
-</div>
-</div>
+<p style="color:rgb(150,150,150);"> Simple Network Encrypting Backup Utility</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_downloads_installation">Downloads / Installation</h2>
+<h2 id="_introduction">1. Introduction</h2>
 <div class="sectionbody">
+<div class="paragraph">
+<p>Snebu is a high-performance snapshot-style backup system for Linux supporting compression, deduplication and optional public key encryption.  It can operate in single-host mode, push mode (client pushes data to server), or pull mode (server pulls data from client) via SSH.  In pull mode, no agent is required on the client (the program <em>tarcrypt</em> will need to be on clients when encryption is used).</p>
+</div>
+<div class="paragraph">
+<p>The backups are snapshot style, so only the minimum necessary files are transferred to the backup server to complete a backup set.  This keeps storage and bandwidth utilization to a minimum.</p>
+</div>
+<div class="paragraph">
+<p>Server side is accessed via SSH, supports multiple simultaneous clients, and deduplicates backup files across file systems, clients and backup sets.  Server access supports multi-user granular permissions per account (i.e., an account can be granted backup access, but forbidden delete access&#8201;&#8212;&#8201;useful for protection against malware attacks).</p>
+</div>
+<h3 id="_primary_features" class="discrete">Primary Features</h3>
 <div class="ulist">
-<div class="title">Source</div>
 <ul>
 <li>
-<p>Download <a href="https://github.com/derekp7/snebu/releases/download/v1.1pre1/snebu-1.1pre1.tar.gz">snebu-1.1pre1.tar.gz</a></p>
+<p>Centrally managed</p>
 </li>
 <li>
-<p>Extract the tar file, and run make / make install</p>
-<div class="listingblock">
+<p>Snapshot backups</p>
+</li>
+<li>
+<p>Database-backed metadata catalog</p>
+</li>
+<li>
+<p>File-level deduplication</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Across backup sets and clients</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Compression</p>
+</li>
+<li>
+<p>RSA Public Key encryption using <a href="https://www.snebu.com/tarcrypt">tarcrypt</a></p>
+</li>
+<li>
+<p>Single-host, Client-push, or Server-pull backups</p>
+</li>
+<li>
+<p>Multiple user granular access</p>
+</li>
+<li>
+<p>Agentless</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Client-side uses standard Unix/Linux commands&#8201;&#8212;&#8201;<em>find</em>, <em>tar</em>, <em>ssh</em>, <em>bash</em></p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>High efficiency C code</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Minimal library runtime dependencies&#8201;&#8212;&#8201;<em>SQLite</em>, <em>OpenSSL</em>, <em>LZOP</em></p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p><em>SNEBU&#8201;&#8212;&#8201;Sleep Nominally, Everything&#8217;s Backed Up.</em></p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_quick_start">2. Quick start</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_downloads_compiling_installation">2.1. Downloads / Compiling / Installation</h3>
+<h4 id="_source" class="discrete">Source</h4>
+<div class="ulist">
+<ul>
+<li>
+<p>Download <a href="https://github.com/derekp7/snebu/releases/download/v1.1.0/snebu-1.1.0.tar.gz">snebu-1.1.0.tar.gz</a></p>
+</li>
+<li>
+<p>Extract the tar file, run make, then sudo make install.</p>
+<div class="literalblock">
 <div class="content">
-<pre>tar -zxvf snebu-1.1pre1.tar.gz
-cd snebu-1.1pre1
+<pre>tar -zxvf snebu-1.1.0.tar.gz
 make
-make install</pre>
+sudo make install</pre>
 </div>
 </div>
 </li>
 </ul>
 </div>
-<div class="ulist">
-<div class="title">RPM (Fedora / RHEL)</div>
-<ul>
-<li>
-<p>Download <a href="https://github.com/derekp7/snebu/releases/download/v1.1pre1/snebu-1.1pre1-1.src.rpm">snebu-1.1pre1-1.src.rpm</a></p>
-</li>
-<li>
-<p>Make sure you have the prerequisite packages installed</p>
-<div class="listingblock">
-<div class="content">
-<pre>yum install rpm-build lzo-devel openssl-devel sqlite-devel</pre>
-</div>
-</div>
-</li>
-<li>
-<p>Build and install the binary RPM</p>
-<div class="listingblock">
-<div class="content">
-<pre>rpmbuild --rebuild snebu-1.1pre1-1.src.rpm
-yum install snebu-1.1pre1-1.rpm</pre>
-</div>
-</div>
-</li>
-</ul>
-</div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_features">Features</h2>
-<div class="sectionbody">
 <div class="paragraph">
-<p>Benefits:</p>
+<p>Then to set up privilege separation:</p>
 </div>
+<div class="literalblock">
+<div class="content">
+<pre>sudo useradd -r -U -d /var/lib/snebu snebu
+sudo chown snebu:snebu</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This creates a user and group called "snebu", installing the snebu binary as SUID to user "snebu".  The config file /etc/sneub.conf defaults to placing the vault in <code>/var/lib/snebu/vault</code> and the backup catalog DB in <code>/var/lib/snebu/catalog</code>.  The <code>vault</code> directory is where the backed up files are stored, and the <code>catalog</code> directory holds the backup catalog database (in SQLite format).</p>
+</div>
+<h4 id="_rpm" class="discrete">RPM</h4>
 <div class="ulist">
 <ul>
 <li>
-<p>Easy to set up.  There system consists of two programs:<br>
-<code>snebu-client</code> - This is a simple shell script for interacting with the backend process, along with gathering the files to include in a given backup set.<br>
-<code>snebu</code>&#8201;&#8212;&#8201;This is the backend process which stores backup files in a disk-based vault, maintaining metadata about the files and backup sets in an SQLite-based backup catalog.</p>
-<div class="paragraph">
-<p>There are no complicated daemons to configure, or heavy database systems that need to be installed.  All the core logic is self-contained in the snebu binary.</p>
+<p>Download <a href="https://github.com/derekp7/snebu/releases/download/v1.1.0/snebu-1.1.0-1.fc33.x86_64.rpm">snebu-1.1.0-1.fc33.x86_64.rpm</a></p>
+<div class="literalblock">
+<div class="content">
+<pre>dnf install ./snebu-1.1.0-1.fc33.x86_64.rpm</pre>
+</div>
 </div>
 </li>
 <li>
-<p>Suitable for backing up a single system to an attached external disk, backing up to a separate network server, or backing up a number of hosts with backups initiated from the central backup server.</p>
+<p>Or rebuild from source (requires gcc, rpm-build, openssl-devel, sqlite-devel, lzo-devel): <a href="https://github.com/derekp7/snebu/releases/download/v1.1.0/snebu-1.1.0-1.fc33.src.rpm">snebu-1.1.0-1.fc33.src.rpm</a></p>
+<div class="literalblock">
+<div class="content">
+<pre>rpmbuild --rebuild snebu-1.1.0-1.fc33.src.rpm</pre>
+</div>
+</div>
 </li>
-<li>
-<p>No client software installation required.  If backups are initiated from a central backup server, then communications to the clients are preformed over SSH.  The only requirements are that the backup account on the server is permitted appropriate access to the client (via ssh keys), and the client have the minimal versions of GNU find and tar installed (this is only a concern with ancient Linux installations, or Unix systems).</p>
-</li>
-<li>
-<p>Works similar to rsync-based backup tools (by providing snapshot incremental-forever backups), but provides compression and a self-contained database-backed (SQLite) backup catalog.  One of the many benefits of having a separate backup catalog is this allows the backend to execute under a regular (non-root) utility account.</p>
-</li>
-<li>
-<p>File-level de-duplication is supported, including de-duplication of files across backup sets, and across multiple backup clients.</p>
-</li>
-<li>
-<p>Built using standard tools and protocols.  File metadata gathering is provided by the <code>find</code> command (GNU find is required), files are transfered using <code>tar</code> format, the backup catalog is in an SQLite database file, and files are stored in the disk-based vault compressed with the LZO library, and compatible with the <code>lzop</code> compression program.</p>
-</li>
-<li>
-<p>*NEW* Client-side public key encryption is now supported using the included <a href="tarcrypt.html"<code>tarcrypt</code></a> command.
 </ul>
 </div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_quick_start_guide">Quick-start guide</h2>
-<div class="sectionbody">
-<div class="sect2">
-<h3 id="_concepts">Concepts</h3>
 <div class="paragraph">
-<p>The Snebu backup system is composed of a backend process, <code>snebu</code>, and a front-end client called <code>snebu-client</code>.  The client gathers a list of files to back up (using the <code>find</code> command), sends this list to the backend, and gets back a list of files that are needed to complete an incremental backup.  These files are then sent to the backend using the Unix <code>tar</code> format.</p>
-</div>
-<div class="paragraph">
-<p>Backups are stored in backup sets.  A backup set is uniquely identified by the backup name (typically the host name getting backed up), and a datestamp in the form of a Unix time_t value (essentially, a count of the number of seconds since Jan 1, 1970).  This value functions as a serial number.</p>
-</div>
-<div class="paragraph">
-<p>Each backup set has a retention schedule attached to it, specified by the <code>-r</code> flag.  The retention schedule is used by the expiration process to, for example, expire all daily backups older than 10 days, or all monthly backups older than 6 months.  Anything can be used for for a schedule name, but typical values are <code>daily</code>, <code>weekly</code>, <code>monthly</code>, <code>yearly</code>, and <code>archive</code>.  If not specified, then the <code>snebu-client</code> script will automatically pick a retention schedule based on the date (Sunday through Friday are daily, Saturday is weekly, and the 1st of the month is monthly).</p>
-</div>
-<div class="paragraph">
-<p>When a backup is requested, the backend will determine which files it already has (by comparing meta data such as file name, size, last modification time, and various other attributes).  A list of files that are already on the backup server is added to the current backup set.  The remaining files are then requested, and are added to the backup set when they are received.</p>
-</div>
-<div class="paragraph">
-<p>File contents are stored and referenced by using the SHA1 hash of the file contents.  Therefore, file level de-duplication is achieved across all backups stored on the backup server.  In addition, files are stored compressed in an lzop compatible format.  This allows for recovery of files even outside of the backup utility.</p>
+<p>You can mount an external storage device on /var/lib/snebu (making sure the <code>snebu</code> user/group owns the directory after mounting&#8201;&#8212;&#8201;if not, <code>chown snebu:snebu /var/lib/snebu/</code> once the drive is mounted).  However, if the storage device has slow seek times, which is the case with many 2.5" USB-powered mechanical hard drives, then you will get better performance by mounting the mechanical drive under <code>/var/lib/snebu/vault</code>, and mounting a separate SSD drive in <code>/var/lib/snebu/catalog</code> (or the appropriate directories specified in <code>/etc/snebu.conf</code>.  Or if you keep the <code>catalog</code> directory on the local systems drive then be sure to separately copy the contents of the catalog directory to the external storage device after a backup session finishes.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_setting_up_a_local_backup">Setting up a local backup</h3>
+<h3 id="_sample_backup_and_restore_operation">2.2. Sample Backup and Restore Operation</h3>
+<div class="sect3">
+<h4 id="_user_and_permissions_setup">User and permissions setup</h4>
 <div class="paragraph">
-<p>This procedure assumes that both <code>snebu</code> and <code>snebu-client</code> are installed, and you will be backing up to a drive that is mounted under /media/backups.  These steps will be run as the root user.  In the examples, the host name that is getting backed up is called <code>zeus</code>.  The backup retention schedules are automatically determined in these examples (use <code>-r</code> to override)</p>
+<p>You will need to set up user permissions for any user ID that access the <code>snebu</code> binary.  To set up permissions for the <code>root</code> user, run the following commands:</p>
 </div>
-<div class="olist arabic">
-<ol class="arabic">
-<li>
-<p>Create a file <code>/etc/snebu.conf</code> with the following:</p>
 <div class="listingblock">
 <div class="content">
-<pre>meta=/media/backups/meta
-vault=/media/backups/vault</pre>
+<pre>$ sudo -u snebu snebu permissions --add --command '*' --name '*' --user root</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>The meta directory is where the backup catalog is stored (in an SQLite DB).  The vault directory contains all the backup file contents.</p>
+<p>If a user other than root needs to run snebu, then they need to be added to the snebu group.</p>
 </div>
-</li>
-<li>
-<p>Create the directories from the previous step:</p>
+</div>
+<div class="sect3">
+<h4 id="_run_a_backup">Run a backup</h4>
+<div class="paragraph">
+<p><code>sudo</code> is needed here to allow snebu-client to read all the files on the host.  If a user is only backing up their own directory then sudo isn&#8217;t needed, and they can be given more granular permissions to the <code>snebu</code> command&#8201;&#8212;&#8201;see the man page snebu-permissions(1).</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre>mkdir -p /media/backups/meta
-mkdir -p /media/backups/vault</pre>
-</div>
-</div>
-</li>
-<li>
-<p>Create a file <code>/etc/snebu-client.conf</code> with the following:</p>
-<div class="listingblock">
-<div class="content">
-<pre>EXCLUDE=( /tmp /var/tmp /mnt /media/backups )</pre>
+<pre>$ sudo snebu-client backup</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>By default, the files to be backed up included all mounted Linux filesystems of the types ext2, ext3, ext4, btrfs, xfs.  This is the same as specifying the following line in the <code>snebu-client.conf</code> file:</p>
+<p>This backs up all mounted disk-based file systems (automatically skips tmpfs, procfs, sysfs, and other "nodev" mount points).  The backup name defaults to the host name of the client, however this can be overridden with <code>--name</code> parameter.  You can also follow the command with a file or path list.  For example:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>INCLUDE=( $(mount |egrep "ext[234]|btrfs" |awk '{print $3}') )</pre>
+<pre>$ sudo snebu-client backup -n boss-home-dir /home/bigboss</pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_list_backups_contents_and_restore_a_file">List backups, contents, and restore a file</h4>
+<div class="listingblock">
+<div class="content">
+<pre>$ sudo snebu-client listbackups -v
+
+bosshost1
+    1608761077 / daily / Wed Dec 23 16:04:37 2020</pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ sudo snebu-client listbackups -n bosshost1 -d 1608761077 '*BudgetProposal*'
+
+/home/bigboss/BudgetProposal2021.doc</pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ sudo snebu-client restore -n bosshost1 -d 1608761077 -C /tmp \
+    --graft /home/bigboss/=bigboss-restored
+
+ bigboss-restored/BudgetProposal2021.doc</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>If you want to list specific directories to backup, list them in an INCLUDE line in the <code>/etc/snebu-client.conf</code> file:</p>
+<p>The first command gives a list of all hosts that have been backed up.  With the "-v" flag, it will also give all backup sets that are part of each backed up host.  Backup sets are identified by a serial number, which is the time/date that the backup was created, represented in Unix time_t format (i.e., the number of seconds since Jan 1, 1970).</p>
 </div>
-<div class="listingblock">
+<div class="paragraph">
+<p>The second command will list the files that are part of the host and backup set, restricting the output to the given file specification.</p>
+</div>
+<div class="paragraph">
+<p>In the third command, a restore of this backup set is initiated.  The client changes to the "/tmp" directory, so everything restored is relative to this directory (or specify <code>-C /</code> to restore to the original location).  The <code>--graft</code> parameter is specified to re-write part of the file path&#8201;&#8212;&#8201;in this case it replaces the directory "/home/bigboss/" with "bigboss-restored".  Putting it together the final path file that gets restored is in <code>/tmp/bigobss-restored/BudgetProposal2021.doc</code>.</p>
+</div>
+<div class="paragraph">
+<p>Notice that the backup above is a "daily" backup&#8201;&#8212;&#8201;this is the retention schedule that this backup set is assigned to.  By default, backups ran on Sunday through Friaday are <code>daily</code> backups, Saturday is a <code>weekly</code> backup, and the first of the month is a <code>monthly</code> backup.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_remote_backups">Remote backups</h4>
+<div class="paragraph">
+<p>If snebu is installed in a remote backup server called <code>bkupsvr1</code>, and you have the snebu-client script on a local host, you can add the parameters <code>--backup-server bkupsvr1</code> and <code>--backup-user svc-bosshost1</code> to the above commands.  Make sure to create the service user account <code>svc-bosshost1</code> on the remote host (or whichever user account name specified by your organizations practices), along with adding the account to the snebu group.  Set up ssh key based authentication for unattended backups, and then create the appropriate permissions for this service user on the remote backup server:</p>
+</div>
+<div class="literalblock">
 <div class="content">
-<pre>INCLUDE=( /dir1 /dir2 /dir3 )</pre>
+<pre>admin@bkupsvr1:~$ sudo -u snebu snebu permissions --add --command '*' \
+    --name 'bosshost1' --user svc-bosshost1</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>Or, if you want to add to the default include:</p>
+<p>Now you can back up to this host:</p>
 </div>
-<div class="listingblock">
+<div class="literalblock">
 <div class="content">
-<pre>INCLUDE=( "${INCLUDE[@]}" /dir1 /dir2 /dir3 )</pre>
-</div>
-</div>
-</li>
-<li>
-<p>Run a test backup:</p>
-<div class="listingblock">
-<div class="content">
-<pre>snebu-client backup -v</pre>
+<pre>root@booshost1:~$ sudo snebu-client backup --backup-server bkupsvr1 --backup-user svc-bosshost1</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>Note, you can also override the default INCLUDE list on the <code>snebu-client</code> command line:</p>
+<p>Note, you may wish to grant more granular permissions such as "backup", "listbackups" and "restore" in the above <code>snebu permissions</code> command.  This would prevent the client from deleting backups on the backup server if it were to become compromised.  See the <code>snebu-permissions</code> man page for detailed command usage.</p>
 </div>
-<div class="listingblock">
+<div class="paragraph">
+<p>If you want more protection, you can reverse the process and have the remote backup server "pull" a backup from the client:</p>
+</div>
+<div class="literalblock">
 <div class="content">
-<pre>snebu-client backup -v /dir1 /dir2</pre>
+<pre>snebu@bkupsvr1:~$ snebu-client backup --remote-client bosshost1 \
+    --remote-user root --sudo svs-backup</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>See the <code>snebu-client</code> detailed documentation for the list of available parameters.  Specifically, look at the <code>-r</code> (retention schedule), and <code>-n</code> (backup name) parameters.</p>
+<p>This will access bosshost1 as the service user <code>svs-backup</code>, then sudo to <code>root</code> to pull the data.  Make sure to set up ssh key authentication between <code>snebu@bkupsvr1</code> and <code>svs-backup@bosshost1</code>.  If you leave off the <code>--sudo</code> flag, then the user <code>root</code> will be directly accessed via ssh (requiring ssh key authorization to <code>root@bosshost1</code>)</p>
 </div>
-</li>
-<li>
-<p>Once the backup is completed, you can use the following to list the backups:</p>
+</div>
+<div class="sect3">
+<h4 id="_expiring_old_backups">Expiring old backups</h4>
+<div class="paragraph">
+<p>Run the following on the backup server to expire old backups</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre>snebu-client listbackups -v</pre>
+<pre>$ sudo snebu expire -a 14 -r daily
+$ sudo snebu exipre -a 42 -r weekly
+$ sudo snebu expire -a 365 -r monthly
+$ sudo snebu purge</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>Which should output the names of the backups that are available:</p>
+<p>This expires all daily backups older than 2 weeks, weekly backups older than 6 weeks, and monthly backups older than a year.  Expiring a backup only removes the metadata, and takes a short amount of time.  A <code>purge</code> permanently remove data from the <code>vault</code>, and can take a bit longer (depending on the number of files that need to be removed).</p>
 </div>
-<div class="listingblock">
+<div class="paragraph">
+<p>In the above example, the commands were run under the user ID <code>snebu</code>, which owns the repository and has all permissions.  Again, you can grant a specific user permission to run the expire and purge commands to limit the need to access the main user account (see <em>snebu-permissions(1)</em> documentation).</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_encryption">Encryption</h4>
+<div class="paragraph">
+<p>Snebu supports client-side public key encryption.  This requires the program <code>tarcrypt</code> to be installed on the client.  On the client, run the command <code>tarcrypt genkey -f outputfile</code>, and make sure it has appropriate permissions and ownership</p>
+</div>
+<div class="literalblock">
 <div class="content">
-<pre>zeus
-    1389677695 / daily / Mon Jan 13 23:34:55 2014</pre>
-</div>
-</div>
-</li>
-<li>
-<p>To get a list of files that are included:</p>
-<div class="listingblock">
-<div class="content">
-<pre>    snebu-client listbackups --name zeus --datestamp 1389677695 |more</pre>
-</div>
-</div>
-</li>
-<li>
-<p>To restore a given file, pick one from the list generated in the step above, and:</p>
-<div class="listingblock">
-<div class="content">
-<pre>snebu-client restore --name zeus --datestamp 1389677695 '/path/to/file'</pre>
+<pre>$ sudo tarcrypt genkey -f /etc/snebu-backup.key
+$ sudo chown root:root /etc/snebu-backup.key
+$ sudo chmod 600 /etc/snebu-backup.key</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>Or, to restore a directory,</p>
+<p>You will be prompted for a passphrase to protect the private key stored in the <code>.key</code> file.  Then, on any of the backup command variations, add the parameter <code>--encryption-key /etc/snebu-backup.key</code>:</p>
 </div>
-<div class="listingblock">
+<div class="literalblock">
 <div class="content">
-<pre>snebu-client restore --name zeus --datestamp 1389677695 '/path/to/directory/*'</pre>
+<pre>sudo snebu-client backup --backup-server bkupsvr1 --backup-user svc-bosshost1 \
+    --encryption-key /etc/snebu-backup.key</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>This will by default place the files starting in the directory you are currently sitting in.  So, if you are in /tmp, and restore /home/bob/resume.txt, it will be placed in /tmp/home/bob/resume.txt.  See the detailed documentation section for additional parameters, such as <code>-C</code> which will specify an alternate target directory, or <code>--graft</code> which will allow you to rename parts of the file path.</p>
-</div>
-</li>
-<li>
-<p>To create encrypted backups, first generate a key on the client using <code>tarcrypt genkey</code>
-<div class="listingblock">
-<div class="content">
-<pre>tarcrypt genkey -f /etc/zeus-backup.key</pre>
-</div>
-</div>
-<p>Then, when performing any backup operation, include the <code>-k</code> flag followed by the stored encryption key
-<div class="listingblock">
-<div class="content">
-<pre>snebu-client backup -v -k /etc/zeus-backup.key</pre>
-</div>
-</div>
-<div calss="paragraph">
-<p>When restoring, include the <code>--decrypt</code> flag</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre>snebu-client restore --decrypt --name zeus --datestamp 1389677695 '/path/to/file'</pre>
-</div>
-</div>
-</li>
-</ol>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_backing_up_to_a_remote_server">Backing up to a remote server</h3>
-<div class="paragraph">
-<p>When backing up to a remote server, it is preferable to use a non-privliged user account, such as <code>backup</code>, instead of <code>root</code>.  In this section, the backup server will be called <code>jupiter</code>, and the client is <code>zeus</code>.  The backup server will have the target backup media mounted under /media/backups, which will be owned by <code>backup</code>.  The program <code>snebu</code> is assumed to be installed on <code>jupiter</code>, and the <code>snebu-client</code> script is on the client <code>zeus</code>.</p>
-</div>
-<div class="olist arabic">
-<ol class="arabic">
-<li>
-<p>Create a backup user:</p>
-<div class="listingblock">
-<div class="content">
-<pre>useradd backup
-passwd backup</pre>
-</div>
-</div>
-</li>
-<li>
-<p>Create a file <code>/etc/snebu.conf</code> with the following:</p>
-<div class="listingblock">
-<div class="content">
-<pre>meta=/media/backups/meta
-vault=/media/backups/vault</pre>
-</div>
-</div>
-</li>
-<li>
-<p>After mounting the backup media, create the directories from the previous step, and make everything owned by backup:</p>
-<div class="listingblock">
-<div class="content">
-<pre>mkdir -p /media/backups/meta
-mkdir -p /media/backups/vault
-chown -R backup /media/backups</pre>
-</div>
-</div>
-</li>
-<li>
-<p>On the client (<code>zeus</code>), create an ssh key pair if one doesn&#8217;t exist for the root user, and copy it to the <code>backup</code> user&#8217;s authorized-keys file on <code>jupiter</code>:</p>
-<div class="listingblock">
-<div class="content">
-<pre>ssh-keygen -t rsa -N ""
-ssh-copy-id backup@jupiter</pre>
-</div>
-</div>
-</li>
-<li>
-<p>On the client, create the <code>/etc/snebu-client.conf</code> file with proper INCLUDE and EXCLUDE parameters, as specified in the previous (local backup) section.</p>
-</li>
-<li>
-<p>Make sure you can (as root on <code>zeus</code>) ssh into the backup user on <code>jupiter</code></p>
-<div class="listingblock">
-<div class="content">
-<pre>ssh backup@jupiter uname -a</pre>
-</div>
-</div>
-</li>
-<li>
-<p>Run a test backup as before, but with an additional parameter:</p>
-<div class="listingblock">
-<div class="content">
-<pre>snebu-client backup --backup-server jupiter -v</pre>
-</div>
+<p>Note, you can repeate the <code>--encryption-key</code> parameter to encrypt with multiple keys&#8201;&#8212;&#8201;in this case, the passphrase for any one of the keys can be used to decode the backup upon restoring.</p>
 </div>
 <div class="paragraph">
-<p>The --backup-server parameter will also apply to all the other comands, such as listbackups and restore.  An alternative to specifying this each time is to add the following to <code>/etc/snebu-client.conf</code>:</p>
+<p>When restoring an encrypted backup, specify <code>snebu-client restore --decrypt</code> along with the other parameters as appropriate.  No key file is specified, as all key data is securely stored with the backup.  You will be prompted for the private key passphrase for one of the keys when restoring.</p>
 </div>
-<div class="listingblock">
-<div class="content">
-<pre>bksvrname=jupiter</pre>
-</div>
-</div>
-</li>
-</ol>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_backing_up_remote_clients_from_a_backup_server">Backing up remote clients from a backup server</h3>
-<div class="paragraph">
-<p>If you have a number of systems to back up, it may be better to initiate all backups from the backup server.  In this model, the <code>backup</code> user account on the backup server will need SSH permissions to access root on the clients.  This may be preferable, as it avoids having to give each client remote access to the backup server.  However, that means the clients have to trust the backup server with root access.  The good part, though, is there is nothing to install on the clients, other than inserting a key into root&#8217;s authorized_keys file.</p>
-</div>
-<div class="olist arabic">
-<ol class="arabic">
-<li>
-<p>Set up the backup server, <code>jupiter</code> as discussed in the previous section (steps 1 through 3)</p>
-</li>
-<li>
-<p>Also, on the server (<code>jupiter</code>), create an SSH key pair for the <code>backup</code> user</p>
-<div class="listingblock">
-<div class="content">
-<pre>ssh-keygen -t rsa -N ""</pre>
-</div>
-</div>
-</li>
-<li>
-<p>Copy the public key file to the clients to be backed up.  Newer versions of OpenSSH include a utility to make this easier:</p>
-<div class="listingblock">
-<div class="content">
-<pre>ssh-copy-id root@zeus</pre>
-</div>
-</div>
-</li>
-<li>
-<p>Initiate a test backup from the <code>backup</code> user on <code>jupiter</code>:</p>
-<div class="listingblock">
-<div class="content">
-<pre>snebu-client backup --remote-client zeus -v</pre>
-</div>
-</div>
-</li>
-</ol>
 </div>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_daily_and_periodic_maintenance_tasks">Daily and periodic maintenance tasks</h2>
+<h2 id="_general_concepts">3. General concepts</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_expiring_old_backups">Expiring old backups</h3>
+<h3 id="_components">3.1. Components</h3>
 <div class="paragraph">
-<p>Periodically cleaning out old backups is essential for keeping the target storage device from running out of space.  Typical data retention schedules are:</p>
+<p>The Snebu backup system consists of a backend process <code>snebu</code>, which maintains a backup catalog in an SQLite database <code>snebu-catalog.db</code> in the directory specified in the <code>/etc/snebu.conf</code> file.  This database has a number of tables, containing entries for each host that is backed up, along with the backup sets, all file metadata, and backup set details which relate the contents of a given backup set snapshot to to files in the file details table.  Individual file contents are compressed and a file hash is computed.  The files are stored in file names reflecting the file hash in the vault directory (again as specified in the config file).  Storing files named by the hash of the file contents leads directly to file-level deduplication across directories and hosts.</p>
 </div>
+<div class="paragraph">
+<p>When initiating a backup, a file manifest of the system to be backed up is sent to <code>snebu</code>&#8201;&#8212;&#8201;this manifest consists of a list of file names and all associated metadata (ownership, permissions, size, modification times, etc).  This represents a complete snapshot of backed up file set.  This manifest gets processed to determine which files are already on the backup server.  The names of new and modified files (as determined by changes in <em>any</em> of the metadata fields) are returned to the client, which is then passed to the <code>tar</code> command to process and create a backup.</p>
+</div>
+<div class="paragraph">
+<p>The output of <code>tar</code> is then ingested by the <code>snebu</code> backend process, which extracts the file names and meta data, then compresses the contents of each file to a temporary staging file in the <code>vault</code> location.  After computing a sha1 hash of the file, the file is renamed to this hash and placed in the target location in the vault.</p>
+</div>
+<div class="paragraph">
+<p>The <code>snebu-client</code> program acts as a front end to <code>snebu</code>.  Technically it isn&#8217;t necessary, however you would need to generate the manifest manually (using <code>find</code> and a specific list of <code>-printf</code> specifiers&#8201;&#8212;&#8201;consult the man page <code>snebu-newbackup(1)</code> for details), and send it into <code>snebu --newbackup</code>, capture the return manifest to use to generate a <code>tar</code> file, and finally sending that into <code>snebu --submitfiles</code>.</p>
+</div>
+<div class="paragraph">
+<p>Note, that some subcommands share the same name between <code>snebu</code> and <code>snebu-client</code>.  In some cases, such as <code>listbackups</code>, there is a bit more front-end processing provided by <code>snebu-client</code>.  In other cases, such as <code>restore</code>, the actions are different.  <code>snebu restore</code> synthesizes a <code>tar</code> file on standard output, whereas <code>snebu-client restore</code> executes <code>snebu restore</code> and calls the local <code>tar</code> command to extract the files.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_encryption_2">3.2. Encryption</h3>
+<div class="paragraph">
+<p>Since <code>snebu</code> uses <code>tar</code> as a serialization format for the backup data, the <code>tarcrypt</code> command was created to act as a filter in a <code>tar</code> pipeline in order to add encryption capabilities.  The key used by <code>tarcrypt</code> contains an RSA Public key which is used to encrypt a random session key for each file.  It also contains a secret HMAC key used to "sign" each file in the backup with a deterministic hash.  The HMAC key is computed using a combination of the RSA Public key and the passphrase used to protect the RSA Private key.  That way it can not only be reliably regenerated during a restore operation (since the user needs to input the same passphrase to decrypt the backup), but it is also directly tied to the combination of the RSA keys and passphrase.  Since the HMAC key is considered sensitive, the <code>.key</code> file should be stored with appropriate restricted ownership and permissions to prevent an attacker from forging backup file contents (although a compromised HMAC key still won&#8217;t permit an attacker from decrypting a backup).</p>
+</div>
+<div class="paragraph">
+<p>Since the backup server can&#8217;t know the hash of the raw file, and since a random session key is used when encrypting, that means that the has of the received file can&#8217;t be utilized for deduplication purposes.  However since the HMAC signature is deterministic, this signature is utilized for deduplication purposes which works to deduplicate across any hosts that share the same key file(s).  (When multiple keys are used during encryption, a hash of all the HMAC keys is used to name the file).</p>
+</div>
+<div class="paragraph">
+<p>If a new key is generated, then subsequent backups will consist of files encrypted with the old key and the new one (since backups are snapshot based, only new/modified files get sent to the backup server and encrypted with the new key).  The <code>tarcrypt</code> command handles this gracefully&#8201;&#8212;&#8201;the global header contains all the encrypted keys used that are related to the files in the restore set, so the operator will be prompted for the passphrase for each key.  As an ease-of-use operation, if the same passphrase is used on more than one key, it only has to be entered once&#8201;&#8212;&#8201;it will automatically be tested against all keys.</p>
+</div>
+<div class="paragraph">
+<p>You also have the option to force a full backup, which will re-send all files on the client to the backup server, if you don&#8217;t want to deal with multiple keys, by specifying the <code>--force-full</code> parameter (<code>snebu-client backup --force-full &#8230;&#8203;</code>).</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_other_security_features">3.3. Other security features</h3>
+<div class="paragraph">
+<p>If the <code>snebu</code> binary is installed with the suid bit set, then the user that owns it (the <code>snebu</code> user in the default case) will own the backup catalog database and the data vault.  Other users on the system can be given access to specific features, restricted to the specified hosts by using the <code>snebu permissions</code> subcommand.  For example you can give a user access to back up their host, but not restore.  Or you can restrict their ability to expire backups&#8201;&#8212;&#8201;either give permission for a host to only expire their own backups, or restrict expire option to a separate locked down account.  This can be valuable to prevent an attacker from deleting all the backups if a host is compromised.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_reference">4. Reference</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_snebu_client1_front_end_client_for_the_snebu_backup_system">4.1. snebu-client(1) - Front-end client for the snebu backup system</h3>
+<div class="listingblock">
+<div class="content">
+<pre>snebu-client [ subcommand ] [ options ]</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description">Description</h4>
+<div class="paragraph">
+<p>snebu-client is the client front end for snebu.
+Use it to easily
+back up a local or remote host, to either local a local storage
+device, or to a remote backup server.  Use it with one of the
+following subcommands.</p>
+</div>
+<h4 id="_sub_commands_are_as_follows" class="discrete">Sub commands are as follows:</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>backup</strong> [ <strong>-n</strong> <em>backupname</em> ] [ <strong>-d</strong> <em>datestamp</em> ] [ <strong>-r</strong> <em>schedule</em> ]</dt>
+<dd>
+<p>Initiates a backup.</p>
+</dd>
+<dt class="hdlist1"><strong>restore</strong> [ <strong>-n</strong> <em>backupname</em> ] [ <strong>-d</strong> <em>datestamp</em> ]</dt>
+<dd>
+<p>Initiates a restore.</p>
+</dd>
+<dt class="hdlist1"><strong>listbackups</strong> [ <strong>-n</strong> <em>backupname</em> [ <strong>-d</strong> <em>datestamp</em> ]] [ <em>file_list</em>&#8230;&#8203; ]</dt>
+<dd>
+<p>List backed up hosts, backup sets within a host, or files within a backup set.</p>
+</dd>
+<dt class="hdlist1"><strong>validate</strong> <strong>-n</strong> <em>backupname</em> <strong>-d</strong> <em>datestamp</em></dt>
+<dd>
+<p>Validates a given backup.</p>
+</dd>
+<dt class="hdlist1"><strong>help</strong> [ <em>subcommand</em> ]</dt>
+<dd>
+<p>Displays help page of subcommand</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also">See Also</h4>
+<div class="paragraph">
+<p><strong>snebu-client-backup</strong>(1),
+<strong>snebu-client-restore</strong>(1),
+<strong>snebu-client-listbackups</strong>(1),
+<strong>snebu-client-validate</strong>(1),</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_client_backup1_initiates_a_backup">4.2. snebu-client-backup(1) - Initiates a backup</h3>
+<div class="listingblock">
+<div class="content">
+<pre>snebu-client backup  [ -n backupname ] [ -d datestamp ] [ -r schedule ] [ file-list ]</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description_2">Description</h4>
+<div class="paragraph">
+<p>Initiates a system backup.
+By default, it will back up the local host to a local snebu install.
+You can also use this command to back up to a remote backup server,
+back up a remote host to either a local snebu installation,
+or back up a remote host to another remote backup server,
+depending on which options are chosen.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_options">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>-c</strong>, <strong>--config</strong> <em>config_file</em></dt>
+<dd>
+<p>Name of the configuration file.  Default is
+<em>/etc/snebu-client.conf</em>.</p>
+</dd>
+<dt class="hdlist1"><strong>-n</strong>, <strong>--name</strong> <em>backupname</em></dt>
+<dd>
+<p>Name of the backup.  Usually set to the server
+name that you are backing up.</p>
+</dd>
+<dt class="hdlist1"><strong>-d</strong>, <strong>--date</strong> <em>datestamp</em></dt>
+<dd>
+<p>Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date&nbsp;+%s" command.</p>
+</dd>
+<dt class="hdlist1"><strong>-r</strong>, <strong>--retention</strong> <em>schedule</em></dt>
+<dd>
+<p>Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".</p>
+</dd>
+<dt class="hdlist1"><strong>-k</strong>, <strong>--encryption-key</strong> <em>keyfile</em></dt>
+<dd>
+<p>Turns on encryption, and specifies encryption
+key location.  May be specified more than once to
+encrypt with multiple keys.</p>
 <div class="ulist">
 <ul>
 <li>
-<p>daily&#8201;&#8212;&#8201;keep all daily backups for 2 weeks</p>
+<p>The program "tarcrypt" needs to be present on the
+client for this option.  Keys are generated with
+the command:</p>
 </li>
 <li>
-<p>weekly&#8201;&#8212;&#8201;keep all weekly (Saturday) backups for 6 weeks</p>
-</li>
-<li>
-<p>monthly&#8201;&#8212;&#8201;keep all monthly backups for 12 months</p>
+<p><strong>tarcrypt genkey -f</strong> <em>keyfile</em> [ <strong>-c</strong> <em>comment</em> ]</p>
 </li>
 </ul>
 </div>
-<div class="paragraph">
-<p>To accomplish this, run the following commands on the backup server:</p>
+</dd>
+<dt class="hdlist1"><strong>-C</strong>, <strong>--changedir</strong> <em>path</em></dt>
+<dd>
+<p>Changes to the given directory path before backing up.</p>
+</dd>
+<dt class="hdlist1"><strong>--graft</strong> <em>/path/name/</em>*=*<em>/new/name/</em></dt>
+<dd>
+<p>Re-write path names beginning with "<em>/path/name/</em>"
+to "<em>/new/name/</em>"</p>
+</dd>
+<dt class="hdlist1"><strong>-f</strong>, <strong>--force-full</strong></dt>
+<dd>
+<p>Force a full backup</p>
+</dd>
+<dt class="hdlist1"><strong>--remote-client</strong> <em>hostname</em></dt>
+<dd>
+<p>Host name / IP address of remote host.  Used to
+backup a remote host to local backup server.</p>
+</dd>
+<dt class="hdlist1"><strong>--remote-user</strong> <em>userid</em></dt>
+<dd>
+<p>User ID for remote remote-client.  Defaults to
+root.</p>
+</dd>
+<dt class="hdlist1"><strong>--sudo</strong> <em>userid</em></dt>
+<dd>
+<p>Initial login User ID for remote remote-client.
+This ID uses sudo to switch to remote-user once
+logged in.</p>
+</dd>
+<dt class="hdlist1"><strong>--backup-server</strong> <em>hostname</em></dt>
+<dd>
+<p>Host name / IP address of backup server.  Used to
+backup to a remote server.</p>
+</dd>
+<dt class="hdlist1"><strong>--backup-user</strong> <em>userid</em></dt>
+<dd>
+<p>User ID for remote backup-server.</p>
+</dd>
+<dt class="hdlist1"><strong>--plugin</strong> <em>scriptname</em></dt>
+<dd>
+<p>Specifies an optional plug in script.  Usually
+used to perform database-specific operations
+(such as enabling hot backup mode) for systems
+with a DB installed.</p>
+</dd>
+<dt class="hdlist1">[ <em>file-list</em> ]</dt>
+<dd>
+<p>List of files to backup.
+Overrides default specified in snebu-client.conf file.</p>
+</dd>
+</dl>
 </div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_2">See Also</h4>
+<div class="paragraph">
+<p><strong>tarcrypt</strong>(1)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_client_listbackups1_lists_backed_up_systems_backup_sets_and_file_names">4.3. snebu-client-listbackups(1) - Lists backed up systems, backup sets, and file names</h3>
 <div class="listingblock">
 <div class="content">
-<pre>snebu expire -a 14 -r daily
-snebu expire -a 42 -r weekly
-snebu expire -a 365 -r monthly</pre>
+<pre>snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]</pre>
 </div>
 </div>
+<div class="sect3">
+<h4 id="_description_3">Description</h4>
 <div class="paragraph">
-<p>Note, that there is a safety valve built into the expire command, where it will keep (by default) the most recent 3 backup sets for a given system.  This can be adjusted with the <code>-m</code> flag (i.e., <code>-m 7</code> will keep the most recent 7 backups, or <code>-m 0</code> disables this safety check).</p>
+<p>With no arguments specified, "listbackups" will return a list of all
+systems that are contained in the backup catalog.  Otherwise, when
+specifying the <strong>-n</strong> parameter, a list of backup sets for that host is
+returned.</p>
 </div>
-<div class="paragraph">
-<p>Another form of the expire command will remove a given backup set, useful if you have a partial or a redundant backup that needs to be cleaned out:</p>
 </div>
+<div class="sect3">
+<h4 id="_options_2">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>-c</strong>, <strong>--config</strong> <em>config_file</em></dt>
+<dd>
+<p>Name of the configuration file.
+Default is <em>/etc/snebu-client.conf</em>.</p>
+</dd>
+<dt class="hdlist1"><strong>-n</strong>, <strong>--name</strong> <em>backupname</em></dt>
+<dd>
+<p>Name of the backup.
+Usually set to the server name that you are backing up.</p>
+</dd>
+<dt class="hdlist1"><strong>-d</strong>, <strong>--date</strong> <em>datestamp</em></dt>
+<dd>
+<p>Date stamp for this backup set.
+The format is in <em>time_t</em> format,
+sames as the output of the "date&nbsp;+%s" command.</p>
+</dd>
+<dt class="hdlist1">[ <em>file-list</em> ]</dt>
+<dd>
+<p>List of files to restore.  Defaults to all.</p>
+</dd>
+</dl>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_client_validate1_compares_a_backup_to_file_system_contents">4.4. snebu-client-validate(1) - Compares a backup to file system contents</h3>
 <div class="listingblock">
 <div class="content">
-<pre>snebu expire -n name -d datestamp</pre>
+<pre>snebu-client validate -n backupname -d datestamp [ file-list ]</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description_4">Description</h4>
+<div class="paragraph">
+<p>Compares the contents a given backup session identified by "-n" and "-d"
+parameters, to what is on the client.  Use the "listbackups" subcommand to
+get a list of available
+backup sessions.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_options_3">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>-c</strong>, <strong>--config</strong> <em>config_file</em></dt>
+<dd>
+<p>Name of the configuration file.  Default is
+<em>/etc/snebu-client.conf</em>.</p>
+</dd>
+<dt class="hdlist1"><strong>-n</strong>, <strong>--name</strong> <em>backupname</em></dt>
+<dd>
+<p>Name of the backup.  Usually set to the server
+name that you are backing up.</p>
+</dd>
+<dt class="hdlist1"><strong>-d</strong>, <strong>--date</strong> <em>datestamp</em></dt>
+<dd>
+<p>Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.</p>
+</dd>
+<dt class="hdlist1"><strong>--decrypt</strong></dt>
+<dd>
+<p>Turns on decryption.  Requires "tarcrypt" to be
+on the client.  Password(s) will be prompted for
+during restore.</p>
+</dd>
+<dt class="hdlist1"><strong>-C</strong>, <strong>--changedir</strong> <em>path</em></dt>
+<dd>
+<p>Changes to the given directory path before validating</p>
+</dd>
+<dt class="hdlist1"><strong>--remote-client</strong> <em>hostname</em></dt>
+<dd>
+<p>Host name / IP address of remote host.  Used to
+backup a remote host to local backup server.</p>
+</dd>
+<dt class="hdlist1"><strong>--remote-user</strong> <em>userid</em></dt>
+<dd>
+<p>User ID for remote remote-client.  Defaults to
+root.</p>
+</dd>
+<dt class="hdlist1"><strong>--sudo</strong> <em>userid</em></dt>
+<dd>
+<p>Initial login User ID for remote remote-client.
+This ID uses sudo to switch to remote-user once
+logged in.</p>
+</dd>
+<dt class="hdlist1"><strong>--backup-server</strong> <em>hostname</em></dt>
+<dd>
+<p>Host name / IP address of backup server.  Used to
+backup to a remote server.</p>
+</dd>
+<dt class="hdlist1"><strong>--backup-user</strong> <em>userid</em></dt>
+<dd>
+<p>User ID for remote backup-server.</p>
+</dd>
+<dt class="hdlist1">[ <em>file-list</em> ]</dt>
+<dd>
+<p>List of files to validate.  Defaults to all.</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_3">See Also</h4>
+<div class="paragraph">
+<p><strong>tarcrypt</strong>(1)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_client_restore1_restores_a_backup">4.5. snebu-client-restore(1) - Restores a backup</h3>
+<div class="listingblock">
+<div class="content">
+<pre>snebu-client restore [ -n backupname ] [ -d datestamp ] [ file-list ]</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description_5">Description</h4>
+<div class="paragraph">
+<p>Restores a given backup session identified by "-n" and "-d"
+parameters.  Use the "listbackups" subcommand to get a list of
+available backup sessions.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_options_4">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>-c</strong>, <strong>--config</strong> <em>config_file</em></dt>
+<dd>
+<p>Name of the configuration file.  Default is
+<em>/etc/snebu-client.conf</em>.</p>
+</dd>
+<dt class="hdlist1"><strong>-n</strong>, <strong>--name</strong> <em>backupname</em></dt>
+<dd>
+<p>Name of the backup.  Usually set to the server
+name that you are backing up.</p>
+</dd>
+<dt class="hdlist1"><strong>-d</strong>, <strong>--date</strong> <em>datestamp</em></dt>
+<dd>
+<p>Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.</p>
+</dd>
+<dt class="hdlist1"><strong>--decrypt</strong></dt>
+<dd>
+<p>Turns on decryption.  Requires "tarcrypt" to be
+on the client.  Password(s) will be prompted for
+during restore.</p>
+</dd>
+<dt class="hdlist1"><strong>-C</strong>, <strong>--changedir</strong> <em>path</em></dt>
+<dd>
+<p>Changes to the given directory path before restoring.</p>
+</dd>
+<dt class="hdlist1"><strong>--graft</strong> <em>/path/name/</em>*=*<em>/new/name/</em></dt>
+<dd>
+<p>Re-write path names beginning with "<em>/path/name/</em>"
+to "<em>/new/name/</em>"</p>
+</dd>
+<dt class="hdlist1"><strong>--remote-client</strong> <em>hostname</em></dt>
+<dd>
+<p>Host name / IP address of remote host.  Used to
+backup a remote host to local backup server.</p>
+</dd>
+<dt class="hdlist1"><strong>--remote-user</strong> <em>userid</em></dt>
+<dd>
+<p>User ID for remote remote-client.
+Defaults to root.</p>
+</dd>
+<dt class="hdlist1"><strong>--sudo</strong> <em>userid</em></dt>
+<dd>
+<p>Initial login User ID for remote remote-client.
+This ID uses sudo to switch to remote-user once
+logged in.</p>
+</dd>
+<dt class="hdlist1"><strong>--backup-server</strong> <em>hostname</em></dt>
+<dd>
+<p>Host name / IP address of backup server.  Used to
+backup to a remote server.</p>
+</dd>
+<dt class="hdlist1"><strong>--backup-user</strong> <em>userid</em></dt>
+<dd>
+<p>User ID for remote backup-server.</p>
+</dd>
+<dt class="hdlist1">[ <em>file-list</em> ]</dt>
+<dd>
+<p>List of files to restore.  Defaults to all.</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_4">See Also</h4>
+<div class="paragraph">
+<p><strong>tarcrypt</strong>(1)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_client_conf5_configuration_file_for_snebu_client_front_end">4.6. snebu-client.conf(5) - Configuration file for snebu-client front end</h3>
+<div class="sect3">
+<h4 id="_description_6">Description</h4>
+<div class="paragraph">
+<p>The sneub-client.conf is used to specify a number of default parameters for snebu-client, such as default include / exclude specifications.  The contents are read in and executed as shell script commands by snebu-client, so in addition to specifying parameters it is possible to include standard shell scripting logic.  This also means that parameters are specified without a space between the name and value.</p>
+</div>
+<h4 id="_parameters" class="discrete">Parameters</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>INCLUDE</strong>=( <em>path</em> &#8230;&#8203; )</dt>
+<dd>
+<p>Specifies the directories to include in the backup.  By default, all mounted storage-based file systems are included&#8201;&#8212;&#8201;that is, file systems that are of type "NODEV" (which includes virtual file systems such as /proc, /sys, anything mounted as "tmpdir") are not included.</p>
+<div class="paragraph">
+<p>Also note that file system boundaries are not crossed automatically.  For example, if "/home" is a separate mount point from "/" then you will need to specify both "/" and "/home".  Mount points are specified explicitly to prevent virtual file systems (i.e., "/proc") from being inadvertently included.</p>
+</div>
+</dd>
+<dt class="hdlist1"><strong>EXCLUDE</strong>=( <em>path</em> &#8230;&#8203;)</dt>
+<dd>
+<p>Excludes directories that would normally be included with the above INCLUDE parameter.</p>
+</dd>
+<dt class="hdlist1"><strong>EXCLUDEMATCH</strong>=( <em>filespec</em>&#8230;&#8203; )</dt>
+<dd>
+<p>Similar to EXCLUDE, however works with files matching a given pattern (processing shell wildcard expansion).  Note that individual parameters need to be quoted to prevent wildcard expansion from matching only files in the current directory.</p>
+</dd>
+<dt class="hdlist1"><strong>backupname</strong>=<em>name-of-backup</em></dt>
+<dd>
+<p>Give the backup the given name instead of defaulting to the hostname.</p>
+</dd>
+</dl>
+</div>
+<h4 id="_server_initiated_backup_notes" class="discrete">Server-initiated backup notes</h4>
+<div class="paragraph">
+<p>If running backups from a backup server, the parameters will by default apply to all clients.  To target parameters for specific clients, you can wrap them in a shell scripting conditional clause (if-then-else, or case statement).</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_examples">Examples:</h4>
+<div class="paragraph">
+<p>To include specified directories:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>INCLUDE=( / /var /var/log /home )</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>After the expiration jobs are finished (which removes the backups from the backup catalog), you will need to remove the actual file contents from the vault:</p>
+<p>To exclude /tmp and /var/tmp</p>
 </div>
+<div class="literalblock">
+<div class="content">
+<pre>EXCLUDE=( /tmp /var/tmp )</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To exclude all ".tmp" and ".dbf" files</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>EXCLUDEMATCH=( "*.tmp" "*.dbf" )</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>On a server backing up multiple clients&#8201;&#8212;&#8201;to exclude all database ".dbf" files only on the database server "erp-database", include the following:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>if [ "${clientname}" = "erp-database" ]
+then
+    EXCLUDEMATCH=( "*.dbf" )
+fi</pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_client_plugin5_defines_pre_backup_and_post_backup_scripts_to_run_on_a_client">4.7. snebu-client-plugin(5) - Defines pre-backup and post-backup scripts to run on a client.</h3>
+<div class="sect3">
+<h4 id="_description_7">Description</h4>
+<div class="paragraph">
+<p>Specifying the <strong>--plugin</strong> argument when executing a snebu-client backup operation will cause the specified plugin script to be incorporated into the backup process.  The plugin script defines at least two shell script functions&#8201;&#8212;&#8201;-fBpluginpre(), which executes prior to the backup, and pluginpost()\R which executes after the backup has completed.</p>
+</div>
+<div class="paragraph">
+<p>This allows performing operations such as mounting a file system snapshot prior to a backup and removing the snapshot afterwards, or placing a database in hot backup mode at the beginning of the backup.  In the case of backing up a database, often times the backup will need to be completed in multiple stages&#8201;&#8212;&#8201;place the DB in hot backup mode, gather a list of database files, back them up, take the DB out of hot backup mode, gather a list of files containing transaction logs that were created during the backup, and finally backing up those files.</p>
+</div>
+<div class="paragraph">
+<p>To facilitate these type of backup steps, the <strong>pluginpre</strong> function can save the contents of the file include/exclude variables <strong>INCLUDE</strong>, <strong>EXCLUDE</strong>, and <strong>EXCLUDEMATCH</strong>.  Then set the variable <strong>bkrepeat=1</strong>, along with setting any other housekeeping variables used inside the plugin script.  Once it has completed the last stage, it can then restore the include/exclude variables, let the rest of the backup process continue, and then set <strong>bkrepeat=0</strong> to finish off the backup.</p>
+</div>
+<h4 id="_functions_and_variables" class="discrete">Functions and Variables</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>pluginpre()</strong></dt>
+<dd>
+<p>Shell script code containing pre-backup procedures.</p>
+</dd>
+<dt class="hdlist1"><strong>pluginpost()</strong></dt>
+<dd>
+<p>Shell script code containing post-backup procedures.</p>
+</dd>
+<dt class="hdlist1"><strong>bkrepeat</strong></dt>
+<dd>
+<p>Set bkrepeat=1 to repeat the backup with modifications to the include/exclude list.  Every time the backup repeats, the backup set is amended with the new file set.</p>
+</dd>
+<dt class="hdlist1"><strong>INCLUDE</strong></dt>
+<dd>
+<p>Shell array containing file include list (see <strong>snebu-client.conf(5)</strong>)</p>
+</dd>
+<dt class="hdlist1"><strong>EXCLUDE</strong></dt>
+<dd>
+<p>Shell array containing file exclude list (see <strong>snebu-client.conf(5)</strong>)</p>
+</dd>
+<dt class="hdlist1"><strong>EXCLUDEMATCH</strong></dt>
+<dd>
+<p>Shell array containing file exclude file pattern list (see <strong>snebu-client.conf(5)</strong>)</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_examples_2">Examples</h4>
+<div class="paragraph">
+<p>The following is a template that can be used when backing up a server containing a database.  In this case, the include/exclude list initially includes files to back up the entire server.  So this script does a hot backup of the database first, then adds to the exclude list the dbf files that were backed up initially, and then backs up the rest of the system.</p>
+</div>
+<div class="paragraph">
+<p>The Since these functions get called at various times from the snebu-client script, the order of the various code fragments can become a bit confusing.  Pay attention to the "(Step x)" labels for the actual execution order in each fragment.</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>### Snebu backup plugin template for databases
+
+# Initialize an internal housekeeping variable
+# (Step 0)
+dbstage=0
+
+# Define the pre-backup script
+pluginpre() {
+    # Stage 0 =&gt; haven't backed up the DB yet
+    if [ "${dbstage}" = 0 ]
+    then
+	# (Step 1)
+	# Save the current include/exclude list
+	OLD_INCLUDE=( "${INCLUDE[@]}" )
+	OLD_EXCLUDE=( "${EXCLUDE[@]}" )
+	OLD_EXCLUDEMATCH=( "${EXCLUDEMATCH[@]}" )
+
+	# Zero out exclude list
+	EXCLUDE=( )
+	EXCLUDEMATCH=( )
+
+	# Set the include list to include database files
+	DBF_FILES=( "$(
+	    # Function to list database filenames to standard output
+	    print_dbf_filenames
+	)" )
+	INCLUDE=( "${DBF_FILES[@]}" )
+
+	# Place DB in hot backup mode
+	begin_db_backup
+
+	# After this, snebu-client-backup takes over and backs up
+	# the above set include list.  Then control jumps to
+	# pluginpost() with dbstage still set to 0
+    elif [ "${dbstage}" = 1 ]
+    then
+	# (Step 3)
+	DBF_LOG_FILES=( "$(
+	    # Function to list archived transaction logs
+	    print_dbf_log_filenames
+	)" )
+	INCLUDE=( "${DBF_LOG_FILES[@]}" )
+
+	# Back to the backup with the new include list, then
+	# off to pluginpost again with dbstage set to 1
+    fi
+}
+
+pluginpost() {
+    if [ "${dbstage}" = 0 ]
+    then
+	# (Step 2)
+	# Take DB out of hot backup mode
+	end_db_backup
+
+	# Define the next stage, and repeat the backup
+	dbstage=1
+	bkrepeat=1
+
+	# Now control jumps back to pluginpre() with dbstage=1
+    elif [ "${dbstage}" = 1 ]
+    then
+	# (Step 4)
+	# Restore the original include/exclude list, with the
+	# database files added to the exclude list.
+	INCLUDE=( "${OLD_INCLUDE[@]}" )
+	EXCLUDE=( "${OLD_EXCLUDE[@]}" "${DBF_FILES[@]}" 	"${DBF_LOG_FILES[@]}"
+	EXCLUDEMATCH=( "${OLD_EXCLUDEMATCH[@]}" )
+
+	# Define the next stage, and repeat the backup
+	dbstage=2
+	bkrepeat=1
+
+	# Control jumps back to pluginpre(), however no more pre-
+	# processing is needed for stage 2, so the backup begins
+	# again with the original client include/exclude (plus the
+	# above database files added to the exclude).
+    elif [ "${dbstage}" = 2 ]
+    then
+	# (Step 5)
+	# Break the cycle, backup is completed for this host.
+	bkrepeat=0
+    fi
+}
+
+# Also, don't forget to fill in the functions referenced above:
+
+begin_db_backup() {
+    ### Steps to place DB in hot backup mode
+}
+
+end_db_backup() {
+    ### Steps to DB out of hot backup mode
+}
+
+print_dbf_filenames() {
+    ### Output list of dbf file names
+}
+
+print_dbf_log_filenames() {
+    ### Output list of archived transaction log file names
+}</pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu1_the_simple_network_backup_system">4.8. snebu(1) - The simple network backup system</h3>
+<div class="listingblock">
+<div class="content">
+<pre>snebu [ -c | --config filepath ] subcommand [ options ]</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description_8">Description</h4>
+<div class="paragraph">
+<p>The <em>snebu</em> command is a backup tool which manages storing data from
+backup sessions on disk-based storage, utilizing a simple database
+for tracking backup sets and meta data.  With the exception of administrative
+sub commands (expire, purge, permissions), it is typically it is called via a
+front end script (such as the included "snebu-client" shell script).
+The subcommands are listed below along with the most common options.
+Details on each command are given in each command&#8217;s individual man page.</p>
+</div>
+<h4 id="_sub_commands_are_as_follows_2" class="discrete">Sub commands are as follows:</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>newbackup</strong> <strong>-n</strong> <em>backupname</em> <strong>-d</strong> <em>datestamp</em> <strong>-r</strong> <em>schedule</em></dt>
+<dd>
+<p>Initiates a new backup set, taking in the full backup manifest,
+returning a snapshot manifest.</p>
+</dd>
+<dt class="hdlist1"><strong>submitfiles</strong> <strong>-n</strong> <em>backupname</em> <strong>-d</strong> <em>datestamp</em></dt>
+<dd>
+<p>Receives a backup in TAR format that fulfills the snapshot manifest returned from newbackup</p>
+</dd>
+<dt class="hdlist1"><strong>restore</strong> <strong>-n</strong> <em>backupname</em> <strong>-d</strong> <em>datestamp</em> [ <em>file_list&#8230;&#8203;</em> ]</dt>
+<dd>
+<p>Generates a tar file containing the specified backup set.</p>
+</dd>
+<dt class="hdlist1"><strong>listbackups</strong> [ <strong>-n</strong> <em>backupname</em> [ <strong>-d</strong> <em>datestamp</em> ]] [ <em>file_list&#8230;&#8203;</em> ]</dt>
+<dd>
+<p>List backed up hosts, backup sets within a host, or files within a backup set.</p>
+</dd>
+<dt class="hdlist1"><strong>expire</strong> [ <strong>-n</strong> <em>backupname</em> <strong>-d</strong> <em>datestamp</em> ] or [ <strong>-a</strong> <em>days</em> <strong>-r</strong> <em>schedule</em> [ <strong>-n</strong> <em>hostname</em> ]]</dt>
+<dd>
+<p>Expires (removes) the given backup set, or backups matching the given criteria</p>
+</dd>
+<dt class="hdlist1"><strong>purge</strong></dt>
+<dd>
+<p>Purges backing files from the vault that are part of expired backups</p>
+</dd>
+<dt class="hdlist1"><strong>permissions</strong></dt>
+<dd>
+<p>[ <strong>-l</strong> | <strong>-a</strong> | <strong>-r</strong> ]
+<strong>-c</strong> <em>command</em>
+<strong>-n</strong> <em>hostname</em>
+<strong>-u</strong> <em>user</em>
+Defines permissions for a given user, when snebu is run in multi-user mode.</p>
+</dd>
+<dt class="hdlist1"><strong>help</strong> [subcommand]</dt>
+<dd>
+<p>Displays help page of subcommand</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_5">See Also</h4>
+<div class="paragraph">
+<p><strong>snebu-newbackup</strong>(1),
+<strong>snebu-submitfiles</strong>(1),
+<strong>snebu-restore</strong>(1),
+<strong>snebu-listbackups</strong>(1),
+<strong>snebu-expire</strong>(1),
+<strong>snebu-purge</strong>(1),
+<strong>snebu-permissions</strong>(1),
+<strong>snebu-client</strong>(1)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_newbackup1_submits_manifest_for_a_new_backup">4.9. snebu-newbackup(1) - Submits manifest for a new backup</h3>
+<div class="listingblock">
+<div class="content">
+<pre>snebu newbackup -n backupname -d datestamp -r schedule</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description_9">Description</h4>
+<div class="paragraph">
+<p>The "newbackup" command creates a new backup set, by consuming a
+tab-delimited list of file names (along with associated meta data) to
+include in the backup.  It then compares this list to the backup
+catalog database to determine which files are new, and which ones are
+already contained on the backup media.  A list of new / changed files
+is returned (the snapshot manifest), which can then be passed along to
+"tar" to generate the input for the "submitfiles" subcommand.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_options_5">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>-n</strong>, <strong>--name</strong> <em>backupname</em></dt>
+<dd>
+<p>Name of the backup.  Usually set to the server
+name that you are backing up.</p>
+</dd>
+<dt class="hdlist1"><strong>-d</strong>, <strong>--date</strong> <em>datestamp</em></dt>
+<dd>
+<p>Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.</p>
+</dd>
+<dt class="hdlist1"><strong>-r</strong>, <strong>--retention</strong> <em>schedule</em></dt>
+<dd>
+<p>Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".</p>
+</dd>
+<dt class="hdlist1"><strong>-T</strong>, <strong>--files-from</strong> <em>FILE</em></dt>
+<dd>
+<p>Read list of filenames (with meta data) to backup
+from the named file, instead of standard input.</p>
+</dd>
+<dt class="hdlist1"><strong>--null</strong></dt>
+<dd>
+<p>Inbound backup manifest (<strong>-T</strong>, or standard input)
+is null terminated</p>
+</dd>
+<dt class="hdlist1"><strong>--not-null</strong></dt>
+<dd>
+<p>Inbound backup manifest (<strong>-T</strong>, or standard input)
+is newline terminated</p>
+</dd>
+<dt class="hdlist1"><strong>--null-output</strong></dt>
+<dd>
+<p>Generate snapshot manifest with null-terminated lines.</p>
+</dd>
+<dt class="hdlist1"><strong>--not-null-output</strong></dt>
+<dd>
+<p>Generate snapshot with newline-terminated lines.</p>
+</dd>
+<dt class="hdlist1"><strong>-f</strong>, <strong>--force-full</strong></dt>
+<dd>
+<p>Force a full backup</p>
+</dd>
+<dt class="hdlist1"><strong>--graft</strong> <em>/path/name/</em>*=*<em>/new/name/</em></dt>
+<dd>
+<p>Re-write path names beginning with "<em>/path/name/</em>"
+to "<em>/new/name/</em>"</p>
+</dd>
+<dt class="hdlist1"><strong>-v</strong></dt>
+<dd>
+<p>Turn on verbose output.</p>
+</dd>
+</dl>
+</div>
+<h4 id="_input_manifest_format" class="discrete">Input Manifest format</h4>
+<div class="paragraph">
+<p>The input manifest contains a list of files to include in this backup set.
+The format is a delimited list of file names and file metadata, with the following fields:
+.BP</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>1 - FType</strong></dt>
+<dd>
+<p>Values are one of "f", "d", "l", "c", "b"</p>
+</dd>
+<dt class="hdlist1"><strong>2 - Mode</strong></dt>
+<dd>
+<p>File mode in octal</p>
+</dd>
+<dt class="hdlist1"><strong>3 - Device</strong></dt>
+<dd>
+<p>Device number of file system</p>
+</dd>
+<dt class="hdlist1"><strong>4 - Inode</strong></dt>
+<dd>
+<p>Inode number of file</p>
+</dd>
+<dt class="hdlist1"><strong>5 - UName</strong></dt>
+<dd>
+<p>User name</p>
+</dd>
+<dt class="hdlist1"><strong>6 - UID</strong></dt>
+<dd>
+<p>User ID number</p>
+</dd>
+<dt class="hdlist1"><strong>7 - GName</strong></dt>
+<dd>
+<p>User&#8217;s Group Name</p>
+</dd>
+<dt class="hdlist1"><strong>8 - GID</strong></dt>
+<dd>
+<p>User&#8217;s Group Number</p>
+</dd>
+<dt class="hdlist1"><strong>9 - Size</strong></dt>
+<dd>
+<p>File size in bytes</p>
+</dd>
+<dt class="hdlist1"><strong>10 - Hash</strong></dt>
+<dd>
+<p>File Hash (future use, set to "0")</p>
+</dd>
+<dt class="hdlist1"><strong>11 - CTime</strong></dt>
+<dd>
+<p>File Inode&#8217;s last change time</p>
+</dd>
+<dt class="hdlist1"><strong>12 - MTime</strong></dt>
+<dd>
+<p>File Content&#8217;s last modififed time</p>
+</dd>
+<dt class="hdlist1"><strong>13 - Path</strong></dt>
+<dd>
+<p>Full file path</p>
+</dd>
+<dt class="hdlist1"><strong>14 - LTarget</strong></dt>
+<dd>
+<p>Link target</p>
+</dd>
+</dl>
+</div>
+<div class="paragraph">
+<p>Field 14 (Link Target) is only present if the file type is "l" (symbolic link).</p>
+</div>
+<div class="paragraph">
+<p>The fields are tab-delimited.  If the "--null" option is specified, then each line is null terminated, with an additional null character delimiting fields 13 and 14.  Otherwise if "--not-null" is specified, fields 13 and 14 are tab delimited, and the path names must have special characters escaped.</p>
+</div>
+<div class="paragraph">
+<p>The input manifest can be created with the GNU <em>find</em> command, with the following print formatting specification (suitable for the "--null" flag):</p>
+</div>
+<div class="paragraph">
+<div class="title">EX</div>
+<p>find [ parameters ] \( -type f -o -type d \ .br
+    -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0" .br
+    -o -type l -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0%l\0"
+.EE</p>
+</div>
+<h4 id="_returned_snapshot_manifest_output" class="discrete">Returned Snapshot manifest output</h4>
+<div class="paragraph">
+<p>The manifest returned is either a null-delimited list of files (if "--null-output" is specified),
+or a newline-delimited list of files with special characters escaped (if "--not-null-output is specified).
+This is the list of files that are required to complete the snapshot (any file that hasn&#8217;t changed from previous backups will be referenced from the backup server).  This list is suitable for passing into the <em>tar</em> command.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_6">See Also</h4>
+<div class="paragraph">
+<p><strong>snebu</strong>(1),
+<strong>snebu-submitfiles</strong>(1),
+<strong>snebu-restore</strong>(1),
+<strong>snebu-listbackups</strong>(1),
+<strong>snebu-expire</strong>(1),
+<strong>snebu-purge</strong>(1),
+<strong>snebu-permissions</strong>(1),
+<strong>snebu-client</strong>(1)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_submitfiles1_recieves_tar_file_contents_to_complete_a_backup">4.10. snebu-submitfiles(1) - Recieves tar file contents to complete a backup</h3>
+<div class="listingblock">
+<div class="content">
+<pre>snebu submitfiles -n backupname -d datestamp</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description_10">Description</h4>
+<div class="paragraph">
+<p>The "submitfiles" sub command is called after running <em>snebu&nbsp;newbackup</em>,
+and is used to submit a tar file containing the files from the snapshot manifest returned by <em>newbackup</em>.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_options_6">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>-n</strong>, <strong>--name</strong> <em>backupname</em></dt>
+<dd>
+<p>Name of the backup.
+Typically set to the server name that you are backing up.</p>
+</dd>
+<dt class="hdlist1"><strong>-d</strong>, <strong>--date</strong> <em>datestamp</em></dt>
+<dd>
+<p>Date stamp for this backup set.
+The format is in time_t format, sames as the output of the "date&nbsp;+%s" command.</p>
+</dd>
+<dt class="hdlist1"><strong>-v</strong></dt>
+<dd>
+<p>Verbose output</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_7">See Also</h4>
+<div class="paragraph">
+<p><strong>snebu</strong>(1),
+<strong>snebu-newbackup</strong>(1),
+<strong>snebu-restore</strong>(1),
+<strong>snebu-listbackups</strong>(1),
+<strong>snebu-expire</strong>(1),
+<strong>snebu-purge</strong>(1),
+<strong>snebu-permissions</strong>(1),
+<strong>snebu-client</strong>(1)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_listbackups1_lists_backed_up_systems_backup_sets_and_file_names">4.11. snebu-listbackups(1) - Lists backed up systems, backup sets, and file names</h3>
+<div class="listingblock">
+<div class="content">
+<pre>snebu  listbackups [ -n hostname ] [ -d datestamp ]] [ file_list... ]</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description_11">Description</h4>
+<div class="paragraph">
+<p>With no arguments specified, <em>listbackups</em> will return a list of all
+systems that are contained in the backup catalog.  Otherwise, when
+specifying the <strong>-n</strong> parameter, a list of backup sets for that host is
+returned.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_options_7">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>-n</strong>, <strong>--name</strong> <em>backupname</em></dt>
+<dd>
+<p>Name of the backup.  Usually set to the server
+name that you are backing up.</p>
+</dd>
+<dt class="hdlist1"><strong>-d</strong>, <strong>--date</strong> <em>datestamp</em></dt>
+<dd>
+<p>Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.</p>
+</dd>
+<dt class="hdlist1">[ <em>file-list</em> ]</dt>
+<dd>
+<p>List of files or file pattern(s)</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_8">See Also</h4>
+<div class="paragraph">
+<p><strong>snebu</strong>(1),
+<strong>snebu-newbackup</strong>(1),
+<strong>snebu-submitfiles</strong>(1),
+<strong>snebu-restore</strong>(1),
+<strong>snebu-expire</strong>(1),
+<strong>snebu-purge</strong>(1),
+<strong>snebu-permissions</strong>(1),
+<strong>snebu-client</strong>(1)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_restore1_generates_tar_file_from_backup">4.12. snebu-restore(1) - Generates tar file from backup</h3>
+<div class="listingblock">
+<div class="content">
+<pre>snebu restore -n backupname -d datestamp [ file_list... ]</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description_12">Description</h4>
+<div class="paragraph">
+<p>Generates a tar file containing files from a given backup set.
+Pipe the output of this command into <em>tar</em> to restore files.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_options_8">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>-n</strong>, <strong>--name</strong> <em>backupname</em></dt>
+<dd>
+<p>Name of the backup, as specified in the <em>newbackup</em> subcommand.
+Typically is the name of the server that was backed up.</p>
+</dd>
+<dt class="hdlist1"><strong>-d</strong>, <strong>--date</strong> <em>datestamp</em></dt>
+<dd>
+<p>Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date&nbsp;+%s" command.</p>
+</dd>
+<dt class="hdlist1"><strong>--graft</strong> <em>/path/name/</em>*=*<em>/new/name/</em></dt>
+<dd>
+<p>Re-write path names beginning with "<em>/path/name/</em>" to "<em>/new/name/</em>".
+This allows you to restore a file to a different location.</p>
+</dd>
+<dt class="hdlist1">[ <em>file-list</em> ]</dt>
+<dd>
+<p>List of files to restore.  Defaults to all.</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_9">See Also</h4>
+<div class="paragraph">
+<p><strong>snebu</strong>(1),
+<strong>snebu-newbackup</strong>(1),
+<strong>snebu-submitfiles</strong>(1),
+<strong>snebu-listbackups</strong>(1),
+<strong>snebu-expire</strong>(1),
+<strong>snebu-purge</strong>(1),
+<strong>snebu-permissions</strong>(1),
+<strong>snebu-client</strong>(1)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_expire1_expire_a_given_backup_set_or_range_of_backups">4.13. snebu-expire(1) - Expire a given backup set or range of backups</h3>
+<div class="listingblock">
+<div class="content">
+<pre>snebu expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description_13">Description</h4>
+<div class="paragraph">
+<p>Removes backup sessions from the snebu backup catalog database.
+A specific backup session can be purged by providing the <strong>-n</strong> and <strong>-d</strong>
+options, or all backups that are part of a given retention schedule
+(specified with <strong>-r</strong>, and optionally from a given host, with the <strong>-n</strong>
+option) that are older than a given number of days (<strong>-a</strong>) are removed.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_options_9">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>-n</strong>, <strong>--name</strong> <em>backupname</em></dt>
+<dd>
+<p>Name of the backup.  Usually set to the server
+name that you are backing up.</p>
+</dd>
+<dt class="hdlist1"><strong>-d</strong>, <strong>--date</strong> <em>datestamp</em></dt>
+<dd>
+<p>Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.</p>
+</dd>
+<dt class="hdlist1"><strong>-r</strong>, <strong>--retention</strong> <em>schedule</em></dt>
+<dd>
+<p>Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".</p>
+</dd>
+<dt class="hdlist1"><strong>-a</strong>, <strong>--age</strong> <em>#days</em></dt>
+<dd>
+<p>Expire backups older than #days.</p>
+</dd>
+<dt class="hdlist1"><strong>-m</strong>, <strong>--min-keep</strong> <em>#backups</em></dt>
+<dd>
+<p>When expiring with the <strong>-a</strong> flag, keep at least
+this many of the most recent backups for a given
+hostname/retention schedule.
+Defaults to 3 days.</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_10">See Also</h4>
+<div class="paragraph">
+<p><strong>snebu</strong>(1),
+<strong>snebu-newbackup</strong>(1),
+<strong>snebu-submitfiles</strong>(1),
+<strong>snebu-restore</strong>(1),
+<strong>snebu-listbackups</strong>(1),
+<strong>snebu-purge</strong>(1),
+<strong>snebu-permissions</strong>(1),
+<strong>snebu-client</strong>(1)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_snebu_purge1_remove_backing_files_from_expired_backups">4.14. snebu-purge(1) - Remove backing files from expired backups</h3>
 <div class="listingblock">
 <div class="content">
 <pre>snebu purge</pre>
 </div>
 </div>
+<div class="sect3">
+<h4 id="_description_14">Description</h4>
 <div class="paragraph">
-<p>The purge process can take some time to execute, so typically it would be run on a weekly basis, and the expire jobs run daily after the backups have completed.</p>
+<p>Permanently removes files from disk storage that are no longer
+referenced by any backups. Run this command after running "snebu expire".</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_11">See Also</h4>
+<div class="paragraph">
+<p><strong>snebu</strong>(1),
+<strong>snebu-newbackup</strong>(1),
+<strong>snebu-submitfiles</strong>(1),
+<strong>snebu-restore</strong>(1),
+<strong>snebu-listbackups</strong>(1),
+<strong>snebu-expire</strong>(1),
+<strong>snebu-permissions</strong>(1),
+<strong>snebu-client</strong>(1)</p>
 </div>
 </div>
 </div>
-</div>
-<div class="sect1">
-<h2 id="_advanced_usage">Advanced usage</h2>
-<div class="sectionbody">
 <div class="sect2">
-<h3 id="_creating_a_custom_snebu_client_script">Creating a custom snebu-client script</h3>
-<div class="paragraph">
-<p>Typically, direct usage of the <code>snebu</code> command is used for maintenance purposes.  Submitting backups and restoring is driven by the snebu-client command.  However, if needed, you can create a custom client for advanced purposes (such as performing live database backups, which typically involve placing the DB in backup mode, and querying the DB for which files to back up).  The process of submitting a backup requires two parts:</p>
+<h3 id="_snebu_permissions1_set_permissions_for_snebu_when_used_in_multi_user_mode">4.15. snebu-permissions(1) - Set permissions for Snebu when used in multi-user mode</h3>
+<div class="listingblock">
+<div class="content">
+<pre>snebu permissions [ -l | -a | -r ] -c command -n hostname -u user</pre>
 </div>
+</div>
+<div class="sect3">
+<h4 id="_description_15">Description</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">The <em>permissions</em> command lists, adds, or removes user permissions.</dt>
+<dd>
+<p>These permissions are applied when the "snebu" command is installed setuid, and run
+by a OS different user.</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_options_10">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>-l</strong>, <strong>--list</strong></dt>
+<dd>
+<p>Lists all installed permissions.  If the <strong>-c</strong>, <strong>-n</strong>, or
+<strong>-u</strong> options are given, this list is restricted to
+those sub commands, hostnames, or users respectively.</p>
+</dd>
+<dt class="hdlist1"><strong>-a</strong>, <strong>--add</strong></dt>
+<dd>
+<p>Adds permissions for the specified sub command [-c],
+hostname [-n], and user [-u].</p>
+</dd>
+<dt class="hdlist1"><strong>-r</strong>, <strong>--remove</strong></dt>
+<dd>
+<p>Removes permissions for the specified sub command
+[-c], hostname [-n], and user [-u].</p>
+</dd>
+<dt class="hdlist1"><strong>-c</strong>, <strong>--command</strong> <em>sub command</em></dt>
+<dd>
+<p>The sub command that this permission command applies to.</p>
+</dd>
+<dt class="hdlist1"><strong>-n</strong>, <strong>--name</strong> <em>hostname</em></dt>
+<dd>
+<p>The host name that this permission command applies to.</p>
+</dd>
+<dt class="hdlist1"><strong>-u</strong>, <strong>--user</strong> <em>username</em></dt>
+<dd>
+<p>The user that this permission command applies to.</p>
+</dd>
+</dl>
+</div>
+<div class="paragraph">
+<p>Available subcomands that work with permissions are:</p>
+</div>
+<div class="paragraph">
+<p><strong>backup</strong> (covers both newbackup and submitfiles functions)</p>
+</div>
+<div class="paragraph">
+<p><strong>restore</strong></p>
+</div>
+<div class="paragraph">
+<p><strong>listbackups</strong></p>
+</div>
+<div class="paragraph">
+<p><strong>expire</strong></p>
+</div>
+<div class="paragraph">
+<p><strong>purge</strong></p>
+</div>
+<div class="paragraph">
+<p><strong>permissions</strong></p>
+</div>
+<div class="paragraph">
+<p>Note that in the case of functions that aren&#8217;t host specific (such as <em>permissions</em>) or    affect all hosts (<em>snebu purge</em>, or <em>snebu expire -a &#8230;&#8203;</em>), users will need to be granted permission to all hosts by specifying <strong>-h '*'</strong> in order to be granted access to those specific functions).</p>
+</div>
+<div class="paragraph">
+<p>To grant permissions, this command must be run as the user that snebu is
+installed under, or the user must be granted access to the <em>permissions</em>
+sub command</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_see_also_12">See Also</h4>
+<div class="paragraph">
+<p><strong>snebu</strong>(1),
+<strong>snebu-newbackup</strong>(1),
+<strong>snebu-submitfiles</strong>(1),
+<strong>snebu-restore</strong>(1),
+<strong>snebu-listbackups</strong>(1),
+<strong>snebu-expire</strong>(1),
+<strong>snebu-purge</strong>(1),
+<strong>snebu-client</strong>(1)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_tarcrypt1_compresses_and_encrypts_file_data_in_tar_files">4.16. tarcrypt(1) - Compresses and encrypts file data in TAR files</h3>
+<div class="listingblock">
+<div class="content">
+<pre>tarcrypt encrypt -k keyfile
+ tarcrypt decrypt
+ tarcrypt genkey -f keyfile -c comment</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_description_16">Description</h4>
+<div class="paragraph">
+<p>The <em>tarcrypt</em> command acts as a filter for the <em>tar</em> command.
+In encryption mode, it will compress and encrypt the data portion of TAR files
+while leaving header metadata intact.  This allows the TAR file to be sent to
+a backup system that expects the Unix TAR format as input.</p>
+</div>
+<div class="paragraph">
+<p>The key file that is generated by the <em>genkey</em> function contains an encrypted
+(passphrase protected) RSA private key, public key, and HMAC key used for verification.
+The encrypted private key, public key, and a hash of the HMAC key are stored in
+the TAR file&#8217;s global header.</p>
+</div>
+<div class="paragraph">
+<p>Each individual file is encrypted with a random AES-256 key, which is in turn encrypted
+using the RSA public key.  The file contents is also signed using the HMAC key,
+and the signature for the file is attached to the file header.</p>
+</div>
+<div class="paragraph">
+<p>During a decrypt operation, the user is prompted for the passphrase protecting the private key,
+which is used to decrypt the AES key stored with each file.
+The passphrase, along with the public key hash, are used to re-create the secret HMAC key
+in order to validate each file contents as it is begin decrypted.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_options_11">Options</h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>encrypt</strong></dt>
+<dd>
+<p>Reads the tar command output on standard input, outputting an encrypted tar file.
+    <strong>Parameters</strong>:</p>
 <div class="ulist">
 <ul>
 <li>
-<p><code>snebu newbackup</code></p>
-<div class="paragraph">
-<p>This subcommand expects an input list of files as a tab-delimited list consisting of:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre>File Type, Mode, Device, Inode, Owner, Owner#, Group, Group#, Size, SHA1, Inode Mod Time, File Mod Date, Filename, Symlink Target</pre>
-</div>
-</div>
-<div class="paragraph">
-<p>This list can be generated with GNU find command, with the following <code>-printf</code> arguments added:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre>\( -type f -o -type d \) \
-    -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0" \
-    -o -type l \
-    -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0%l\0"</pre>
-</div>
-</div>
-<div class="paragraph">
-<p>(Note, that currently the SHA1 field (field number 10) isn&#8217;t used, so the above puts a 0 as a placeholder.  This is intended to be an additional indicator of if a file needs to be transfered to the backup server&#8217;s vault, or if it is already there.)</p>
-</div>
-</li>
-<li>
-<p><code>snebu submitfiles</code></p>
-<div class="paragraph">
-<p>The output of the <code>snebu newbackup</code> command is a list of files that need to be backed up to complete the backup set (anything not on this list is already on the backup server, and gets linked to the current backup set).  This list is then used to generate a <code>tar</code> file, which gets submitted to the submitfiles target as standard input.</p>
-</div>
-<div class="paragraph">
-<p>See the detailed documentation section for additional command line arguments that are required.  Also, the included snebu-client shell script can be referenced for more details.</p>
-</div>
+<p><strong>-k</strong>, <strong>--keyfile</strong> <em>keyfilename</em><br>
+Specifies the key file (generated by the <em>genkey</em> subcommand)</p>
 </li>
 </ul>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_changing_file_locations">Changing file locations</h3>
-<div class="paragraph">
-<p>One parameter to <code>snebu-client</code> (or <code>snebu</code>, if writing your own client) is the <code>--graft</code> option.  This allows you to re-write the directory path from one location to another.  This is useful when backing up a filesystem snapshot.  If the snapshot of <code>/srv/database</code> is mounted under <code>/mnt/snapshots/database</code>, you can specify <code>--graft /mnt/snapshots/database/=/srv/database/</code> so that the backup will record the file locations as if they were backed up under their original location.</p>
+</dd>
+</dl>
 </div>
 <div class="paragraph">
-<p>Another usage for <code>--graft</code> is when restoring a single file to a different location.  For example: <code>--graft /home/bob/budget.doc=/home/bob/restore/budget.doc</code> will allow restoring the file without overwriting the version that is currently in place.</p>
+<p>Multiple key files may be specified by repeating this parameter.</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><strong>decrypt</strong></dt>
+<dd>
+<p>Reads an encrypted tar file on standard input, prompts for the passphrase,
+decrypts and verifies contents outputting a standard tar file.</p>
+</dd>
+<dt class="hdlist1"><strong>genkey</strong></dt>
+<dd>
+<p>Generates a key file used by the <em>encrypt</em> function.
+    <strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>-f</strong>, <strong>--filename</strong> <em>keyfilename</em><br>
+Specifies the filename to write the keyfile out to.</p>
+</li>
+<li>
+<p>[ <strong>-c</strong>, <strong>--comment</strong> "<em>comment text</em>" ]<br>
+Specifies a comment to include in the keyfile.</p>
+</li>
+</ul>
+</div>
+</dd>
+</dl>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_forcing_a_full_backup">Forcing a full backup</h3>
+<div class="sect3">
+<h4 id="_security">Security</h4>
 <div class="paragraph">
-<p>Snebu uses the file meta data (file name, last mod date, size, permissions, etc.) to determine if a file has been modified since the last backup.  If a file gets modified, keeps the same size, and the mod date is manually set to the original, this can cause the file to be skipped during incremental backups.  Therefore, it may be desirable to periodically force a full backup with the <code>-f</code> flag.  This will cause all included files to get transfered, although de-duplication is still accomplished on the back end.  The main drawback of <code>-f</code> is that it increases the backup time and network usage.</p>
+<p>Public Key cryptography splits up a key into two parts&#8201;&#8212;&#8201;an encryption (public) key, and a decryption (private) key.
+The public key isn&#8217;t considered sensitive&#8201;&#8212;&#8201;it is designed so that one party can send encrypted data to another party,
+by using the other party&#8217;s public key.  The private key, however, needs to be kept confidential by the receiving party.
+Typically the private key is stored encrypted with a symmetric algorithm (one where the same password is used to both encrypt
+and decrypt the data) to provide additional security.</p>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_plugins">Plugins</h3>
 <div class="paragraph">
-<p>A plugin architecture is currently under development, which allows the <code>snebu-client</code> script to perform additional steps before and after a backup.  This can be used to create and mount snapshots of file systems, or to put a database into backup mode.</p>
+<p>In the case of tarcrypt, the sending and receiving party is the same entity,
+using a third party (the backup server) to store the encrypted data.
+If the backup is needed, chances are that the keyfile used to encrypt the backup is lost also.
+Therefore, both the public key (for reference), and an encrypted copy of the private key are stored
+in the generated encrypted tar file&#8217;s global header.</p>
 </div>
-</div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_command_reference">Command reference</h2>
-<div class="sectionbody">
-<div class="sect2">
-<h3 id="_snebu_client_br">snebu-client<br></h3>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu-client [ subcommand ] [ options ]
- snebu-client is the client front end for snebu.  Use it to easily
- back up a local or remote host, to either local a local storage
- device, or to a remote backup server.  Use it with one of the
- following subcommands.
-
- Sub commands are as follows:
-    backup  [ -n backupname ] [ -d datestamp ] [ -r schedule ]
-
-    restore [ -n backupname ] [ -d datestamp ]
-
-    listbackups [ -n backupname [ -d datestamp ]] [ file_list... ]
-
-    help [subcommand]</pre>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_snebu_client_backup">snebu-client backup</h4>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu-client backup [ -n backupname ] [ -d datestamp ] [ -r schedule ]
-    [ file-list ]
- Initiates a system backup.  By default, it will back up the local
- host to a local snebu install.  You can also use this command to back
- up to a remote backup server, back up a remote host to either a local
- snebu instalation, or back up a remote host to another remote backup
- server, depending on which options are chosen.
-
-Options:
- -c, --config config_file   Name of the configuration file.  Default is
-                            /etc/snebu-client.conf.
-
- -n, --name backupname      Name of the backup.  Usually set to the server
-                            name that you are backing up.
-
- -d, --date datestamp       Date stamp for this backup set.  The format is in
-                            time_t format, sames as the output of the "date
-                            +%s" command.
-
- -r, --retention schedule   Retention schedule for this backup set.  Typical
-                            values are "daily", "weekly", "monthly", "yearly".
-
-     --remote-client hostname
-                            Host name / IP address of remote server.  Used to
-                            backup a remote server to local host.
-
-     --backup-server hostname
-                            Host name / IP address of backup server.  Used to
-                            backup to a remote server.
-
- -f, --force-full           Force a full backup
-
- -C, --changedir path       Changes to the given directory path before
-                            backing up or restoring.
-
-     --graft /path/name/=/new/name/
-                            Re-write path names beginning with "/path/name/"
-                            to "/new/name/"
-
-     --plugin scriptname    Specifies an optional plug in script.  Usually
-                            used to perform database-specific operations
-                            (such as enabling hot backup mode) for systems
-                            with a DB installed.
-
- [ file-list ]              List of files to backup -- overrides default</pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_snebu_client_restore">snebu-client restore</h4>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu-client restore [ -n backupname ] [ -d datestamp ] [ file-list ]
- Restores a given backup session identified by "-n" and "-d"
- parameters.  Use the "listbackups" subcommand to get a list of
- available backup sessions.
-
-Options:
- -c, --config config_file   Name of the configuration file.  Default is
-                            /etc/snebu-client.conf.
-
- -n, --name backupname      Name of the backup.  Usually set to the server
-                            name that you are backing up.
-
- -d, --date datestamp       Date stamp for this backup set.  The format is in
-                            time_t format, sames as the output of the "date
-                            +%s" command.
-
- -C, --changedir path       Changes to the given directory path before
-                            backing up or restoring.
-
-     --remote-client hostname
-                            Host name / IP address of remote server.  Used to
-                            backup a remote server to local host.
-
-     --backup-server hostname
-                            Host name / IP address of backup server.  Used to
-                            backup to a remote server.
-
- [ file-list ]              List of files to restore.  Defaults to all.</pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_snebu_client_listbackups">snebu-client listbackups</h4>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
- With no arguments specified, "listbackups" will return a list of all
- systems that are contained in the backup catalog.  Otherwise, when
- specifying the -n parameter, a list of backup sets for that host is
- returned.
-
-Options:
- -c, --config config_file   Name of the configuration file.  Default is
-                            /etc/snebu-client.conf.
-
- -n, --name backupname      Name of the backup.  Usually set to the server
-                            name that you are backing up.
-
- -d, --date datestamp       Date stamp for this backup set.  The format is in
-                            time_t format, sames as the output of the "date
-                            +%s" command.</pre>
-</div>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_snebu">snebu</h3>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu [ subcommand ] [ options ]
-  where "subcommand" is one of the following:
-    newbackup -n backupname -d datestamp -r schedule
-
-    submitfiles -n backupname -d datestamp
-
-    restore -n backupname -d datestamp [ file_list... ]
-
-    listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
-
-    expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]
-
-    purge
-
-    help [ subcommand ]
-
- The "snebu" command is a backup tool which manages storing data from
- backup sessions on disk-based storage, utilizing a simple database
- for tracking backup sets and meta data.  Typically it is called via a
- front end script (such as the included "snebu-client" shell script).
- Documentation is provided here if you need to create a custom backup
- client script.  The subcommands are listed below along with the most
- common options.  Details on each command are given in each command's
- help section.</pre>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_snebu_newbackup">snebu newbackup</h4>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu newbackup -n backupname -d datestamp -r schedule
- The "newbackup" command creates a new backup set, by consuming a
- tab-delimited list of file names (along with associated meta data) to
- include in the backup.  It then compares this list to the backup
- catalog database to determine which files are new, and which ones are
- already contained on the backup media.  A list of new / changed files
- is returned, which can then be passed along to "tar" to generate a
-
-Options:
- -c, --config config_file   Name of the configuration file.  Default is
-                            /etc/snebu.conf.
-
- -n, --name backupname      Name of the backup.  Usually set to the server
-                            name that you are backing up.
-
- -d, --date datestamp       Date stamp for this backup set.  The format is in
-                            time_t format, sames as the output of the "date
-                            +%s" command.
-
- -r, --retention schedule   Retention schedule for this backup set.  Typical
-                            values are "daily", "weekly", "monthly", "yearly".
-
- -T, --files-from FILE      Read list of filenames (with meta data) to backup
-                            from the named file, instead of standard input.
-
-     --null                 Inbound file backup list (-T, or standard input)
-                            is null terminated
-
-     --not-null             Inbound file backup list (-T, or standard input)
-                            is newline terminated
-
-     --null-output          Generate include-file-list with null terminated
-                            lines.
-
-     --not-null-output      Generate include-file-list with newline
-                            terminated lines.
-
- -f, --force-full           Force a full backup
-
-     --graft /path/name/=/new/name/
-                            Re-write path names beginning with "/path/name/"
-                            to "/new/name/"
-
- -v,                        Verbose output</pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_snebu_submitfiles">snebu submitfiles</h4>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu submitfiles -n backupname -d datestamp
- The "submitfiles" command is called after newbackup, and is used to
- submit a tar file containing the list of filest that newbackup
- returned.
-
-Options:
- -c, --config config_file   Name of the configuration file.  Default is
-                            /etc/snebu.conf.
-
- -n, --name backupname      Name of the backup.  Usually set to the server
-                            name that you are backing up.
-
- -d, --date datestamp       Date stamp for this backup set.  The format is in
-                            time_t format, sames as the output of the "date
-                            +%s" command.
-
- -v,                        Verbose output</pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_snebu_restore">snebu restore</h4>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu restore -n backupname -d datestamp [ file_list... ]
- Generates a tar file containing files from a given backup set.  Pipe
- the output of this command into a tar command to actually restore
- files.
-
-Options:
- -c, --config config_file   Name of the configuration file.  Default is
-                            /etc/snebu.conf.
-
- -n, --name backupname      Name of the backup.  Usually set to the server
-                            name that you are backing up.
-
- -d, --date datestamp       Date stamp for this backup set.  The format is in
-                            time_t format, sames as the output of the "date
-                            +%s" command.
-     --graft /path/name/=/new/name/
-                            Re-write path names beginning with "/path/name/"
-                            to "/new/name/"</pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_snebu_listbackups">snebu listbackups</h4>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
- With no arguments specified, "listbackups" will return a list of all
- systems that are contained in the backup catalog.  Otherwise, when
- specifying the -n parameter, a list of backup sets for that host is
- returned.
-
-Options:
- -c, --config config_file   Name of the configuration file.  Default is
-                            /etc/snebu.conf.
-
- -n, --name backupname      Name of the backup.  Usually set to the server
-                            name that you are backing up.
-
- -d, --date datestamp       Date stamp for this backup set.  The format is in
-                            time_t format, sames as the output of the "date
-                            +%s" command.</pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_snebu_expire">snebu expire</h4>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]
- Removes backup sessions from the snebu backup catalog database.  A
- specific backup session can be purged by providing the "-n" and "-d"
- options, or all backups that are part of a given retention schedule
- (specified with "-r", and optionally from a given host, with the "-n"
- option) that are older than a given number of days ("-a") are removed.
-
-Options:
- -c, --config config_file   Name of the configuration file.  Default is
-                            /etc/snebu.conf.
-
- -n, --name backupname      Name of the backup.  Usually set to the server
-                            name that you are backing up.
-
- -d, --date datestamp       Date stamp for this backup set.  The format is in
-                            time_t format, sames as the output of the "date
-                            +%s" command.
-
- -r, --retention schedule   Retention schedule for this backup set.  Typical
-                            values are "daily", "weekly", "monthly", "yearly".
- -a, --age #days            Expire backups older than #days.
-
- -m, --min-keep #           When expiring with the "-a" flag, keep at least
-                            this many of the most recent backups for a given
-                            hostname/retention level.</pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_snebu_purge">snebu purge</h4>
-<div class="listingblock">
-<div class="content">
-<pre>Usage: snebu purge
- Permanently removes files from disk storage that are no longer
- referenced by any backups. Run this command after running "snebu
- expire".</pre>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_contact_info">Contact info</h2>
-<div class="sectionbody">
 <div class="paragraph">
-<p>If you find any bugs or have feature requests, you can submit them using Github&#8217;s <a href="https://github.com/derekp7/snebu/issues">issue tracker</a>.  Note, that this requires a Github account to post to.</p>
+<p>For the purpose of file confidentiality the keyfile isn&#8217;t considered sensitive,
+as the private key used to decrypt the data is stored in encrypted form.
+However, the keyfile also contains a secret HMAC key used to authenticate the contents of the encrypted
+tar file.  Therefore if authenticity is needed, then the keyfile must be kept confidential
+(i.e., stored with appropriate file system permissions to be accessed only by the backup process).</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_notes">Notes</h4>
+<div class="paragraph">
+<p>The tarcrypt file format is an extension of the PAX TAR format, with custom values in the PAX header.
+If used in conjunction with a backup tool which expects the TAR format as input,
+then the backup tool may need some modifications in order to handle the extensions.
+If the tool stores the tar file intact, and if it doesn&#8217;t choke on the custom header fields,
+then no modifications should be necessary.  However if the backup system parses out the TAR file format
+(i.e., it if uses it as a serialization format), then it would need to be modified to store the encrypted
+header info along with the rest of the metadata, and re-generate the appropriate global and individual
+file headers.</p>
 </div>
 </div>
 </div>
-<div id="footer">
-<div id="footer-text">
-Last updated 2020-12-22
+</div>
 </div>
 </div>
 </body>

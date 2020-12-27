@@ -1,0 +1,1245 @@
+= SNEBU
+:sectnums:
+:sectnumlevels: 2
+:toc: left
+:toclevels: 2
+:keywords: Snebu, Linux Backup, Snapshot, Encrypting
+:nofooter:
+:stylesheet: plain.css
+
+:asterisk: *
+++++
+<p style="color:rgb(150,150,150);"> Simple Network Encrypting Backup Utility</p>
+++++
+
+== Introduction
+
+Snebu is a high-performance snapshot-style backup system for Linux supporting compression, deduplication and optional public key encryption.  It can operate in single-host mode, push mode (client pushes data to server), or pull mode (server pulls data from client) via SSH.  In pull mode, no agent is required on the client (the program _tarcrypt_ will need to be on clients when encryption is used).
+
+The backups are snapshot style, so only the minimum necessary files are transferred to the backup server to complete a backup set.  This keeps storage and bandwidth utilization to a minimum.
+
+Server side is accessed via SSH, supports multiple simultaneous clients, and deduplicates backup files across file systems, clients and backup sets.  Server access supports multi-user granular permissions per account (i.e., an account can be granted backup access, but forbidden delete access -- useful for protection against malware attacks).
+
+
+[discrete]
+=== Primary Features
+* Centrally managed
+* Snapshot backups
+* Database-backed metadata catalog
+* File-level deduplication
+** Across backup sets and clients
+* Compression
+* RSA Public Key encryption using https://www.snebu.com/tarcrypt[tarcrypt]
+* Single-host, Client-push, or Server-pull backups
+* Multiple user granular access
+* Agentless
+** Client-side uses standard Unix/Linux commands -- _find_, _tar_, _ssh_, _bash_
+* High efficiency C code
+** Minimal library runtime dependencies -- _SQLite_, _OpenSSL_, _LZOP_
+
+_SNEBU -- Sleep Nominally, Everything's Backed Up._
+
+== Quick start
+
+=== Downloads / Compiling / Installation
+
+[discrete]
+==== Source
+
+* Download https://github.com/derekp7/snebu/releases/download/v1.1.0/snebu-1.1.0.tar.gz[snebu-1.1.0.tar.gz]
+* Extract the tar file, run make, then sudo make install.
+
+ tar -zxvf snebu-1.1.0.tar.gz
+ make
+ sudo make install
+
+Then to set up privilege separation:
+
+ sudo useradd -r -U -d /var/lib/snebu snebu
+ sudo chown snebu:snebu 
+
+This creates a user and group called "snebu", installing the snebu binary as SUID to user "snebu".  The config file /etc/sneub.conf defaults to placing the vault in `/var/lib/snebu/vault` and the backup catalog DB in `/var/lib/snebu/catalog`.  The `vault` directory is where the backed up files are stored, and the `catalog` directory holds the backup catalog database (in SQLite format).
+
+[discrete]
+==== RPM
+
+* Download https://github.com/derekp7/snebu/releases/download/v1.1.0/snebu-1.1.0-1.fc33.x86_64.rpm[snebu-1.1.0-1.fc33.x86_64.rpm]
+
+ dnf install ./snebu-1.1.0-1.fc33.x86_64.rpm
+
+* Or rebuild from source (requires gcc, rpm-build, openssl-devel, sqlite-devel, lzo-devel): https://github.com/derekp7/snebu/releases/download/v1.1.0/snebu-1.1.0-1.fc33.src.rpm[snebu-1.1.0-1.fc33.src.rpm]
+
+ rpmbuild --rebuild snebu-1.1.0-1.fc33.src.rpm
+
+
+You can mount an external storage device on /var/lib/snebu (making sure the `snebu` user/group owns the directory after mounting -- if not, `chown snebu:snebu /var/lib/snebu/` once the drive is mounted).  However, if the storage device has slow seek times, which is the case with many 2.5" USB-powered mechanical hard drives, then you will get better performance by mounting the mechanical drive under `/var/lib/snebu/vault`, and mounting a separate SSD drive in `/var/lib/snebu/catalog` (or the appropriate directories specified in `/etc/snebu.conf`.  Or if you keep the `catalog` directory on the local systems drive then be sure to separately copy the contents of the catalog directory to the external storage device after a backup session finishes.
+
+=== Sample Backup and Restore Operation
+
+==== User and permissions setup
+You will need to set up user permissions for any user ID that access the `snebu` binary.  To set up permissions for the `root` user, run the following commands:
+
+----
+$ sudo -u snebu snebu permissions --add --command '*' --name '*' --user root
+----
+
+If a user other than root needs to run snebu, then they need to be added to the snebu group.
+
+==== Run a backup
+`sudo` is needed here to allow snebu-client to read all the files on the host.  If a user is only backing up their own directory then sudo isn't needed, and they can be given more granular permissions to the `snebu` command -- see the man page snebu-permissions(1).
+----
+$ sudo snebu-client backup
+----
+
+This backs up all mounted disk-based file systems (automatically skips tmpfs, procfs, sysfs, and other "nodev" mount points).  The backup name defaults to the host name of the client, however this can be overridden with `--name` parameter.  You can also follow the command with a file or path list.  For example:
+
+----
+$ sudo snebu-client backup -n boss-home-dir /home/bigboss
+----
+
+==== List backups, contents, and restore a file
+----
+$ sudo snebu-client listbackups -v
+
+bosshost1
+    1608761077 / daily / Wed Dec 23 16:04:37 2020
+----
+----
+$ sudo snebu-client listbackups -n bosshost1 -d 1608761077 '*BudgetProposal*'
+
+/home/bigboss/BudgetProposal2021.doc
+----
+----
+$ sudo snebu-client restore -n bosshost1 -d 1608761077 -C /tmp \
+    --graft /home/bigboss/=bigboss-restored
+
+ bigboss-restored/BudgetProposal2021.doc
+----
+
+The first command gives a list of all hosts that have been backed up.  With the "-v" flag, it will also give all backup sets that are part of each backed up host.  Backup sets are identified by a serial number, which is the time/date that the backup was created, represented in Unix time_t format (i.e., the number of seconds since Jan 1, 1970).
+
+The second command will list the files that are part of the host and backup set, restricting the output to the given file specification.
+
+In the third command, a restore of this backup set is initiated.  The client changes to the "/tmp" directory, so everything restored is relative to this directory (or specify `-C /` to restore to the original location).  The `--graft` parameter is specified to re-write part of the file path -- in this case it replaces the directory "/home/bigboss/" with "bigboss-restored".  Putting it together the final path file that gets restored is in `/tmp/bigobss-restored/BudgetProposal2021.doc`.
+
+Notice that the backup above is a "daily" backup -- this is the retention schedule that this backup set is assigned to.  By default, backups ran on Sunday through Friaday are `daily` backups, Saturday is a `weekly` backup, and the first of the month is a `monthly` backup.
+
+==== Remote backups
+If snebu is installed in a remote backup server called `bkupsvr1`, and you have the snebu-client script on a local host, you can add the parameters `--backup-server bkupsvr1` and `--backup-user svc-bosshost1` to the above commands.  Make sure to create the service user account `svc-bosshost1` on the remote host (or whichever user account name specified by your organizations practices), along with adding the account to the snebu group.  Set up ssh key based authentication for unattended backups, and then create the appropriate permissions for this service user on the remote backup server:
+
+    admin@bkupsvr1:~$ sudo -u snebu snebu permissions --add --command '*' \
+        --name 'bosshost1' --user svc-bosshost1
+
+Now you can back up to this host:
+
+    root@booshost1:~$ sudo snebu-client backup --backup-server bkupsvr1 --backup-user svc-bosshost1
+
+Note, you may wish to grant more granular permissions such as "backup", "listbackups" and "restore" in the above `snebu permissions` command.  This would prevent the client from deleting backups on the backup server if it were to become compromised.  See the `snebu-permissions` man page for detailed command usage.
+
+If you want more protection, you can reverse the process and have the remote backup server "pull" a backup from the client:
+
+    snebu@bkupsvr1:~$ snebu-client backup --remote-client bosshost1 \
+        --remote-user root --sudo svs-backup
+
+This will access bosshost1 as the service user `svs-backup`, then sudo to `root` to pull the data.  Make sure to set up ssh key authentication between `snebu@bkupsvr1` and `svs-backup@bosshost1`.  If you leave off the `--sudo` flag, then the user `root` will be directly accessed via ssh (requiring ssh key authorization to `root@bosshost1`)
+
+
+==== Expiring old backups
+
+Run the following on the backup server to expire old backups
+----
+$ sudo snebu expire -a 14 -r daily
+$ sudo snebu exipre -a 42 -r weekly
+$ sudo snebu expire -a 365 -r monthly
+$ sudo snebu purge
+----
+
+This expires all daily backups older than 2 weeks, weekly backups older than 6 weeks, and monthly backups older than a year.  Expiring a backup only removes the metadata, and takes a short amount of time.  A `purge` permanently remove data from the `vault`, and can take a bit longer (depending on the number of files that need to be removed).
+
+In the above example, the commands were run under the user ID `snebu`, which owns the repository and has all permissions.  Again, you can grant a specific user permission to run the expire and purge commands to limit the need to access the main user account (see _snebu-permissions(1)_ documentation).
+
+==== Encryption
+Snebu supports client-side public key encryption.  This requires the program `tarcrypt` to be installed on the client.  On the client, run the command `tarcrypt genkey -f outputfile`, and make sure it has appropriate permissions and ownership
+
+    $ sudo tarcrypt genkey -f /etc/snebu-backup.key
+    $ sudo chown root:root /etc/snebu-backup.key
+    $ sudo chmod 600 /etc/snebu-backup.key
+
+You will be prompted for a passphrase to protect the private key stored in the `.key` file.  Then, on any of the backup command variations, add the parameter `--encryption-key /etc/snebu-backup.key`:
+
+    sudo snebu-client backup --backup-server bkupsvr1 --backup-user svc-bosshost1 \
+        --encryption-key /etc/snebu-backup.key
+
+Note, you can repeate the `--encryption-key` parameter to encrypt with multiple keys -- in this case, the passphrase for any one of the keys can be used to decode the backup upon restoring.
+
+When restoring an encrypted backup, specify `snebu-client restore --decrypt` along with the other parameters as appropriate.  No key file is specified, as all key data is securely stored with the backup.  You will be prompted for the private key passphrase for one of the keys when restoring.
+
+== General concepts
+
+=== Components
+
+The Snebu backup system consists of a backend process `snebu`, which maintains a backup catalog in an SQLite database `snebu-catalog.db` in the directory specified in the `/etc/snebu.conf` file.  This database has a number of tables, containing entries for each host that is backed up, along with the backup sets, all file metadata, and backup set details which relate the contents of a given backup set snapshot to to files in the file details table.  Individual file contents are compressed and a file hash is computed.  The files are stored in file names reflecting the file hash in the vault directory (again as specified in the config file).  Storing files named by the hash of the file contents leads directly to file-level deduplication across directories and hosts.
+
+When initiating a backup, a file manifest of the system to be backed up is sent to `snebu` -- this manifest consists of a list of file names and all associated metadata (ownership, permissions, size, modification times, etc).  This represents a complete snapshot of backed up file set.  This manifest gets processed to determine which files are already on the backup server.  The names of new and modified files (as determined by changes in _any_ of the metadata fields) are returned to the client, which is then passed to the `tar` command to process and create a backup.
+
+The output of `tar` is then ingested by the `snebu` backend process, which extracts the file names and meta data, then compresses the contents of each file to a temporary staging file in the `vault` location.  After computing a sha1 hash of the file, the file is renamed to this hash and placed in the target location in the vault.
+
+The `snebu-client` program acts as a front end to `snebu`.  Technically it isn't necessary, however you would need to generate the manifest manually (using `find` and a specific list of `-printf` specifiers -- consult the man page `snebu-newbackup(1)` for details), and send it into `snebu --newbackup`, capture the return manifest to use to generate a `tar` file, and finally sending that into `snebu --submitfiles`.
+
+Note, that some subcommands share the same name between `snebu` and `snebu-client`.  In some cases, such as `listbackups`, there is a bit more front-end processing provided by `snebu-client`.  In other cases, such as `restore`, the actions are different.  `snebu restore` synthesizes a `tar` file on standard output, whereas `snebu-client restore` executes `snebu restore` and calls the local `tar` command to extract the files.
+
+=== Encryption
+
+Since `snebu` uses `tar` as a serialization format for the backup data, the `tarcrypt` command was created to act as a filter in a `tar` pipeline in order to add encryption capabilities.  The key used by `tarcrypt` contains an RSA Public key which is used to encrypt a random session key for each file.  It also contains a secret HMAC key used to "sign" each file in the backup with a deterministic hash.  The HMAC key is computed using a combination of the RSA Public key and the passphrase used to protect the RSA Private key.  That way it can not only be reliably regenerated during a restore operation (since the user needs to input the same passphrase to decrypt the backup), but it is also directly tied to the combination of the RSA keys and passphrase.  Since the HMAC key is considered sensitive, the `.key` file should be stored with appropriate restricted ownership and permissions to prevent an attacker from forging backup file contents (although a compromised HMAC key still won't permit an attacker from decrypting a backup).
+
+Since the backup server can't know the hash of the raw file, and since a random session key is used when encrypting, that means that the has of the received file can't be utilized for deduplication purposes.  However since the HMAC signature is deterministic, this signature is utilized for deduplication purposes which works to deduplicate across any hosts that share the same key file(s).  (When multiple keys are used during encryption, a hash of all the HMAC keys is used to name the file).
+
+If a new key is generated, then subsequent backups will consist of files encrypted with the old key and the new one (since backups are snapshot based, only new/modified files get sent to the backup server and encrypted with the new key).  The `tarcrypt` command handles this gracefully -- the global header contains all the encrypted keys used that are related to the files in the restore set, so the operator will be prompted for the passphrase for each key.  As an ease-of-use operation, if the same passphrase is used on more than one key, it only has to be entered once -- it will automatically be tested against all keys.
+
+You also have the option to force a full backup, which will re-send all files on the client to the backup server, if you don't want to deal with multiple keys, by specifying the `--force-full` parameter (`snebu-client backup --force-full ...`).
+
+=== Other security features
+
+If the `snebu` binary is installed with the suid bit set, then the user that owns it (the `snebu` user in the default case) will own the backup catalog database and the data vault.  Other users on the system can be given access to specific features, restricted to the specified hosts by using the `snebu permissions` subcommand.  For example you can give a user access to back up their host, but not restore.  Or you can restrict their ability to expire backups -- either give permission for a host to only expire their own backups, or restrict expire option to a separate locked down account.  This can be valuable to prevent an attacker from deleting all the backups if a host is compromised.
+
+== Reference
+
+=== snebu-client(1) - Front-end client for the snebu backup system
+
+
+----
+snebu-client [ subcommand ] [ options ]
+----
+
+==== Description
+
+snebu-client is the client front end for snebu.
+Use it to easily
+back up a local or remote host, to either local a local storage
+device, or to a remote backup server.  Use it with one of the
+following subcommands.
+
+[discrete]
+==== Sub commands are as follows:
+
+
+*backup* [ *-n* _backupname_ ] [ *-d* _datestamp_ ] [ *-r* _schedule_ ]::
+Initiates a backup.
+
+*restore* [ *-n* _backupname_ ] [ *-d* _datestamp_ ]::
+Initiates a restore.
+
+*listbackups* [ *-n* _backupname_ [ *-d* _datestamp_ ]] [ _file_list_... ]::
+List backed up hosts, backup sets within a host, or files within a backup set.
+
+*validate* *-n* _backupname_ *-d* _datestamp_::
+Validates a given backup.
+
+*help* [ _subcommand_ ]::
+Displays help page of subcommand
+
+==== See Also
+
+*snebu-client-backup*(1),
+*snebu-client-restore*(1),
+*snebu-client-listbackups*(1),
+*snebu-client-validate*(1),
+
+=== snebu-client-backup(1) - Initiates a backup
+
+
+----
+snebu-client backup  [ -n backupname ] [ -d datestamp ] [ -r schedule ] [ file-list ]
+----
+
+==== Description
+
+Initiates a system backup.
+By default, it will back up the local host to a local snebu install.
+You can also use this command to back up to a remote backup server,
+back up a remote host to either a local snebu installation,
+or back up a remote host to another remote backup server,
+depending on which options are chosen.
+
+==== Options
+
+
+*-c*, *--config* _config_file_::
+Name of the configuration file.  Default is
+_/etc/snebu-client.conf_.
+
+*-n*, *--name* _backupname_::
+Name of the backup.  Usually set to the server
+name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date&nbsp;+%s" command.
+
+*-r*, *--retention* _schedule_::
+Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".
+
+*-k*, *--encryption-key* _keyfile_::
+Turns on encryption, and specifies encryption
+key location.  May be specified more than once to
+encrypt with multiple keys.
+* The program "tarcrypt" needs to be present on the
+client for this option.  Keys are generated with
+the command:
+* *tarcrypt genkey -f* _keyfile_ [ *-c* _comment_ ]
+
+*-C*, *--changedir* _path_::
+Changes to the given directory path before backing up.
+
+*--graft* _/path/name/_*=*_/new/name/_::
+Re-write path names beginning with "_/path/name/_"
+to "_/new/name/_"
+
+*-f*, *--force-full*::
+Force a full backup
+
+*--remote-client* _hostname_::
+Host name / IP address of remote host.  Used to
+backup a remote host to local backup server.
+
+*--remote-user* _userid_::
+User ID for remote remote-client.  Defaults to
+root.
+
+*--sudo* _userid_::
+Initial login User ID for remote remote-client.
+This ID uses sudo to switch to remote-user once
+logged in.
+
+*--backup-server* _hostname_::
+Host name / IP address of backup server.  Used to
+backup to a remote server.
+
+*--backup-user* _userid_::
+User ID for remote backup-server.
+
+*--plugin* _scriptname_::
+Specifies an optional plug in script.  Usually
+used to perform database-specific operations
+(such as enabling hot backup mode) for systems
+with a DB installed.
+
+[ _file-list_ ]::
+List of files to backup.
+Overrides default specified in snebu-client.conf file.
+
+==== See Also
+
+*tarcrypt*(1)
+
+=== snebu-client-listbackups(1) - Lists backed up systems, backup sets, and file names
+
+
+----
+snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
+----
+
+==== Description
+
+With no arguments specified, "listbackups" will return a list of all
+systems that are contained in the backup catalog.  Otherwise, when
+specifying the *-n* parameter, a list of backup sets for that host is
+returned.
+
+==== Options
+
+
+*-c*, *--config* _config_file_::
+Name of the configuration file.
+Default is _/etc/snebu-client.conf_.
+
+*-n*, *--name* _backupname_::
+Name of the backup.
+Usually set to the server name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.
+The format is in _time_t_ format,
+sames as the output of the "date&nbsp;+%s" command.
+
+[ _file-list_ ]::
+List of files to restore.  Defaults to all.
+
+=== snebu-client-validate(1) - Compares a backup to file system contents
+
+
+----
+snebu-client validate -n backupname -d datestamp [ file-list ]
+----
+
+==== Description
+
+Compares the contents a given backup session identified by "-n" and "-d"
+parameters, to what is on the client.  Use the "listbackups" subcommand to
+get a list of available
+backup sessions.
+
+==== Options
+
+
+*-c*, *--config* _config_file_::
+Name of the configuration file.  Default is
+_/etc/snebu-client.conf_.
+
+*-n*, *--name* _backupname_::
+Name of the backup.  Usually set to the server
+name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+
+*--decrypt*::
+Turns on decryption.  Requires "tarcrypt" to be
+on the client.  Password(s) will be prompted for
+during restore.
+
+*-C*, *--changedir* _path_::
+Changes to the given directory path before validating
+
+*--remote-client* _hostname_::
+Host name / IP address of remote host.  Used to
+backup a remote host to local backup server.
+
+*--remote-user* _userid_::
+User ID for remote remote-client.  Defaults to
+root.
+
+*--sudo* _userid_::
+Initial login User ID for remote remote-client.
+This ID uses sudo to switch to remote-user once
+logged in.
+
+*--backup-server* _hostname_::
+Host name / IP address of backup server.  Used to
+backup to a remote server.
+
+*--backup-user* _userid_::
+User ID for remote backup-server.
+
+[ _file-list_ ]::
+List of files to validate.  Defaults to all.
+
+==== See Also
+
+*tarcrypt*(1)
+
+=== snebu-client-restore(1) - Restores a backup
+
+
+----
+snebu-client restore [ -n backupname ] [ -d datestamp ] [ file-list ]
+----
+
+==== Description
+
+Restores a given backup session identified by "-n" and "-d"
+parameters.  Use the "listbackups" subcommand to get a list of
+available backup sessions.
+
+==== Options
+
+
+*-c*, *--config* _config_file_::
+Name of the configuration file.  Default is
+_/etc/snebu-client.conf_.
+
+*-n*, *--name* _backupname_::
+Name of the backup.  Usually set to the server
+name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+
+*--decrypt*::
+Turns on decryption.  Requires "tarcrypt" to be
+on the client.  Password(s) will be prompted for
+during restore.
+
+*-C*, *--changedir* _path_::
+Changes to the given directory path before restoring.
+
+*--graft* _/path/name/_*=*_/new/name/_::
+Re-write path names beginning with "_/path/name/_"
+to "_/new/name/_"
+
+*--remote-client* _hostname_::
+Host name / IP address of remote host.  Used to
+backup a remote host to local backup server.
+
+*--remote-user* _userid_::
+User ID for remote remote-client.
+Defaults to root.
+
+*--sudo* _userid_::
+Initial login User ID for remote remote-client.
+This ID uses sudo to switch to remote-user once
+logged in.
+
+*--backup-server* _hostname_::
+Host name / IP address of backup server.  Used to
+backup to a remote server.
+
+*--backup-user* _userid_::
+User ID for remote backup-server.
+
+[ _file-list_ ]::
+List of files to restore.  Defaults to all.
+
+==== See Also
+
+*tarcrypt*(1)
+
+=== snebu-client.conf(5) - Configuration file for snebu-client front end
+
+
+==== Description
+
+The sneub-client.conf is used to specify a number of default parameters for snebu-client, such as default include / exclude specifications.  The contents are read in and executed as shell script commands by snebu-client, so in addition to specifying parameters it is possible to include standard shell scripting logic.  This also means that parameters are specified without a space between the name and value.
+
+[discrete]
+==== Parameters
+
+
+*INCLUDE*=( _path_ ... )::
+Specifies the directories to include in the backup.  By default, all mounted storage-based file systems are included -- that is, file systems that are of type "NODEV" (which includes virtual file systems such as /proc, /sys, anything mounted as "tmpdir") are not included.
++
+Also note that file system boundaries are not crossed automatically.  For example, if "/home" is a separate mount point from "/" then you will need to specify both "/" and "/home".  Mount points are specified explicitly to prevent virtual file systems (i.e., "/proc") from being inadvertently included.
+
+
+*EXCLUDE*=( _path_ ...)::
+Excludes directories that would normally be included with the above INCLUDE parameter.
+
+*EXCLUDEMATCH*=( _filespec_... )::
+Similar to EXCLUDE, however works with files matching a given pattern (processing shell wildcard expansion).  Note that individual parameters need to be quoted to prevent wildcard expansion from matching only files in the current directory.
+
+*backupname*=_name-of-backup_::
+Give the backup the given name instead of defaulting to the hostname.
+
+[discrete]
+==== Server-initiated backup notes
+
+If running backups from a backup server, the parameters will by default apply to all clients.  To target parameters for specific clients, you can wrap them in a shell scripting conditional clause (if-then-else, or case statement).
+
+==== Examples:
+
+To include specified directories:
+
+ INCLUDE=( / /var /var/log /home )
+
+To exclude /tmp and /var/tmp
+
+ EXCLUDE=( /tmp /var/tmp )
+
+To exclude all ".tmp" and ".dbf" files
+
+ EXCLUDEMATCH=( "*.tmp" "*.dbf" )
+
+On a server backing up multiple clients -- to exclude all database ".dbf" files only on the database server "erp-database", include the following:
+
+ if [ "${clientname}" = "erp-database" ]
+ then
+     EXCLUDEMATCH=( "*.dbf" )
+ fi
+
+=== snebu-client-plugin(5) - Defines pre-backup and post-backup scripts to run on a client.
+
+
+==== Description
+
+Specifying the *--plugin* argument when executing a snebu-client backup operation will cause the specified plugin script to be incorporated into the backup process.  The plugin script defines at least two shell script functions -- -fBpluginpre(), which executes prior to the backup, and pluginpost()\R which executes after the backup has completed.
+
+This allows performing operations such as mounting a file system snapshot prior to a backup and removing the snapshot afterwards, or placing a database in hot backup mode at the beginning of the backup.  In the case of backing up a database, often times the backup will need to be completed in multiple stages -- place the DB in hot backup mode, gather a list of database files, back them up, take the DB out of hot backup mode, gather a list of files containing transaction logs that were created during the backup, and finally backing up those files.
+
+To facilitate these type of backup steps, the *pluginpre* function can save the contents of the file include/exclude variables *INCLUDE*, *EXCLUDE*, and *EXCLUDEMATCH*.  Then set the variable *bkrepeat=1*, along with setting any other housekeeping variables used inside the plugin script.  Once it has completed the last stage, it can then restore the include/exclude variables, let the rest of the backup process continue, and then set *bkrepeat=0* to finish off the backup.
+
+[discrete]
+==== Functions and Variables
+
+
+*pluginpre()*::
+Shell script code containing pre-backup procedures.
+
+*pluginpost()*::
+Shell script code containing post-backup procedures.
+
+*bkrepeat*::
+Set bkrepeat=1 to repeat the backup with modifications to the include/exclude list.  Every time the backup repeats, the backup set is amended with the new file set.
+
+*INCLUDE*::
+Shell array containing file include list (see *snebu-client.conf(5)*)
+
+*EXCLUDE*::
+Shell array containing file exclude list (see *snebu-client.conf(5)*)
+
+*EXCLUDEMATCH*::
+Shell array containing file exclude file pattern list (see *snebu-client.conf(5)*)
+
+==== Examples
+
+The following is a template that can be used when backing up a server containing a database.  In this case, the include/exclude list initially includes files to back up the entire server.  So this script does a hot backup of the database first, then adds to the exclude list the dbf files that were backed up initially, and then backs up the rest of the system.
+
+The Since these functions get called at various times from the snebu-client script, the order of the various code fragments can become a bit confusing.  Pay attention to the "(Step x)" labels for the actual execution order in each fragment.
+
+....
+### Snebu backup plugin template for databases
+
+# Initialize an internal housekeeping variable
+# (Step 0)
+dbstage=0
+
+# Define the pre-backup script
+pluginpre() {
+    # Stage 0 => haven't backed up the DB yet
+    if [ "${dbstage}" = 0 ]
+    then
+	# (Step 1)
+	# Save the current include/exclude list
+	OLD_INCLUDE=( "${INCLUDE[@]}" )
+	OLD_EXCLUDE=( "${EXCLUDE[@]}" )
+	OLD_EXCLUDEMATCH=( "${EXCLUDEMATCH[@]}" )
+
+	# Zero out exclude list
+	EXCLUDE=( )
+	EXCLUDEMATCH=( )
+
+	# Set the include list to include database files
+	DBF_FILES=( "$(
+	    # Function to list database filenames to standard output
+	    print_dbf_filenames
+	)" )
+	INCLUDE=( "${DBF_FILES[@]}" )
+
+	# Place DB in hot backup mode
+	begin_db_backup
+
+	# After this, snebu-client-backup takes over and backs up
+	# the above set include list.  Then control jumps to
+	# pluginpost() with dbstage still set to 0
+    elif [ "${dbstage}" = 1 ]
+    then
+	# (Step 3)
+	DBF_LOG_FILES=( "$(
+	    # Function to list archived transaction logs
+	    print_dbf_log_filenames
+	)" )
+	INCLUDE=( "${DBF_LOG_FILES[@]}" )
+
+	# Back to the backup with the new include list, then
+	# off to pluginpost again with dbstage set to 1
+    fi
+}
+
+pluginpost() {
+    if [ "${dbstage}" = 0 ]
+    then
+	# (Step 2)
+	# Take DB out of hot backup mode
+	end_db_backup
+	
+	# Define the next stage, and repeat the backup
+	dbstage=1
+	bkrepeat=1
+
+	# Now control jumps back to pluginpre() with dbstage=1
+    elif [ "${dbstage}" = 1 ]
+    then
+	# (Step 4)
+	# Restore the original include/exclude list, with the
+	# database files added to the exclude list.
+	INCLUDE=( "${OLD_INCLUDE[@]}" )
+	EXCLUDE=( "${OLD_EXCLUDE[@]}" "${DBF_FILES[@]}" 	"${DBF_LOG_FILES[@]}"
+	EXCLUDEMATCH=( "${OLD_EXCLUDEMATCH[@]}" )
+
+	# Define the next stage, and repeat the backup
+	dbstage=2
+	bkrepeat=1
+
+	# Control jumps back to pluginpre(), however no more pre-
+	# processing is needed for stage 2, so the backup begins
+	# again with the original client include/exclude (plus the
+	# above database files added to the exclude).
+    elif [ "${dbstage}" = 2 ]
+    then
+	# (Step 5)
+	# Break the cycle, backup is completed for this host.
+	bkrepeat=0
+    fi
+}
+
+# Also, don't forget to fill in the functions referenced above:
+
+begin_db_backup() {
+    ### Steps to place DB in hot backup mode
+}
+
+end_db_backup() {
+    ### Steps to DB out of hot backup mode
+}
+
+print_dbf_filenames() {
+    ### Output list of dbf file names
+}
+
+print_dbf_log_filenames() {
+    ### Output list of archived transaction log file names
+}
+....
+
+=== snebu(1) - The simple network backup system
+
+
+----
+snebu [ -c | --config filepath ] subcommand [ options ]
+----
+
+==== Description
+
+The _snebu_ command is a backup tool which manages storing data from
+backup sessions on disk-based storage, utilizing a simple database
+for tracking backup sets and meta data.  With the exception of administrative
+sub commands (expire, purge, permissions), it is typically it is called via a
+front end script (such as the included "snebu-client" shell script).
+The subcommands are listed below along with the most common options.
+Details on each command are given in each command's individual man page.
+
+[discrete]
+==== Sub commands are as follows:
+
+
+*newbackup* *-n* _backupname_ *-d* _datestamp_ *-r* _schedule_::
+Initiates a new backup set, taking in the full backup manifest,
+returning a snapshot manifest.
+
+*submitfiles* *-n* _backupname_ *-d* _datestamp_::
+Receives a backup in TAR format that fulfills the snapshot manifest returned from newbackup
+
+*restore* *-n* _backupname_ *-d* _datestamp_ [ _file_list..._ ]::
+Generates a tar file containing the specified backup set.
+
+*listbackups* [ *-n* _backupname_ [ *-d* _datestamp_ ]] [ _file_list..._ ]::
+List backed up hosts, backup sets within a host, or files within a backup set.
+
+*expire* [ *-n* _backupname_ *-d* _datestamp_ ] or [ *-a* _days_ *-r* _schedule_ [ *-n* _hostname_ ]]::
+Expires (removes) the given backup set, or backups matching the given criteria
+
+*purge*::
+Purges backing files from the vault that are part of expired backups
+
+*permissions*::
+[ *-l* | *-a* | *-r* ]
+*-c* _command_
+*-n* _hostname_
+*-u* _user_
+Defines permissions for a given user, when snebu is run in multi-user mode.
+
+*help* [subcommand]::
+Displays help page of subcommand
+
+==== See Also
+
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-purge*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)
+
+=== snebu-newbackup(1) - Submits manifest for a new backup
+
+
+----
+snebu newbackup -n backupname -d datestamp -r schedule
+----
+
+==== Description
+
+The "newbackup" command creates a new backup set, by consuming a
+tab-delimited list of file names (along with associated meta data) to
+include in the backup.  It then compares this list to the backup
+catalog database to determine which files are new, and which ones are
+already contained on the backup media.  A list of new / changed files
+is returned (the snapshot manifest), which can then be passed along to
+"tar" to generate the input for the "submitfiles" subcommand.
+
+==== Options
+
+
+*-n*, *--name* _backupname_::
+Name of the backup.  Usually set to the server
+name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+
+*-r*, *--retention* _schedule_::
+Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".
+
+*-T*, *--files-from* _FILE_::
+Read list of filenames (with meta data) to backup
+from the named file, instead of standard input.
+
+*--null*::
+Inbound backup manifest (*-T*, or standard input)
+is null terminated
+
+*--not-null*::
+Inbound backup manifest (*-T*, or standard input)
+is newline terminated
+
+*--null-output*::
+Generate snapshot manifest with null-terminated lines.
+
+*--not-null-output*::
+Generate snapshot with newline-terminated lines.
+
+*-f*, *--force-full*::
+Force a full backup
+
+*--graft* _/path/name/_*=*_/new/name/_::
+Re-write path names beginning with "_/path/name/_"
+to "_/new/name/_"
+
+*-v*::
+Turn on verbose output.
+
+[discrete]
+==== Input Manifest format
+
+The input manifest contains a list of files to include in this backup set.
+The format is a delimited list of file names and file metadata, with the following fields:
+.BP
+
+
+*1 - FType*::
+Values are one of "f", "d", "l", "c", "b"
+
+*2 - Mode*::
+File mode in octal
+
+*3 - Device*::
+Device number of file system
+
+*4 - Inode*::
+Inode number of file
+
+*5 - UName*::
+User name
+
+*6 - UID*::
+User ID number
+
+*7 - GName*::
+User's Group Name
+
+*8 - GID*::
+User's Group Number
+
+*9 - Size*::
+File size in bytes
+
+*10 - Hash*::
+File Hash (future use, set to "0")
+
+*11 - CTime*::
+File Inode's last change time
+
+*12 - MTime*::
+File Content's last modififed time
+
+*13 - Path*::
+Full file path
+
+*14 - LTarget*::
+Link target
+
+Field 14 (Link Target) is only present if the file type is "l" (symbolic link).
+
+The fields are tab-delimited.  If the "--null" option is specified, then each line is null terminated, with an additional null character delimiting fields 13 and 14.  Otherwise if "--not-null" is specified, fields 13 and 14 are tab delimited, and the path names must have special characters escaped.
+
+The input manifest can be created with the GNU _find_ command, with the following print formatting specification (suitable for the "--null" flag):
+
+.EX
+find [ parameters ] \( -type f -o -type d \ .br
+    -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0" .br
+    -o -type l -printf "%y\t%#m\t%D\t%i\t%u\t%U\t%g\t%G\t%s\t0\t%C@\t%T@\t%p\0%l\0"
+.EE
+
+[discrete]
+==== Returned Snapshot manifest output
+
+The manifest returned is either a null-delimited list of files (if "--null-output" is specified),
+or a newline-delimited list of files with special characters escaped (if "--not-null-output is specified).
+This is the list of files that are required to complete the snapshot (any file that hasn't changed from previous backups will be referenced from the backup server).  This list is suitable for passing into the _tar_ command.
+
+==== See Also
+
+*snebu*(1),
+*snebu-submitfiles*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-purge*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)
+
+=== snebu-submitfiles(1) - Recieves tar file contents to complete a backup
+
+
+----
+snebu submitfiles -n backupname -d datestamp
+----
+
+==== Description
+
+The "submitfiles" sub command is called after running _snebu&nbsp;newbackup_,
+and is used to submit a tar file containing the files from the snapshot manifest returned by _newbackup_.
+
+==== Options
+
+
+*-n*, *--name* _backupname_::
+Name of the backup.
+Typically set to the server name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.
+The format is in time_t format, sames as the output of the "date&nbsp;+%s" command.
+
+*-v*::
+Verbose output
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-purge*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)
+
+=== snebu-listbackups(1) - Lists backed up systems, backup sets, and file names
+
+
+----
+snebu  listbackups [ -n hostname ] [ -d datestamp ]] [ file_list... ]
+----
+
+==== Description
+
+With no arguments specified, _listbackups_ will return a list of all
+systems that are contained in the backup catalog.  Otherwise, when
+specifying the *-n* parameter, a list of backup sets for that host is
+returned.
+
+==== Options
+
+
+*-n*, *--name* _backupname_::
+Name of the backup.  Usually set to the server
+name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+
+[ _file-list_ ]::
+List of files or file pattern(s)
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-restore*(1),
+*snebu-expire*(1),
+*snebu-purge*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)
+
+=== snebu-restore(1) - Generates tar file from backup
+
+
+----
+snebu restore -n backupname -d datestamp [ file_list... ]
+----
+
+==== Description
+
+Generates a tar file containing files from a given backup set.
+Pipe the output of this command into _tar_ to restore files.
+
+==== Options
+
+
+*-n*, *--name* _backupname_::
+Name of the backup, as specified in the _newbackup_ subcommand.
+Typically is the name of the server that was backed up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date&nbsp;+%s" command.
+
+*--graft* _/path/name/_*=*_/new/name/_::
+Re-write path names beginning with "_/path/name/_" to "_/new/name/_".
+This allows you to restore a file to a different location.
+
+[ _file-list_ ]::
+List of files to restore.  Defaults to all.
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-purge*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)
+
+=== snebu-expire(1) - Expire a given backup set or range of backups
+
+
+----
+snebu expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]
+----
+
+==== Description
+
+Removes backup sessions from the snebu backup catalog database.
+A specific backup session can be purged by providing the *-n* and *-d*
+options, or all backups that are part of a given retention schedule
+(specified with *-r*, and optionally from a given host, with the *-n*
+option) that are older than a given number of days (*-a*) are removed.
+
+==== Options
+
+
+*-n*, *--name* _backupname_::
+Name of the backup.  Usually set to the server
+name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+
+*-r*, *--retention* _schedule_::
+Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".
+
+*-a*, *--age* _#days_::
+Expire backups older than #days.
+
+*-m*, *--min-keep* _#backups_::
+When expiring with the *-a* flag, keep at least
+this many of the most recent backups for a given
+hostname/retention schedule.
+Defaults to 3 days.
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-purge*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)
+
+=== snebu-purge(1) - Remove backing files from expired backups
+
+
+----
+snebu purge
+----
+
+==== Description
+
+Permanently removes files from disk storage that are no longer
+referenced by any backups. Run this command after running "snebu expire".
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)
+
+=== snebu-permissions(1) - Set permissions for Snebu when used in multi-user mode
+
+
+----
+snebu permissions [ -l | -a | -r ] -c command -n hostname -u user
+----
+
+==== Description
+
+
+The _permissions_ command lists, adds, or removes user permissions.::
+These permissions are applied when the "snebu" command is installed setuid, and run
+by a OS different user.
+
+==== Options
+
+
+*-l*, *--list*::
+Lists all installed permissions.  If the *-c*, *-n*, or
+*-u* options are given, this list is restricted to
+those sub commands, hostnames, or users respectively.
+
+*-a*, *--add*::
+Adds permissions for the specified sub command [-c],
+hostname [-n], and user [-u].
+
+*-r*, *--remove*::
+Removes permissions for the specified sub command
+[-c], hostname [-n], and user [-u].
+
+*-c*, *--command* _sub command_::
+The sub command that this permission command applies to.
+
+*-n*, *--name* _hostname_::
+The host name that this permission command applies to.
+
+*-u*, *--user* _username_::
+The user that this permission command applies to.
+
+Available subcomands that work with permissions are:
+
+*backup* (covers both newbackup and submitfiles functions)
+
+*restore*
+
+*listbackups*
+
+*expire*
+
+*purge*
+
+*permissions*
+
+Note that in the case of functions that aren't host specific (such as _permissions_) or    affect all hosts (_snebu purge_, or _snebu expire -a ..._), users will need to be granted permission to all hosts by specifying *-h '{asterisk}'* in order to be granted access to those specific functions).
+
+To grant permissions, this command must be run as the user that snebu is
+installed under, or the user must be granted access to the _permissions_
+sub command
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-purge*(1),
+*snebu-client*(1)
+
+=== tarcrypt(1) - Compresses and encrypts file data in TAR files
+
+
+----
+tarcrypt encrypt -k keyfile
+ tarcrypt decrypt
+ tarcrypt genkey -f keyfile -c comment
+----
+
+==== Description
+
+The _tarcrypt_ command acts as a filter for the _tar_ command.
+In encryption mode, it will compress and encrypt the data portion of TAR files
+while leaving header metadata intact.  This allows the TAR file to be sent to
+a backup system that expects the Unix TAR format as input.
+
+The key file that is generated by the _genkey_ function contains an encrypted
+(passphrase protected) RSA private key, public key, and HMAC key used for verification.
+The encrypted private key, public key, and a hash of the HMAC key are stored in
+the TAR file's global header.
+
+Each individual file is encrypted with a random AES-256 key, which is in turn encrypted
+using the RSA public key.  The file contents is also signed using the HMAC key,
+and the signature for the file is attached to the file header.
+
+During a decrypt operation, the user is prompted for the passphrase protecting the private key,
+which is used to decrypt the AES key stored with each file.
+The passphrase, along with the public key hash, are used to re-create the secret HMAC key
+in order to validate each file contents as it is begin decrypted.
+
+==== Options
+
+
+*encrypt*::
+Reads the tar command output on standard input, outputting an encrypted tar file.
+    *Parameters*:
+ ** *-k*, *--keyfile* _keyfilename_ +
+Specifies the key file (generated by the _genkey_ subcommand)
+
+Multiple key files may be specified by repeating this parameter.
+
+
+*decrypt*::
+Reads an encrypted tar file on standard input, prompts for the passphrase,
+decrypts and verifies contents outputting a standard tar file.
+
+*genkey*::
+Generates a key file used by the _encrypt_ function.
+    *Parameters:*
+ ** *-f*, *--filename* _keyfilename_ +
+Specifies the filename to write the keyfile out to.
+ ** [ *-c*, *--comment* "_comment text_" ] +
+Specifies a comment to include in the keyfile.
+
+==== Security
+
+Public Key cryptography splits up a key into two parts -- an encryption (public) key, and a decryption (private) key.
+The public key isn't considered sensitive -- it is designed so that one party can send encrypted data to another party,
+by using the other party's public key.  The private key, however, needs to be kept confidential by the receiving party.
+Typically the private key is stored encrypted with a symmetric algorithm (one where the same password is used to both encrypt
+and decrypt the data) to provide additional security.
+
+In the case of tarcrypt, the sending and receiving party is the same entity,
+using a third party (the backup server) to store the encrypted data.
+If the backup is needed, chances are that the keyfile used to encrypt the backup is lost also.
+Therefore, both the public key (for reference), and an encrypted copy of the private key are stored
+in the generated encrypted tar file's global header.
+
+For the purpose of file confidentiality the keyfile isn't considered sensitive,
+as the private key used to decrypt the data is stored in encrypted form.
+However, the keyfile also contains a secret HMAC key used to authenticate the contents of the encrypted
+tar file.  Therefore if authenticity is needed, then the keyfile must be kept confidential
+(i.e., stored with appropriate file system permissions to be accessed only by the backup process).
+
+==== Notes
+
+The tarcrypt file format is an extension of the PAX TAR format, with custom values in the PAX header.
+If used in conjunction with a backup tool which expects the TAR format as input,
+then the backup tool may need some modifications in order to handle the extensions.
+If the tool stores the tar file intact, and if it doesn't choke on the custom header fields,
+then no modifications should be necessary.  However if the backup system parses out the TAR file format
+(i.e., it if uses it as a serialization format), then it would need to be modified to store the encrypted
+header info along with the rest of the metadata, and re-generate the appropriate global and individual
+file headers.
