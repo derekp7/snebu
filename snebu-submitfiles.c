@@ -769,8 +769,10 @@ int submitfiles2(int out_h)
 		}
 		if (stat(targetdir, &tmpfstat) != 0) {
 		    if (mkdir(targetdir, 0770) != 0) {
-			fprintf(stderr, "Error creating directory %s\n", targetdir);
-			exit(1);
+			if (stat(targetdir, &tmpfstat) != 0) {
+			    fprintf(stderr, "Error creating directory %s\n", targetdir);
+			    exit(1);
+			}
 		    }
 		}
 		if (stat(targetpath, &tmpfstat) != 0 || utime(targetpath, NULL) != 0) {
