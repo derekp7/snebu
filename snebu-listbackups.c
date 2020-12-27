@@ -9,9 +9,11 @@
 extern struct {
     char *vault;
     char *meta;
+    int hash;
 } config;
 
 extern sqlite3 *bkcatalog;
+extern char *SHN;
 
 int listbackups(int argc, char **argv);
 void usage();
@@ -235,10 +237,10 @@ int listbackups(int argc, char **argv)
 	sqlite3_prepare_v2(bkcatalog,
 	    (sqlstmt = sqlite3_mprintf("select distinct serial, ftype, \n"
 		"permission, device_id, inode, user_name, user_id, \n"
-		"group_name, group_id, size, sha1, cdatestamp, datestamp, \n"
+		"group_name, group_id, size, %s, cdatestamp, datestamp, \n"
 		"filename, extdata \n"
 		"from file_entities_bd where name = '%q' and serial >= %d "
-		"and serial <= %d%s", bkname, bdatestamp, edatestamp, filespec != 0 ? filespec : "")),
+		"and serial <= %d%s", SHN, bkname, bdatestamp, edatestamp, filespec != 0 ? filespec : "")),
 		-1, &sqlres, 0);
 
 	if (bdatestamp == edatestamp)
@@ -308,10 +310,10 @@ int listbackups(int argc, char **argv)
 	sqlite3_prepare_v2(bkcatalog,
 	    (sqlstmt = sqlite3_mprintf("select distinct serial, ftype, \n"
 		"permission, device_id, inode, user_name, user_id, \n"
-		"group_name, group_id, size, sha1, cdatestamp, datestamp, \n"
+		"group_name, group_id, size, %s, cdatestamp, datestamp, \n"
 		"filename, extdata \n"
 		"from file_entities_bd where name = '%q' and serial >= %d "
-		"and serial <= %d%s", bkname, bdatestamp, edatestamp, filespec != 0 ? filespec : "")),
+		"and serial <= %d%s", SHN, bkname, bdatestamp, edatestamp, filespec != 0 ? filespec : "")),
 		-1, &sqlres, 0);
 
 	if (bdatestamp == edatestamp) {

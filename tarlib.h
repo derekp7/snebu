@@ -102,11 +102,15 @@ struct lzop_file {
 };
 #define F_H_FILTER      0x00000800L
 
-struct sha1_file {
+struct sha_file {
     size_t (*c_fwrite)();
     size_t (*c_fread)();
     void *c_handle;
-    SHA_CTX cfsha1ctl;
+    int hash;
+    union {
+	SHA_CTX cfshactl;
+	SHA256_CTX cfsha256ctl;
+    } u;
 };
 
 struct hmac_file {
@@ -229,9 +233,9 @@ size_t rsa_read(void *buf, size_t sz, size_t count, struct rsa_file *rcf);
 size_t rsa_write(void *buf, size_t sz, size_t count, struct rsa_file *rcf);
 int rsa_file_finalize(struct rsa_file *rcf);
 
-struct sha1_file *sha1_file_init_w(size_t (*c_ffunc)(), void *c_handle);
-size_t sha1_file_write(void *buf, size_t sz, size_t count, struct sha1_file *s1f);
-int sha1_finalize_w(struct sha1_file *s1f, unsigned char *cfsha1);
+struct sha_file *sha_file_init_w(size_t (*c_ffunc)(), void *c_handle, int hash);
+size_t sha_file_write(void *buf, size_t sz, size_t count, struct sha_file *s1f);
+int sha_finalize_w(struct sha_file *s1f, unsigned char *cfsha);
 
 struct hmac_file *hmac_file_init_w(size_t (*c_ffunc)(), void *c_handle, unsigned char **key, int *keysz, int nk);
 size_t hmac_file_write(void *buf, size_t sz, size_t count, struct hmac_file *hmacf);

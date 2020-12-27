@@ -2185,28 +2185,50 @@ int c_fread_sparsedata(size_t (*c_ffunc)(), void *c_handle, struct filespec *fs)
     return(sparsetext_leni);
 }
 
-struct sha1_file *sha1_file_init_w(size_t (*c_ffunc)(), void *c_handle)
+struct sha_file *sha_file_init_w(size_t (*c_ffunc)(), void *c_handle, int hash)
 {
-    struct sha1_file *s1f;
+    struct sha_file *s1f;
 
-    s1f = malloc(sizeof(struct sha1_file));
+    s1f = malloc(sizeof(struct sha_file));
     s1f->c_fwrite = c_ffunc;
     s1f->c_handle = c_handle;
-    SHA1_Init(&(s1f->cfsha1ctl));
+    s1f->hash = hash;
+    if (hash == 1)
+	SHA1_Init(&(s1f->u.cfshactl));
+    else if (hash == 2)
+	SHA256_Init(&(s1f->u.cfsha256ctl));
+    else
+	return 0;
     return(s1f);
 }
 
-size_t sha1_file_write(void *buf, size_t sz, size_t count, struct sha1_file *s1f)
+size_t sha_file_write(void *buf, size_t sz, size_t count, struct sha_file *s1f)
 {
     size_t c;
     c = s1f->c_fwrite(buf, sz, count, s1f->c_handle);
-    SHA1_Update(&(s1f->cfsha1ctl), buf, c);
+    if (s1f->hash == 1)
+	SHA1_Update(&(s1f->u.cfshactl), buf, c);
+    else if (s1f->hash == 2)
+	SHA256_Update(&(s1f->u.cfsha256ctl), buf, c);
+    else { // This should never occure, since this error shoudl be caught in init function
+	fprintf(stderr, "Unexpected error -- hash type specified as %d\n", s1f->hash);
+	exit(1);
+    }
+
+
     return(c);
 }
 
-int sha1_finalize_w(struct sha1_file *s1f, unsigned char *cfsha1)
+int sha_finalize_w(struct sha_file *s1f, unsigned char *cfsha)
 {
-    SHA1_Final(cfsha1, &(s1f->cfsha1ctl));
+    if (s1f->hash == 1)
+	SHA1_Final(cfsha, &(s1f->u.cfshactl));
+    else if (s1f->hash == 2)
+	SHA256_Final(cfsha, &(s1f->u.cfsha256ctl));
+    else { // This should never occure, since this error shoudl be caught in init function
+	fprintf(stderr, "Unexpected error -- hash type specified as %d\n", s1f->hash);
+	exit(1);
+    }
     free(s1f);
     return(0);
 }

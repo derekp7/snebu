@@ -9,9 +9,12 @@
 extern struct {
     char *vault;
     char *meta;
+    int hash;
 } config;
 
 extern sqlite3 *bkcatalog;
+
+extern char *SHN;
 
 int newbackup(int argc, char **argv);
 int help(char *topic);
@@ -198,7 +201,7 @@ int newbackup(int argc, char **argv)
 	"    group_name    char,  \n"
 	"    group_id      integer,  \n"
 	"    size          integer,  \n"
-	"    sha1           char,  \n"
+	"    hash           char,  \n"
 	"    cdatestamp    integer,  \n"
 	"    datestamp     integer,  \n"
 	"    filename      char,  \n"
@@ -215,7 +218,7 @@ int newbackup(int argc, char **argv)
 	"    group_name,  \n"
 	"    group_id,  \n"
 	"    size,  \n"
-	"    sha1,  \n"
+	"    hash,  \n"
 	"    cdatestamp,  \n"
 	"    datestamp,  \n"
 	"    filename,  \n"
@@ -330,7 +333,7 @@ int newbackup(int argc, char **argv)
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "insert or ignore into inbound_file_entities "
 	    "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
-	    "group_id, size, sha1, cdatestamp, datestamp, filename, extdata, infilename)  "
+	    "group_id, size, hash, cdatestamp, datestamp, filename, extdata, infilename)  "
 	    "values ('%d', '%c', '%4.4o', '%q', '%q', '%q', '%d', '%q', '%d', '%llu', '%q', '%d', '%d', '%q%q', '%q', '%q')",
 	    bkid, fs.ftype, fs.mode, fs.devid, fs.inode, fs.auid, fs.nuid, fs.agid, fs.ngid,
 	    fs.filesize, fs.sha1, fs.cmodtime, fs.modtime, pathsub, fs.filename + pathskip, fs.linktarget, fs.filename)), 0, 0, &sqlerr);
@@ -397,9 +400,9 @@ int newbackup(int argc, char **argv)
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	    "create temporary table thishost_file_details as "
 	    "select t.file_id, ftype, permission, device_id, inode, user_name, user_id, "
-	    "group_name, group_id, size, sha1, cdatestamp, datestamp, "
+	    "group_name, group_id, size, %s hash, cdatestamp, datestamp, "
 	    "filename, extdata from thishost_file_ids t join file_entities f "
-	    "on t.file_id = f.file_id")), 0, 0, &sqlerr);
+	    "on t.file_id = f.file_id", SHN)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -407,7 +410,7 @@ int newbackup(int argc, char **argv)
 	sqlite3_free(sqlstmt);
 
 	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	    "create index thishost_file_details_i1 on thishost_file_details (sha1)")), 0, 0, &sqlerr);
+	    "create index thishost_file_details_i1 on thishost_file_details (hash)")), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);
@@ -443,9 +446,9 @@ int newbackup(int argc, char **argv)
 	    "and i.filename = f.filename and ((i.ftype = '0' and (f.ftype = 'S' or f.ftype = 'E'))  "
 	    "or i.extdata = f.extdata)  "
 	    "left join diskfiles d "
-	    "on f.sha1 = d.sha1  where "
+	    "on f.hash = d.%s  where "
 	    "(f.file_id is null or "
-	    "(d.sha1 is null and (i.ftype = '0' or i.ftype = 'S' or i.ftype = 'E')))", bkid)), 0, 0, &sqlerr);
+	    "(d.%s is null and (i.ftype = '0' or i.ftype = 'S' or i.ftype = 'E')))", bkid, SHN, SHN)), 0, 0, &sqlerr);
 	if (sqlerr != 0) {
 	    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	    sqlite3_free(sqlerr);

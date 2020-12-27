@@ -33,7 +33,9 @@ extern sqlite3 *bkcatalog;
 extern struct {
     char *vault;
     char *meta;
+    int hash;
 } config;
+extern char *SHN;
 char *EncodeBlock2(char *out, char *in, int m, int *n);
 char *DecodeBlock2(char *out, char *in, int m, int *n);
 double ftime();
@@ -134,6 +136,9 @@ int submitfiles(int argc, char **argv)
         usage();
         return(1);
     }
+    /* needed to populate config that slubmitfiles2 needs in separate process */
+    opendb(bkcatalog);
+    sqlite3_close(bkcatalog);
 
     pipebuf(&in, &out);
     submitfiles2(in);
@@ -191,9 +196,9 @@ int submitfiles(int argc, char **argv)
     sqlstmt = sqlite3_mprintf(
         "insert or replace into received_file_entities_t  "
         "(backupset_id, ftype, permission, user_name, user_id,  "
-        "group_name, group_id, size, sha1, datestamp, filename, extdata, xheader)  "
+        "group_name, group_id, size, hash, datestamp, filename, extdata, xheader)  "
         "values (@bkid, @ftype, @mode, @auid, @nuid, @agid,  "
-        "@ngid, @filesize, @sha1, @modtime, @filename, @linktarget, @xheader)");
+        "@ngid, @filesize, @hash, @modtime, @filename, @linktarget, @xheader)");
 
     sqlite3_prepare_v2(bkcatalog, sqlstmt, -1, &inbfrec, 0);
     sqlite3_free(sqlstmt);
@@ -337,7 +342,7 @@ int submitfiles(int argc, char **argv)
 	    tot_files++;
 
             sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-                "insert or ignore into diskfiles_t (sha1)  "
+                "insert or ignore into diskfiles_t (hash)  "
                 "values ('%q')", mdfields[8])), 0, 0, &sqlerr);
             if (sqlerr != 0) {
                 fprintf(stderr, "%s\n", sqlerr);
@@ -452,16 +457,18 @@ int submitfiles2(int out_h)
     char *esclname = NULL;
     char *escxheader = NULL;
     struct lzop_file *lzf;
-    struct sha1_file *s1f;
+    struct sha_file *s1f;
     unsigned char cfsha1[SHA_DIGEST_LENGTH];
     unsigned char cfsha1x[SHA_DIGEST_LENGTH * 2 + 1];
+    unsigned char cfsha2[SHA256_DIGEST_LENGTH];
+    unsigned char cfsha2x[SHA256_DIGEST_LENGTH * 2 + 1];
+    unsigned char *cfshax;
     int use_hmac = 0;
     unsigned char hmac[EVP_MAX_MD_SIZE * 2 + 1];
     int wrote_file = 0;
     pid_t child;
     int numkeys = 0;
     char paxhdr_varstring[256];
-
 
     if ((child = fork()) == 0) {
 	FILE *out = fdopen(out_h, "w");
@@ -671,11 +678,18 @@ int submitfiles2(int out_h)
 			free(tmphash);
 		    }
 		}
-		s1f = sha1_file_init_w(fwrite, curfile);
-		c_fwrite = sha1_file_write;
+		if (config.hash == 1)
+		    s1f = sha_file_init_w(fwrite, curfile, 1);
+		else if (config.hash == 2)
+		    s1f = sha_file_init_w(fwrite, curfile, 2);
+		else {
+		    fprintf(stderr, "Couldn't determine hash type %d\n", config.hash);
+		    exit(1);
+		}
+		c_fwrite = sha_file_write;
 		c_handle = s1f;
 		if (use_hmac == 0) {
-		    lzf = lzop_init_w(sha1_file_write, s1f);
+		    lzf = lzop_init_w(sha_file_write, s1f);
 		    c_fwrite = lzop_write;
 		    c_handle = lzf;
 		}
@@ -701,8 +715,16 @@ int submitfiles2(int out_h)
 		}
 		if (use_hmac == 0)
 		    lzop_finalize_w(lzf);
-		sha1_finalize_w(s1f, cfsha1);
-		encode_block_16(cfsha1x, cfsha1, SHA_DIGEST_LENGTH);
+		if (config.hash == 1) {
+		    sha_finalize_w(s1f, cfsha1);
+		    encode_block_16(cfsha1x, cfsha1, SHA_DIGEST_LENGTH);
+		    cfshax = cfsha1x;
+		} else if (config.hash == 2) {
+		    sha_finalize_w(s1f, cfsha2);
+		    encode_block_16(cfsha2x, cfsha2, SHA256_DIGEST_LENGTH);
+		    cfshax = cfsha2x;
+		    cfsha2x[40] = '\0';
+		}
 		if (fclose(curfile) == 0)
 		    wrote_file = 1;
 		else {
@@ -730,7 +752,7 @@ int submitfiles2(int out_h)
 
 		fprintf(out, "1\t%c\t%4.4o\t%s\t%d\t%s\t%d\t%lld\t%s\t%lu\t%s\t%s\t%d\t%s",
 		    is_ciphered == 1 ? 'E' : fs.n_sparsedata > 0 ? 'S' : fs.ftype, fs.mode,
-		    fs.auid, fs.nuid, fs.agid, fs.ngid, filesize, use_hmac == 0 ? cfsha1x : hmac,
+		    fs.auid, fs.nuid, fs.agid, fs.ngid, filesize, use_hmac == 0 ? cfshax : hmac,
 		    fs.modtime, stresc(fs.filename, &escfname),
 		    stresc(fs.linktarget == 0 ? "" : fs.linktarget, &esclname), fs.xheaderlen,
 		    fs.xheaderlen == 0 ? "" : EncodeBlock2(escxheader, fs.xheader, fs.xheaderlen, NULL)
@@ -756,10 +778,10 @@ int submitfiles2(int out_h)
 
 	    if (wrote_file == 1) {
 		if (use_hmac == 0) {
-		    strncpy(destdir2, (char *) cfsha1x, 2);
+		    strncpy(destdir2, (char *) cfshax, 2);
 		    destdir2[2] = '\0';
 		    snprintf(targetdir, 1024, "%s/%s", destdir, destdir2);
-		    snprintf(targetpath, 1024, "%s/%s/%s.lzo", destdir, destdir2, cfsha1x + 2);
+		    snprintf(targetpath, 1024, "%s/%s/%s.lzo", destdir, destdir2, cfshax + 2);
 		}
 		else {
 		    strncpy(destdir2, (char *) hmac, 2);
@@ -1332,11 +1354,11 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities_t "
 	"(file_id, ftype, permission, device_id, inode, "
-        "user_name, user_id, group_name, group_id, size, sha1, cdatestamp, "
+        "user_name, user_id, group_name, group_id, size, hash, cdatestamp, "
 	"datestamp, filename, extdata, xheader) "
 	"select r.file_id, r.ftype, r.permission, n.device_id, n.inode, "
 	"r.user_name, r.user_id, r.group_name, r.group_id, r.size, "
-	"r.sha1, n.cdatestamp, r.datestamp, n.filename, r.extdata, r.xheader "
+	"r.hash, n.cdatestamp, r.datestamp, n.filename, r.extdata, r.xheader "
 	"from received_file_entities_t r "
 	"join needed_file_entities n "
 	"on r.filename = n.infilename "
@@ -1356,12 +1378,12 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities "
 	"(ftype, permission, device_id, inode, "
-	"user_name, user_id, group_name, group_id, size, sha1, cdatestamp, "
+	"user_name, user_id, group_name, group_id, size, %s, cdatestamp, "
 	"datestamp, filename, extdata, xheader) "
 	"select ftype, permission, device_id, inode, "
-	"user_name, user_id, group_name, group_id, size, sha1, cdatestamp, "
+	"user_name, user_id, group_name, group_id, size, hash, cdatestamp, "
 	"datestamp, filename, extdata, xheader "
-	"from file_entities_t"
+	"from file_entities_t", SHN
     )), 0, 0, &sqlerr);
     if (sqlerr != 0) {
         fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
@@ -1385,10 +1407,10 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	"and f.device_id = t.device_id and f.inode = t.inode "
 	"and f.user_name = t.user_name and f.user_id = t.user_id "
 	"and f.group_name = t.group_name and f.group_id = t.group_id "
-	"and f.size = t.size and f.sha1 = t.sha1 and f.cdatestamp = t.cdatestamp "
+	"and f.size = t.size and f.%s = t.hash and f.cdatestamp = t.cdatestamp "
 	"and f.datestamp = t.datestamp and f.filename = t.filename "
 	"and f.extdata = t.extdata and f.xheader = t.xheader "
-	"and f.cdatestamp = t.cdatestamp; "
+	"and f.cdatestamp = t.cdatestamp; ", SHN
     )), 0, 0, &sqlerr);
 
     if (sqlerr != 0) {
@@ -1421,10 +1443,10 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	"and f.device_id = t.device_id and f.inode = t.inode "
 	"and f.user_name = t.user_name and f.user_id = t.user_id "
 	"and f.group_name = t.group_name and f.group_id = t.group_id "
-	"and f.size = t.size and f.sha1 = t.sha1 and f.cdatestamp = t.cdatestamp "
+	"and f.size = t.size and f.%s = t.hash and f.cdatestamp = t.cdatestamp "
 	"and f.datestamp = t.datestamp and f.filename = t.filename "
 	"and f.extdata = t.extdata and f.xheader = t.xheader "
-	"and f.cdatestamp = t.cdatestamp ", bkid
+	"and f.cdatestamp = t.cdatestamp ", bkid, SHN
     )), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
@@ -1442,18 +1464,18 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities_t "
 	"(file_id, ftype, permission, device_id, inode, "
-        "user_name, user_id, group_name, group_id, size, sha1, cdatestamp, "
+        "user_name, user_id, group_name, group_id, size, hash, cdatestamp, "
 	"datestamp, filename, extdata, xheader) "
 	"select f.file_id, f.ftype, f.permission, f.device_id, f.inode, "
 	"f.user_name, f.user_id, f.group_name, f.group_id, f.size, "
-	"f.sha1, f.cdatestamp, f.datestamp, r.filename, f.extdata, f.xheader "
+	"f.%s, f.cdatestamp, f.datestamp, r.filename, f.extdata, f.xheader "
 	"from file_entities f "
 	"join backupset_detail d "
 	"on f.file_id = d.file_id "
 	"join received_file_entities_t r "
 	"on r.extdata = f.filename "
 	"where r.ftype = 1 "
-	"and d.backupset_id = %d", bkid
+	"and d.backupset_id = %d", SHN, bkid
     )), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
@@ -1464,12 +1486,12 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert or ignore into file_entities "
 	"(ftype, permission, device_id, inode, "
-	"user_name, user_id, group_name, group_id, size, sha1, cdatestamp, "
+	"user_name, user_id, group_name, group_id, size, %s, cdatestamp, "
 	"datestamp, filename, extdata, xheader) "
 	"select ftype, permission, device_id, inode, "
-	"user_name, user_id, group_name, group_id, size, sha1, cdatestamp, "
+	"user_name, user_id, group_name, group_id, size, hash, cdatestamp, "
 	"datestamp, filename, extdata, xheader "
-	"from file_entities_t"
+	"from file_entities_t", SHN
     )), 0, 0, &sqlerr);
     if (sqlerr != 0) {
         fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
@@ -1491,10 +1513,10 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	"and f.device_id = t.device_id and f.inode = t.inode "
 	"and f.user_name = t.user_name and f.user_id = t.user_id "
 	"and f.group_name = t.group_name and f.group_id = t.group_id "
-	"and f.size = t.size and f.sha1 = t.sha1 and f.cdatestamp = t.cdatestamp "
+	"and f.size = t.size and f.%s = t.hash and f.cdatestamp = t.cdatestamp "
 	"and f.datestamp = t.datestamp and f.filename = t.filename "
 	"and f.extdata = t.extdata and f.xheader = t.xheader "
-	"and f.cdatestamp = t.cdatestamp; "
+	"and f.cdatestamp = t.cdatestamp; ", SHN
     )), 0, 0, &sqlerr);
     sqlite3_free(sqlstmt);
 
@@ -1509,10 +1531,10 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 	"and f.device_id = t.device_id and f.inode = t.inode "
 	"and f.user_name = t.user_name and f.user_id = t.user_id "
 	"and f.group_name = t.group_name and f.group_id = t.group_id "
-	"and f.size = t.size and f.sha1 = t.sha1 and f.cdatestamp = t.cdatestamp "
+	"and f.size = t.size and f.%s = t.hash and f.cdatestamp = t.cdatestamp "
 	"and f.datestamp = t.datestamp and f.filename = t.filename "
 	"and f.extdata = t.extdata and f.xheader = t.xheader "
-	"and f.cdatestamp = t.cdatestamp ", bkid
+	"and f.cdatestamp = t.cdatestamp ", bkid, SHN
     )), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s %s\n", sqlerr, sqlstmt);
@@ -1538,6 +1560,7 @@ int flush_received_files(sqlite3 *bkcatalog, int verbose, int bkid,
 int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 {
     char *sqlerr;
+    char *sqlstmt = NULL;
 
     sqlite3_exec(bkcatalog,
         "create temporary table if not exists received_file_entities_t (  \n"
@@ -1550,7 +1573,7 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
         "    group_name    char,  \n"
         "    group_id      integer,  \n"
         "    size          integer,  \n"
-        "    sha1          char,  \n"
+        "    hash          char,  \n"
         "    datestamp     integer,  \n"
         "    filename      char,  \n"
         "    extdata       char default '',  \n"
@@ -1564,7 +1587,7 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
             "group_name,  \n"
             "group_id,  \n"
             "size,  \n"
-            "sha1,  \n"
+            "hash,  \n"
             "datestamp,  \n"
             "filename,  \n"
             "extdata,  \n"
@@ -1574,13 +1597,14 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 	sqlite3_free(sqlerr);
     }
 
-    sqlite3_exec(bkcatalog,
+    sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
 	"create temporary table if not exists file_entities_t "
-	"as select * from file_entities where 0", 0, 0, &sqlerr);
+	"as select file_id, ftype, permission, device_id, inode, user_name, user_id, group_name, group_id, size, %s hash, cdatestamp, datestamp, filename, extdata, xheader from file_entities where 0", SHN), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n", sqlerr);
 	sqlite3_free(sqlerr);
     }
+    sqlite3_free(sqlstmt);
 
     sqlite3_exec(bkcatalog,
     "create index if not exists received_file_entities_t_i1 on received_file_entities_t (  \n"
@@ -1596,13 +1620,14 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid)
 	fprintf(stderr, "%s\n\n\n",sqlerr);
 	sqlite3_free(sqlerr);
     }
-    sqlite3_exec(bkcatalog,
+    sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
 	"create temporary table if not exists diskfiles_t "
-	"as select * from diskfiles where 0", 0, 0, &sqlerr);
+	"as select %s hash from diskfiles where 0", SHN), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n", sqlerr);
 	sqlite3_free(sqlerr);
     }
+    sqlite3_free(sqlstmt);
 	
     return(0);
 }

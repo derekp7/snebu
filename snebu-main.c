@@ -41,7 +41,12 @@ struct subfuncs{
 struct {
     char *vault;
     char *meta;
+    int hash;
 } config;
+
+char *SHN;
+char *SHN_sha1 = "sha1";
+char *SHN_sha2 = "sha2";
 
 int main(int argc, char **argv)
 {
@@ -210,6 +215,19 @@ sqlite3 *opendb()
     sqlite3_exec(bkcatalog, "PRAGMA journal_mode = WAL", 0, 0, 0);
     free(bkcatalogp);
     x = initdb(bkcatalog);
+    if (sqlite3_table_column_metadata(bkcatalog, NULL, "file_entities", "sha1", NULL, NULL, NULL, NULL, NULL) == 0) {
+	config.hash=1;
+	SHN = SHN_sha1;
+    }
+    else if (sqlite3_table_column_metadata(bkcatalog, NULL, "file_entities", "sha2", NULL, NULL, NULL, NULL, NULL) == 0) {
+	config.hash=2;
+	SHN = SHN_sha2;
+    }
+    else {
+	fprintf(stderr, "Error in database detecting hash algorithm\n");
+	exit(1);
+    }
+
     return(bkcatalog);
 
 }
@@ -250,9 +268,9 @@ int initdb(sqlite3 *bkcatalog)
 
     err = sqlite3_exec(bkcatalog,
 	"create table if not exists diskfiles ( \n"
-	"    sha1          char, \n"
+	"    sha2          char, \n"
 	"constraint diskfilesc1 unique ( \n"
-	"    sha1))", 0, 0, &sqlerr);
+	"    sha2))", 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "Create table diskfiles: %s\n", sqlerr);
 	sqlite3_free(sqlerr);
@@ -272,7 +290,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    group_name    char,  \n"
 	"    group_id      integer,  \n"
 	"    size          integer,  \n"
-	"    sha1           char,  \n"
+	"    sha2           char,  \n"
 	"    cdatestamp    integer,  \n"
 	"    datestamp     integer,  \n"
 	"    filename      char,  \n"
@@ -288,7 +306,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    group_name,  \n"
 	"    group_id,  \n"
 	"    size,  \n"
-	"    sha1,  \n"
+	"    sha2,  \n"
 	"    cdatestamp,  \n"
 	"    datestamp,  \n"
 	"    filename,  \n"
@@ -312,7 +330,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    group_name    char,  \n"
 	"    group_id      integer,  \n"
 	"    size          integer,  \n"
-	"    sha1          char,  \n"
+	"    sha2          char,  \n"
 	"    datestamp     integer,  \n"
 	"    filename      char,  \n"
 	"    extdata       char default '',  \n"
@@ -327,7 +345,7 @@ int initdb(sqlite3 *bkcatalog)
 	    "group_name,  \n"
 	    "group_id,  \n"
 	    "size,  \n"
-	    "sha1,  \n"
+	    "sha2,  \n"
 	    "datestamp,  \n"
 	    "filename,  \n"
 	    "extdata,  \n"
@@ -355,10 +373,10 @@ int initdb(sqlite3 *bkcatalog)
     err = sqlite3_exec(bkcatalog,
 	"create table if not exists purgelist (  \n"
 	    "datestamp      integer,  \n"
-	    "sha1            char,  \n"
+	    "sha2            char,  \n"
 	"unique (  \n"
 	    "datestamp,  \n"
-	    "sha1 ))", 0, 0, 0);
+	    "sha2 ))", 0, 0, 0);
 
     err = sqlite3_exec(bkcatalog,
 	    "create table if not exists backupsets (  \n"
@@ -455,7 +473,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    file_entities_bd \n"
 	"as select \n"
 	"    f.file_id, ftype, permission, device_id, inode, user_name, \n"
-	"    user_id, group_name, group_id, size, sha1, cdatestamp, \n"
+	"    user_id, group_name, group_id, size, sha2, cdatestamp, \n"
 	"    datestamp, filename, extdata, xheader, b.backupset_id, \n"
 	"    name, retention, serial \n"
 	"from file_entities f join backupset_detail d \n"
@@ -490,7 +508,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    filename, file_id)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
 	"    create index if not exists file_entitiesi2 on file_entities (  \n"
-	"    sha1)", 0, 0, 0);
+	"    sha2)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
 	"    create index if not exists file_entitiesi3 on file_entities (  \n"
 	"    file_id)", 0, 0, 0);
@@ -508,7 +526,7 @@ int initdb(sqlite3 *bkcatalog)
 	"    backupset_id, extdata)", 0, 0, 0);
     err = sqlite3_exec(bkcatalog,
 	"    create index if not exists received_file_entitiesi5 on received_file_entities (  \n"
-	"    sha1, filename)", 0, 0, 0);
+	"    sha2, filename)", 0, 0, 0);
     return(0);
 }
 

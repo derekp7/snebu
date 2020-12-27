@@ -18,7 +18,9 @@ extern sqlite3 *bkcatalog;
 extern struct {
     char *vault;
     char *meta;
+    int hash;
 } config;
+extern char *SHN;
 
 char *strunesc(char *src, char **target);
 
@@ -215,7 +217,7 @@ int restore(int argc, char **argv)
 	"group_name    char,  \n"
 	"group_id      integer,  \n"
 	"size          integer,  \n"
-	"sha1           char,  \n"
+	"hash           char,  \n"
 	"datestamp     integer,  \n"
 	"filename      char,  \n"
 	"extdata       char default '',  \n"
@@ -231,7 +233,7 @@ int restore(int argc, char **argv)
 	"group_name,  \n"
 	"group_id,  \n"
 	"size,  \n"
-	"sha1,  \n"
+	"hash,  \n"
 	"datestamp,  \n"
 	"filename,  \n"
 	"extdata,  \n"
@@ -244,9 +246,9 @@ int restore(int argc, char **argv)
     sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
 	"insert or ignore into restore_file_entities  "
 	"(file_id, ftype, permission, device_id, inode, user_name, user_id,  "
-	"group_name, group_id, size, sha1, datestamp, filename, extdata, xheader, serial)  "
+	"group_name, group_id, size, hash, datestamp, filename, extdata, xheader, serial)  "
 	"select file_id, ftype, permission, device_id, inode, user_name, user_id,  group_name, "
-	"group_id, size, sha1, datestamp, f.filename, extdata, xheader, f.serial "
+	"group_id, size, %s, datestamp, f.filename, extdata, xheader, f.serial "
 	"from ( "
 	"select filename, max(serial) as serial "
 	"from file_entities_bd "
@@ -257,7 +259,7 @@ int restore(int argc, char **argv)
 	"group by filename) as f "
 	"inner join file_entities_bd as m "
 	"on m.filename = f.filename "
-	"and m.serial = f.serial ",
+	"and m.serial = f.serial ", SHN,
 	join_files_from_sql != NULL ? join_files_from_sql : "",
 	filespec != NULL ? "+" : "",
 	bkname, filespec != NULL ? "+" : "",
@@ -331,10 +333,10 @@ int restore(int argc, char **argv)
     sqlite3_exec(bkcatalog, sqlstmt = sqlite3_mprintf(
 	"create temporary view hardlink_file_entities  "
 	"as select min(file_id) as file_id, ftype, permission, device_id,  "
-	"inode, user_name, user_id, group_name, group_id, size, sha1, datestamp,  "
+	"inode, user_name, user_id, group_name, group_id, size, hash, datestamp,  "
 	"filename, extdata, xheader from restore_file_entities where ftype = '0' or ftype = 'E' group by ftype,  "
 	"permission, device_id, inode, user_name, user_id, group_name,  "
-	"group_id, size, sha1, datestamp, extdata, xheader having count(*) > 1;"), 0, 0, 0);
+	"group_id, size, hash, datestamp, extdata, xheader having count(*) > 1;"), 0, 0, 0);
 
     sqlite3_free(sqlstmt);
 
@@ -428,7 +430,7 @@ int restore(int argc, char **argv)
 	"case when b.file_id not null and a.file_id != b.file_id  "
 	"then 1 else a.ftype end,  "
 	"a.permission, a.device_id, a.inode, a.user_name, a.user_id,  "
-	"a.group_name, a.group_id, case when b.file_id not null and a.file_id != b.file_id then 0 else a.size end, a.sha1, a.datestamp, a.filename,  "
+	"a.group_name, a.group_id, case when b.file_id not null and a.file_id != b.file_id then 0 else a.size end, a.hash, a.datestamp, a.filename,  "
 	"case when b.file_id not null and a.file_id != b.file_id  "
 	"then b.filename else a.extdata end, a.xheader, c.keygroup "
 	"from restore_file_entities a left join hardlink_file_entities b  "
@@ -436,7 +438,7 @@ int restore(int argc, char **argv)
 	"and a.device_id = b.device_id and a.inode = b.inode  "
 	"and a.user_name = b.user_name and a.user_id = b.user_id  "
 	"and a.group_name = b.group_name and a.group_id = b.group_id  "
-	"and a.size = b.size and a.sha1 = b.sha1 and a.datestamp = b.datestamp  "
+	"and a.size = b.size and a.hash = b.hash and a.datestamp = b.datestamp  "
 	"and a.extdata = b.extdata and a.xheader = b.xheader "
 	"left join "
 

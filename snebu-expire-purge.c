@@ -21,7 +21,9 @@ extern sqlite3 *bkcatalog;
 extern struct {
     char *vault;
     char *meta;
+    int hash;
 } config;
+extern char *SHN;
 
 int expire(int argc, char **argv)
 {
@@ -265,18 +267,18 @@ int purge(int argc, char **argv)
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"create temporary table if not exists purgelist1 ( \n"
 	"    file_id	integer primary key, "
-	"    sha1	char)")), 0, 0, &sqlerr);
+	"    hash	char)")), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
 	sqlite3_free(sqlerr);
     }
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert into purgelist1 (file_id, sha1) "
-	"select f.file_id, f.sha1 from file_entities f "
+	"insert into purgelist1 (file_id, hash) "
+	"select f.file_id, f.%s from file_entities f "
 	"left join backupset_detail d "
 	"on f.file_id = d.file_id "
-	"where d.file_id is null")),
+	"where d.file_id is null", SHN)),
     0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
@@ -294,11 +296,11 @@ int purge(int argc, char **argv)
 
     fprintf(stderr, "Creating final purge list\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	"insert into purgelist (datestamp, sha1) "
-	"select %d, d.sha1 from diskfiles d "
+	"insert into purgelist (datestamp, %s) "
+	"select %d, d.%s from diskfiles d "
 	"left join file_entities f "
-	"on d.sha1 = f.sha1 "
-	"where f.sha1 is null ", purgedate)), 0, 0, &sqlerr);
+	"on d.%s = f.%s "
+	"where f.%s is null ", SHN, purgedate, SHN, SHN, SHN, SHN)), 0, 0, &sqlerr);
 
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
@@ -307,7 +309,7 @@ int purge(int argc, char **argv)
 
     fprintf(stderr, "Removing files\n");
     sqlite3_prepare_v2(bkcatalog,
-	(sqlstmt = sqlite3_mprintf("select sha1, datestamp from purgelist")),
+	(sqlstmt = sqlite3_mprintf("select %s, datestamp from purgelist", SHN)),
 	-1, &sqlres, 0);
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
 
@@ -331,15 +333,15 @@ int purge(int argc, char **argv)
 		fprintf(stderr, "Removing %s\n", destfilepath);
 		remove(destfilepathd);
 		sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		    "delete from diskfiles where sha1 = '%q'", sha1)), 0, 0, &sqlerr);
+		    "delete from diskfiles where %s = '%q'", SHN, sha1)), 0, 0, &sqlerr);
 	    }
 	    else {
 		fprintf(stderr, "    Restoring %s\n", destfilepath);
 		rename(destfilepathd, destfilepath);
 	    }
 	}
-//	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-//	    "delete from purgelist where sha1 = '%q'", sha1)), 0, 0, &sqlerr);
+	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from purgelist where %s = '%q'", SHN, sha1)), 0, 0, &sqlerr);
     }
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
     return(0);
