@@ -1808,7 +1808,10 @@ int load_keyfile(char *keyfilename, struct key_st *key_st)
     rewind(keyfile);
 
     keydata = malloc(keyfile_sz + 1);
-    fread(keydata, 1, keyfile_sz, keyfile);
+    if (fread(keydata, 1, keyfile_sz, keyfile) < keyfile_sz) {
+	fprintf(stderr, "Error loading keyfile\n");
+	exit(1);
+    }
     keydata[keyfile_sz] = '\0';
     fclose(keyfile);
 

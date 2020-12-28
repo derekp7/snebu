@@ -90,10 +90,17 @@ int main(int argc, char **argv)
 
     getconfig(configfile);
     if (vaultdir != NULL) {
-	asprintf(&(config.vault), "%s", vaultdir);
+	if (asprintf(&(config.vault), "%s", vaultdir) < 0) {
+	    fprintf(stderr, "Unable to load vault location from config file\n");
+	    exit(1);
+	}
+
     }
     if (metadir != NULL) {
-	asprintf(&(config.meta), "%s", metadir);
+	if (asprintf(&(config.meta), "%s", metadir) < 0) {
+	    fprintf(stderr, "Unable to load catalog location from config file\n");
+	    exit(1);
+	}
     }
 
     if (optind < argc) {
@@ -190,7 +197,10 @@ sqlite3 *opendb()
     char *bkcatalogp = NULL;
     int x;
 
-    asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog");
+    if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
+	fprintf(stderr, "Unable to load catalog -- memory allocation failure\n");
+	exit(1);
+    }
     if ((x = sqlite3_open(bkcatalogp, &bkcatalog)) != SQLITE_OK) {
         fprintf(stderr, "Error: could not open catalog at %s\n", bkcatalogp);
         exit(1);

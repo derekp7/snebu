@@ -819,9 +819,16 @@ int pipebuf(int *in, int *out)
     pid_t child;
 
     if (*in < 0)
-	pipe(pipein);
+	if (pipe(pipein) < 0) {
+	    fprintf(stderr, "Pipe error\n");
+	    exit(1);
+	}
+
     if (*out < 0)
-	pipe(pipeout);
+	if (pipe(pipeout) < 0) {
+	    fprintf(stderr, "Pipe error\n");
+	    exit(1);
+	}
 
     if ((child = fork()) > 0) {
 	if (*in < 0) {
