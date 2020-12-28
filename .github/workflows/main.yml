@@ -1,0 +1,26 @@
+---
+name: Test Build
+
+# Use string "on" as bare "on" converts to a truthy value, causing 
+# Code Inspector validation to fail.
+"on":
+  - push
+  - pull_request
+
+jobs:
+  build:
+
+    runs-on: ubuntu-20.04
+
+    steps:
+
+      - uses: actions/checkout@v2
+
+      - name: install dependencies
+        run: sudo apt-get install -y liblzo2-dev libsqlite3-dev libssl-dev
+
+      - name: make
+        run: make
+
+      - name: make install
+        run: sudo make install
