@@ -16,7 +16,7 @@ DOCDIR=$(DATADIR)/doc
 ETCDIR=/etc
 all: $(PROGS)
 %.o: %.c
-	gcc -D_GNU_SOURCE -std=c99 -c $< -o $@ -Wall
+	$(CC) -D_GNU_SOURCE -std=c99 -c $< -o $@ -Wall
 tarlib.o: tarlib.h
 tarcrypt.o: tarlib.h
 snebu-submitfiles.o: tarlib.h
