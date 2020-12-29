@@ -45,6 +45,7 @@ int submitfiles_tmptables(sqlite3 *bkcatalog, int bkid);
 sqlite3 *opendb();
 long int strtoln(char *nptr, char **endptr, int base, int len);
 void update_status(unsigned long long total_bytes_received, unsigned long long est_size, char *cur_filename, time_t cur_time, time_t start_time, char indicator);
+int logaction(sqlite3 *bkcatalog, int backupset_id, int action, char *message);
 
 struct {
     unsigned long long unit;
@@ -234,6 +235,7 @@ int submitfiles(int argc, char **argv)
 	fprintf(stderr, "Estimated backup size: %6.2f %s\n\n",
 	    (double) est_size / display_units[b_total_unit].unit,
 	    display_units[b_total_unit].label);
+    logaction(bkcatalog, bkid, 4, "Begin receiving files");
 
     while ((inlen = getline(&inbuf, &len, metadata)) > 0) {
 	if (inbuf[inlen - 1] == '\n')
@@ -387,7 +389,7 @@ int submitfiles(int argc, char **argv)
 	    }
 	}
 	inbuf[0] = '\0';
-    }
+    } 
 
 
     free(inbuf);
@@ -427,6 +429,7 @@ int submitfiles(int argc, char **argv)
 	    (double) total_bytes_received / display_units[b_received_unit].unit,
 	    display_units[b_received_unit].label, tot_files);
     fclose(metadata);
+    logaction(bkcatalog, bkid, 7, "End receiving files");
     sqlite3_close(bkcatalog);
 
 
