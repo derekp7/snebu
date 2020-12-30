@@ -46,10 +46,10 @@ _SNEBU -- Sleep Nominally, Everything's Backed Up._
 [discrete]
 ==== Source
 
-* Download https://github.com/derekp7/snebu/releases/download/v1.1.0/snebu-1.1.0.tar.gz[snebu-1.1.0.tar.gz]
+* Download https://github.com/derekp7/snebu/releases/download/v1.1.1/snebu-1.1.1.tar.gz[snebu-1.1.1.tar.gz]
 * Extract the tar file, run make, then sudo make install.
 
- tar -zxvf snebu-1.1.0.tar.gz
+ tar -zxvf snebu-1.1.1.tar.gz
  make
  sudo make install
 
@@ -63,13 +63,13 @@ This creates a user and group called "snebu", installing the snebu binary as SUI
 [discrete]
 ==== RPM
 
-* Download https://github.com/derekp7/snebu/releases/download/v1.1.0/snebu-1.1.0-1.fc33.x86_64.rpm[snebu-1.1.0-1.fc33.x86_64.rpm]
+* Download https://github.com/derekp7/snebu/releases/download/v1.1.1/snebu-1.1.1-1.fc33.x86_64.rpm[snebu-1.1.1-1.fc33.x86_64.rpm]
 
- dnf install ./snebu-1.1.0-1.fc33.x86_64.rpm
+ dnf install ./snebu-1.1.1-1.fc33.x86_64.rpm
 
-* Or rebuild from source (requires gcc, rpm-build, openssl-devel, sqlite-devel, lzo-devel): https://github.com/derekp7/snebu/releases/download/v1.1.0/snebu-1.1.0-1.fc33.src.rpm[snebu-1.1.0-1.fc33.src.rpm]
+* Or rebuild from source (requires gcc, rpm-build, openssl-devel, sqlite-devel, lzo-devel): https://github.com/derekp7/snebu/releases/download/v1.1.1/snebu-1.1.1-1.fc33.src.rpm[snebu-1.1.1-1.fc33.src.rpm]
 
- rpmbuild --rebuild snebu-1.1.0-1.fc33.src.rpm
+ rpmbuild --rebuild snebu-1.1.1-1.fc33.src.rpm
 
 
 You can mount an external storage device on /var/lib/snebu (making sure the `snebu` user/group owns the directory after mounting -- if not, `chown snebu:snebu /var/lib/snebu/` once the drive is mounted).  However, if the storage device has slow seek times, which is the case with many 2.5" USB-powered mechanical hard drives, then you will get better performance by mounting the mechanical drive under `/var/lib/snebu/vault`, and mounting a separate SSD drive in `/var/lib/snebu/catalog` (or the appropriate directories specified in `/etc/snebu.conf`.  Or if you keep the `catalog` directory on the local systems drive then be sure to separately copy the contents of the catalog directory to the external storage device after a backup session finishes.
@@ -1070,13 +1070,22 @@ Defaults to 3 days.
 
 
 ----
-snebu purge
+snebu purge [ -v ] [ -q ]
 ----
 
 ==== Description
 
 Permanently removes files from disk storage that are no longer
 referenced by any backups. Run this command after running "snebu expire".
+
+==== Options
+
+
+*-v*, *--verbose*::
+Turns on verbose mode (default if stderr is a tty)
+
+*-q*, *--quiet*::
+Turns off verbose mode (default if stderr is not a tty)
 
 ==== See Also
 
