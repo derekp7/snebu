@@ -16,16 +16,16 @@ DOCDIR=$(DATADIR)/doc
 ETCDIR=/etc
 all: $(PROGS)
 %.o: %.c
-	$(CC) -D_GNU_SOURCE -std=c99 -c $< -o $@ -Wall $(CFLAGS) $(LDFLAGS)
+	$(CC) -D_GNU_SOURCE -std=c99 -c $< -o $@ -Wall $(CFLAGS)
 tarlib.o: tarlib.h
 tarcrypt.o: tarlib.h
 snebu-submitfiles.o: tarlib.h
 snebu-restore.o: tarlib.h
 
 snebu: snebu-main.o snebu-newbackup.o tarlib.o snebu-submitfiles.o snebu-restore.o snebu-listbackups.o snebu-expire-purge.o snebu-permissions.o
-	$(CC) -D_GNU_SOURCE -std=c99 $^ -o $@ -l sqlite3 -l crypto -l lzo2 -Wall
+	$(CC) -D_GNU_SOURCE -std=c99 $^ -o $@ -l sqlite3 -l crypto -l lzo2 -Wall $(CFLAGS) $(LDFLAGS)
 tarcrypt: tarcrypt.o tarlib.o
-	$(CC) -D_GNU_SOURCE -std=c99 $^ -o $@ -l crypto -l ssl -l lzo2 -Wall
+	$(CC) -D_GNU_SOURCE -std=c99 $^ -o $@ -l crypto -l ssl -l lzo2 -Wall $(CFLAGS) $(LDFLAGS)
 install: $(PROGS) $(SCRIPTS) $(CONFIGS)
 	mkdir -p $(DESTDIR)$(BINDIR)
 	mkdir -p $(DESTDIR)$(ETCDIR)
