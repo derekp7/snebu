@@ -234,12 +234,36 @@ int purge(int argc, char **argv)
     const char *sha1;
     char *destfilepath = NULL;
     char *destfilepathd = NULL;
+    int verbose = 0;
+
+    int optc;
+    int longoptidx;
+
+    struct option longopts[] = {
+	{ "verbose", no_argument, NULL, 'v' },
+	{ "quiet", no_argument, NULL, 'q' },
+	{ NULL, no_argument, NULL, 0 }
+    };
+
+    if (isatty(2))
+	verbose = 1;
+    while ((optc = getopt_long(argc, argv, "nv", longopts, &longoptidx)) >= 0)
+        switch (optc) {
+            case 'v':
+                verbose = 1;
+                break;
+            case 'q':
+                verbose = 0;
+                break;
+            default:
+		usage();
+                exit(1);
+        }
 
     if (checkperm(bkcatalog, "purge", NULL)) {
 	sqlite3_close(bkcatalog);
 	return(1);
     }
-//    sqlite3_busy_handler(bkcatalog, &sqlbusy, 0);
 
     purgedate = time(0);
 
@@ -263,10 +287,19 @@ int purge(int argc, char **argv)
         purgedate = sqlite3_column_int(sqlres, 0);
     }
 
-    fprintf(stderr, "Creating purge list 1\n");
+    if (verbose > 0)
+	fprintf(stderr, "Creating temporary tables\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"create temporary table if not exists purgelist1 ( \n"
 	"    file_id	integer primary key, "
+	"    hash	char)")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"create temporary table if not exists diskfiles_purged ( \n"
 	"    hash	char)")), 0, 0, &sqlerr);
     if (sqlerr != 0) {
 	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
@@ -285,7 +318,8 @@ int purge(int argc, char **argv)
 	sqlite3_free(sqlerr);
     }
 
-    fprintf(stderr, "Purging from file_entities\n");
+    if (verbose > 0)
+	fprintf(stderr, "Purging from file_entities\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"delete from file_entities where file_id in ( "
 	"select file_id from purgelist1) ")), 0, 0, &sqlerr);
@@ -294,7 +328,8 @@ int purge(int argc, char **argv)
 	sqlite3_free(sqlerr);
     }
 
-    fprintf(stderr, "Creating final purge list\n");
+    if (verbose > 0)
+	fprintf(stderr, "Creating final purge list\n");
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
 	"insert into purgelist (datestamp, %s) "
 	"select %d, d.%s from diskfiles d "
@@ -307,10 +342,12 @@ int purge(int argc, char **argv)
 	sqlite3_free(sqlerr);
     }
 
-    fprintf(stderr, "Removing files\n");
+    if (verbose > 0)
+	fprintf(stderr, "Removing files\n");
     sqlite3_prepare_v2(bkcatalog,
 	(sqlstmt = sqlite3_mprintf("select %s, datestamp from purgelist", SHN)),
 	-1, &sqlres, 0);
+    int rows_purged = 0;
     while (sqlite3_step(sqlres) == SQLITE_ROW) {
 
 	sha1 = (char *) sqlite3_column_text(sqlres, 0);
@@ -326,23 +363,83 @@ int purge(int argc, char **argv)
 
 	strncpya0(&destfilepathd, destfilepath, 0);
 	strcata(&destfilepathd, ".d");
-	fprintf(stderr, "Renaming %s to %s\n", destfilepath, destfilepathd);
+//	fprintf(stderr, "Renaming %s to %s\n", destfilepath, destfilepathd);
 
 	if (rename(destfilepath, destfilepathd) == 0) {
 	    if (stat(destfilepathd, &tmpfstat) == 0 && tmpfstat.st_mtime < sqlite3_column_int(sqlres, 1)) {
-		fprintf(stderr, "Removing %s\n", destfilepath);
+//		fprintf(stderr, "Removing %s\n", destfilepath);
 		remove(destfilepathd);
 		sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		    "delete from diskfiles where %s = '%q'", SHN, sha1)), 0, 0, &sqlerr);
+		    "insert into diskfiles_purged (hash) values ('%s')", sha1)), 0, 0, &sqlerr);
+		if (sqlerr != 0) {
+		    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+		    sqlite3_free(sqlerr);
+		}
+		sqlite3_free(sqlstmt);
+		rows_purged++;
 	    }
 	    else {
 		fprintf(stderr, "    Restoring %s\n", destfilepath);
 		rename(destfilepathd, destfilepath);
+		sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		    "delete from purgelist where %s = '%q'", SHN, sha1)), 0, 0, &sqlerr);
+		if (sqlerr != 0) {
+		    fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+		    sqlite3_free(sqlerr);
+		}
+		sqlite3_free(sqlstmt);
 	    }
 	}
-	sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-	    "delete from purgelist where %s = '%q'", SHN, sha1)), 0, 0, &sqlerr);
+	if (rows_purged % 1000 == 0) {
+	    if (verbose > 0)
+		fprintf(stderr, "Purged %d files          \r", rows_purged);
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"delete from purgelist where %s in (select hash from diskfiles_purged)", SHN)), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_free(sqlstmt);
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"delete from diskfiles where %s in (select hash from diskfiles_purged)", SHN)), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_free(sqlstmt);
+	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+		"delete from diskfiles_purged")), 0, 0, &sqlerr);
+	    if (sqlerr != 0) {
+		fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+		sqlite3_free(sqlerr);
+	    }
+	    sqlite3_free(sqlstmt);
+	}
     }
+    if (verbose > 0)
+	fprintf(stderr, "Purged %d files\n", rows_purged);
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"delete from purgelist where %s in (select hash from diskfiles_purged)", SHN)), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"delete from diskfiles where %s in (select hash from diskfiles_purged)", SHN)), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	"delete from diskfiles_purged")), 0, 0, &sqlerr);
+    if (sqlerr != 0) {
+	fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+	sqlite3_free(sqlerr);
+    }
+    sqlite3_free(sqlstmt);
+
     sqlite3_exec(bkcatalog, "END", 0, 0, 0);
     return(0);
 }

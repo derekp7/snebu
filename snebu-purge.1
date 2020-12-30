@@ -4,10 +4,17 @@
 snebu purge \- Remove backing files from expired backups
 .SH SYNOPSIS
 .B snebu
-\fBpurge\/\fB
+\fBpurge\/\fB [ \fB-v\fR ] [ \fB-q\fR ]
 .SH DESCRIPTION
 Permanently removes files from disk storage that are no longer
 referenced by any backups. Run this command after running "snebu expire".
+.SH OPTIONS
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Turns on verbose mode (default if stderr is a tty)
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Turns off verbose mode (default if stderr is not a tty)
 .SH "SEE ALSO"
 .hy 0
 \fBsnebu\fR(1),

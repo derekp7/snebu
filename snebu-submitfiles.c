@@ -465,7 +465,7 @@ int submitfiles2(int out_h)
     unsigned char cfsha1x[SHA_DIGEST_LENGTH * 2 + 1];
     unsigned char cfsha2[SHA256_DIGEST_LENGTH];
     unsigned char cfsha2x[SHA256_DIGEST_LENGTH * 2 + 1];
-    unsigned char *cfshax;
+    unsigned char *cfshax = NULL;
     int use_hmac = 0;
     unsigned char hmac[EVP_MAX_MD_SIZE * 2 + 1];
     int wrote_file = 0;
@@ -727,6 +727,10 @@ int submitfiles2(int out_h)
 		    encode_block_16(cfsha2x, cfsha2, SHA256_DIGEST_LENGTH);
 		    cfshax = cfsha2x;
 		    cfsha2x[40] = '\0';
+		}
+		else {
+		    fprintf(stderr, "Error in determining hash type\n");
+		    exit(1);
 		}
 		if (fclose(curfile) == 0)
 		    wrote_file = 1;
