@@ -201,6 +201,57 @@ sqlite3 *opendb()
 {
     char *bkcatalogp = NULL;
     int x;
+    char *metapath = NULL;
+    char **metapathp = NULL;
+    int metapathc = 0;
+    char *metapathpp = NULL;
+    char *vaultpath = NULL;
+    char **vaultpathp = NULL;
+    int vaultpathc = 0;
+    char *vaultpathpp = NULL;
+    struct stat sb;
+
+    strncpya0(&metapath, config.meta, 4096);
+    metapathc = parse(metapath, &metapathp, '/');
+    for (int i = 0; i < metapathc; i++) {
+	if (i == 0 && strlen(metapathp[i]) == 0) {
+	    strcata(&metapathpp, "/");
+	    continue;
+	}
+	strcata(&metapathpp, metapathp[i]);
+	if (stat(metapathpp, &sb) == -1) {
+	    fprintf(stderr, "Creating directory %s\n", metapathpp);
+	    mkdir(metapathpp, 0750);
+	}
+	else {
+	    if (! S_ISDIR (sb.st_mode)) {
+		fprintf(stderr, "Could not create directory %s\n", metapathpp);
+		exit(1);
+	    }
+	}
+	strcata(&metapathpp, "/");
+    }
+
+    strncpya0(&vaultpath, config.vault, 4096);
+    vaultpathc = parse(vaultpath, &vaultpathp, '/');
+    for (int i = 0; i < vaultpathc; i++) {
+	if (i == 0 && strlen(vaultpathp[i]) == 0) {
+	    strcata(&vaultpathpp, "/");
+	    continue;
+	}
+	strcata(&vaultpathpp, vaultpathp[i]);
+	if (stat(vaultpathpp, &sb) == -1) {
+	    fprintf(stderr, "Creating directory %s\n", vaultpathpp);
+	    mkdir(vaultpathpp, 0750);
+	}
+	else {
+	    if (! S_ISDIR (sb.st_mode)) {
+		fprintf(stderr, "Could not create directory %s\n", vaultpathpp);
+		exit(1);
+	    }
+	}
+	strcata(&vaultpathpp, "/");
+    }
 
     if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
 	fprintf(stderr, "Unable to load catalog -- memory allocation failure\n");
