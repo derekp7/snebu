@@ -231,6 +231,9 @@ sqlite3 *opendb()
 	}
 	strcata(&metapathpp, "/");
     }
+    dfree(metapathpp);
+    dfree(metapathp);
+    dfree(metapath);
 
     strncpya0(&vaultpath, config.vault, 4096);
     vaultpathc = parse(vaultpath, &vaultpathp, '/');
@@ -252,6 +255,9 @@ sqlite3 *opendb()
 	}
 	strcata(&vaultpathpp, "/");
     }
+    dfree(vaultpathpp);
+    dfree(vaultpathp);
+    dfree(vaultpath);
 
     if (asprintf(&bkcatalogp, "%s/%s.db", config.meta, "snebu-catalog") < 0) {
 	fprintf(stderr, "Unable to load catalog -- memory allocation failure\n");
