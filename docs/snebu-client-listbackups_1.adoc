@@ -1,0 +1,32 @@
+=== snebu-client-listbackups(1) - Lists backed up systems, backup sets, and file names
+
+
+----
+snebu-client listbackups [ -n hostname [ -d datestamp ]] [ file_list... ]
+----
+
+==== Description
+
+With no arguments specified, "listbackups" will return a list of all
+systems that are contained in the backup catalog.  Otherwise, when
+specifying the *-n* parameter, a list of backup sets for that host is
+returned.
+
+==== Options
+
+
+*-c*, *--config* _config_file_::
+Name of the configuration file.
+Default is _/etc/snebu-client.conf_.
+
+*-n*, *--name* _backupname_::
+Name of the backup.
+Usually set to the server name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.
+The format is in _time_t_ format,
+sames as the output of the "date&nbsp;+%s" command.
+
+[ _file-list_ ]::
+List of files to restore.  Defaults to all.

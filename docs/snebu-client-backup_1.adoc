@@ -1,0 +1,87 @@
+=== snebu-client-backup(1) - Initiates a backup
+
+
+----
+snebu-client backup  [ -n backupname ] [ -d datestamp ] [ -r schedule ] [ file-list ]
+----
+
+==== Description
+
+Initiates a system backup.
+By default, it will back up the local host to a local snebu install.
+You can also use this command to back up to a remote backup server,
+back up a remote host to either a local snebu installation,
+or back up a remote host to another remote backup server,
+depending on which options are chosen.
+
+==== Options
+
+
+*-c*, *--config* _config_file_::
+Name of the configuration file.  Default is
+_/etc/snebu-client.conf_.
+
+*-n*, *--name* _backupname_::
+Name of the backup.  Usually set to the server
+name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date&nbsp;+%s" command.
+
+*-r*, *--retention* _schedule_::
+Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".
+
+*-k*, *--encryption-key* _keyfile_::
+Turns on encryption, and specifies encryption
+key location.  May be specified more than once to
+encrypt with multiple keys.
+* The program "tarcrypt" needs to be present on the
+client for this option.  Keys are generated with
+the command:
+* *tarcrypt genkey -f* _keyfile_ [ *-c* _comment_ ]
+
+*-C*, *--changedir* _path_::
+Changes to the given directory path before backing up.
+
+*--graft* _/path/name/_*=*_/new/name/_::
+Re-write path names beginning with "_/path/name/_"
+to "_/new/name/_"
+
+*-f*, *--force-full*::
+Force a full backup
+
+*--remote-client* _hostname_::
+Host name / IP address of remote host.  Used to
+backup a remote host to local backup server.
+
+*--remote-user* _userid_::
+User ID for remote remote-client.  Defaults to
+root.
+
+*--sudo* _userid_::
+Initial login User ID for remote remote-client.
+This ID uses sudo to switch to remote-user once
+logged in.
+
+*--backup-server* _hostname_::
+Host name / IP address of backup server.  Used to
+backup to a remote server.
+
+*--backup-user* _userid_::
+User ID for remote backup-server.
+
+*--plugin* _scriptname_::
+Specifies an optional plug in script.  Usually
+used to perform database-specific operations
+(such as enabling hot backup mode) for systems
+with a DB installed.
+
+[ _file-list_ ]::
+List of files to backup.
+Overrides default specified in snebu-client.conf file.
+
+==== See Also
+
+*tarcrypt*(1)

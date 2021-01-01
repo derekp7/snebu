@@ -1,0 +1,60 @@
+=== snebu(1) - The simple network backup system
+
+
+----
+snebu [ -c | --config filepath ] subcommand [ options ]
+----
+
+==== Description
+
+The _snebu_ command is a backup tool which manages storing data from
+backup sessions on disk-based storage, utilizing a simple database
+for tracking backup sets and meta data.  With the exception of administrative
+sub commands (expire, purge, permissions), it is typically it is called via a
+front end script (such as the included "snebu-client" shell script).
+The subcommands are listed below along with the most common options.
+Details on each command are given in each command's individual man page.
+
+[discrete]
+==== Sub commands are as follows:
+
+
+*newbackup* *-n* _backupname_ *-d* _datestamp_ *-r* _schedule_::
+Initiates a new backup set, taking in the full backup manifest,
+returning a snapshot manifest.
+
+*submitfiles* *-n* _backupname_ *-d* _datestamp_::
+Receives a backup in TAR format that fulfills the snapshot manifest returned from newbackup
+
+*restore* *-n* _backupname_ *-d* _datestamp_ [ _file_list..._ ]::
+Generates a tar file containing the specified backup set.
+
+*listbackups* [ *-n* _backupname_ [ *-d* _datestamp_ ]] [ _file_list..._ ]::
+List backed up hosts, backup sets within a host, or files within a backup set.
+
+*expire* [ *-n* _backupname_ *-d* _datestamp_ ] or [ *-a* _days_ *-r* _schedule_ [ *-n* _hostname_ ]]::
+Expires (removes) the given backup set, or backups matching the given criteria
+
+*purge*::
+Purges backing files from the vault that are part of expired backups
+
+*permissions*::
+[ *-l* | *-a* | *-r* ]
+*-c* _command_
+*-n* _hostname_
+*-u* _user_
+Defines permissions for a given user, when snebu is run in multi-user mode.
+
+*help* [subcommand]::
+Displays help page of subcommand
+
+==== See Also
+
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-purge*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)

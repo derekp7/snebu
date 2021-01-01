@@ -1,0 +1,22 @@
+=== snebu-purge(1) - Remove backing files from expired backups
+
+
+----
+snebu purge
+----
+
+==== Description
+
+Permanently removes files from disk storage that are no longer
+referenced by any backups. Run this command after running "snebu expire".
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)

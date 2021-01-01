@@ -1,0 +1,36 @@
+=== snebu-submitfiles(1) - Recieves tar file contents to complete a backup
+
+
+----
+snebu submitfiles -n backupname -d datestamp
+----
+
+==== Description
+
+The "submitfiles" sub command is called after running _snebu&nbsp;newbackup_,
+and is used to submit a tar file containing the files from the snapshot manifest returned by _newbackup_.
+
+==== Options
+
+
+*-n*, *--name* _backupname_::
+Name of the backup.
+Typically set to the server name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.
+The format is in time_t format, sames as the output of the "date&nbsp;+%s" command.
+
+*-v*::
+Verbose output
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-purge*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)

@@ -1,0 +1,40 @@
+=== snebu-restore(1) - Generates tar file from backup
+
+
+----
+snebu restore -n backupname -d datestamp [ file_list... ]
+----
+
+==== Description
+
+Generates a tar file containing files from a given backup set.
+Pipe the output of this command into _tar_ to restore files.
+
+==== Options
+
+
+*-n*, *--name* _backupname_::
+Name of the backup, as specified in the _newbackup_ subcommand.
+Typically is the name of the server that was backed up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date&nbsp;+%s" command.
+
+*--graft* _/path/name/_*=*_/new/name/_::
+Re-write path names beginning with "_/path/name/_" to "_/new/name/_".
+This allows you to restore a file to a different location.
+
+[ _file-list_ ]::
+List of files to restore.  Defaults to all.
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-purge*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)

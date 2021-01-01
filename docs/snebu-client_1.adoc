@@ -1,0 +1,40 @@
+=== snebu-client(1) - Front-end client for the snebu backup system
+
+
+----
+snebu-client [ subcommand ] [ options ]
+----
+
+==== Description
+
+snebu-client is the client front end for snebu.
+Use it to easily
+back up a local or remote host, to either local a local storage
+device, or to a remote backup server.  Use it with one of the
+following subcommands.
+
+[discrete]
+==== Sub commands are as follows:
+
+
+*backup* [ *-n* _backupname_ ] [ *-d* _datestamp_ ] [ *-r* _schedule_ ]::
+Initiates a backup.
+
+*restore* [ *-n* _backupname_ ] [ *-d* _datestamp_ ]::
+Initiates a restore.
+
+*listbackups* [ *-n* _backupname_ [ *-d* _datestamp_ ]] [ _file_list_... ]::
+List backed up hosts, backup sets within a host, or files within a backup set.
+
+*validate* *-n* _backupname_ *-d* _datestamp_::
+Validates a given backup.
+
+*help* [ _subcommand_ ]::
+Displays help page of subcommand
+
+==== See Also
+
+*snebu-client-backup*(1),
+*snebu-client-restore*(1),
+*snebu-client-listbackups*(1),
+*snebu-client-validate*(1),

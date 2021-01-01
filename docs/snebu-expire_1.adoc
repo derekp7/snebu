@@ -1,0 +1,50 @@
+=== snebu-expire(1) - Expire a given backup set or range of backups
+
+
+----
+snebu expire [ -n hostname -d datestamp ] or [ -a days -r schedule [ -n hostname ]]
+----
+
+==== Description
+
+Removes backup sessions from the snebu backup catalog database.
+A specific backup session can be purged by providing the *-n* and *-d*
+options, or all backups that are part of a given retention schedule
+(specified with *-r*, and optionally from a given host, with the *-n*
+option) that are older than a given number of days (*-a*) are removed.
+
+==== Options
+
+
+*-n*, *--name* _backupname_::
+Name of the backup.  Usually set to the server
+name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+
+*-r*, *--retention* _schedule_::
+Retention schedule for this backup set.  Typical
+values are "daily", "weekly", "monthly", "yearly".
+
+*-a*, *--age* _#days_::
+Expire backups older than #days.
+
+*-m*, *--min-keep* _#backups_::
+When expiring with the *-a* flag, keep at least
+this many of the most recent backups for a given
+hostname/retention schedule.
+Defaults to 3 days.
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-purge*(1),
+*snebu-permissions*(1),
+*snebu-client*(1)

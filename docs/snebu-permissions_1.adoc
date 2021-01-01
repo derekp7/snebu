@@ -1,0 +1,69 @@
+=== snebu-permissions(1) - Set permissions for Snebu when used in multi-user mode
+
+
+----
+snebu permissions [ -l | -a | -r ] -c command -n hostname -u user
+----
+
+==== Description
+
+
+The _permissions_ command lists, adds, or removes user permissions.::
+These permissions are applied when the "snebu" command is installed setuid, and run
+by a OS different user.
+
+==== Options
+
+
+*-l*, *--list*::
+Lists all installed permissions.  If the *-c*, *-n*, or
+*-u* options are given, this list is restricted to
+those sub commands, hostnames, or users respectively.
+
+*-a*, *--add*::
+Adds permissions for the specified sub command [-c],
+hostname [-n], and user [-u].
+
+*-r*, *--remove*::
+Removes permissions for the specified sub command
+[-c], hostname [-n], and user [-u].
+
+*-c*, *--command* _sub command_::
+The sub command that this permission command applies to.
+
+*-n*, *--name* _hostname_::
+The host name that this permission command applies to.
+
+*-u*, *--user* _username_::
+The user that this permission command applies to.
+
+Available subcomands that work with permissions are:
+
+*backup* (covers both newbackup and submitfiles functions)
+
+*restore*
+
+*listbackups*
+
+*expire*
+
+*purge*
+
+*permissions*
+
+Note that in the case of functions that aren't host specific (such as _permissions_) or    affect all hosts (_snebu purge_, or _snebu expire -a ..._), users will need to be granted permission to all hosts by specifying *-h '{asterisk}'* in order to be granted access to those specific functions).
+
+To grant permissions, this command must be run as the user that snebu is
+installed under, or the user must be granted access to the _permissions_
+sub command
+
+==== See Also
+
+*snebu*(1),
+*snebu-newbackup*(1),
+*snebu-submitfiles*(1),
+*snebu-restore*(1),
+*snebu-listbackups*(1),
+*snebu-expire*(1),
+*snebu-purge*(1),
+*snebu-client*(1)

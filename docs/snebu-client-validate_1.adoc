@@ -1,0 +1,64 @@
+=== snebu-client-validate(1) - Compares a backup to file system contents
+
+
+----
+snebu-client validate -n backupname -d datestamp [ file-list ]
+----
+
+==== Description
+
+Compares the contents a given backup session identified by "-n" and "-d"
+parameters, to what is on the client.  Use the "listbackups" subcommand to
+get a list of available
+backup sessions.
+
+==== Options
+
+
+*-c*, *--config* _config_file_::
+Name of the configuration file.  Default is
+_/etc/snebu-client.conf_.
+
+*-n*, *--name* _backupname_::
+Name of the backup.  Usually set to the server
+name that you are backing up.
+
+*-d*, *--date* _datestamp_::
+Date stamp for this backup set.  The format is in
+time_t format, sames as the output of the "date
++%s" command.
+
+*--decrypt*::
+Turns on decryption.  Requires "tarcrypt" to be
+on the client.  Password(s) will be prompted for
+during restore.
+
+*-C*, *--changedir* _path_::
+Changes to the given directory path before validating
+
+*--remote-client* _hostname_::
+Host name / IP address of remote host.  Used to
+backup a remote host to local backup server.
+
+*--remote-user* _userid_::
+User ID for remote remote-client.  Defaults to
+root.
+
+*--sudo* _userid_::
+Initial login User ID for remote remote-client.
+This ID uses sudo to switch to remote-user once
+logged in.
+
+*--backup-server* _hostname_::
+Host name / IP address of backup server.  Used to
+backup to a remote server.
+
+*--backup-user* _userid_::
+User ID for remote backup-server.
+
+[ _file-list_ ]::
+List of files to validate.  Defaults to all.
+
+==== See Also
+
+*tarcrypt*(1)

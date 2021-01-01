@@ -1,0 +1,51 @@
+=== snebu-client.conf(5) - Configuration file for snebu-client front end
+
+
+==== Description
+
+The sneub-client.conf is used to specify a number of default parameters for snebu-client, such as default include / exclude specifications.  The contents are read in and executed as shell script commands by snebu-client, so in addition to specifying parameters it is possible to include standard shell scripting logic.  This also means that parameters are specified without a space between the name and value.
+
+[discrete]
+==== Parameters
+
+
+*INCLUDE*=( _path_ ... )::
+Specifies the directories to include in the backup.  By default, all mounted storage-based file systems are included -- that is, file systems that are of type "NODEV" (which includes virtual file systems such as /proc, /sys, anything mounted as "tmpdir") are not included.
++
+Also note that file system boundaries are not crossed automatically.  For example, if "/home" is a separate mount point from "/" then you will need to specify both "/" and "/home".  Mount points are specified explicitly to prevent virtual file systems (i.e., "/proc") from being inadvertently included.
+
+
+*EXCLUDE*=( _path_ ...)::
+Excludes directories that would normally be included with the above INCLUDE parameter.
+
+*EXCLUDEMATCH*=( _filespec_... )::
+Similar to EXCLUDE, however works with files matching a given pattern (processing shell wildcard expansion).  Note that individual parameters need to be quoted to prevent wildcard expansion from matching only files in the current directory.
+
+*backupname*=_name-of-backup_::
+Give the backup the given name instead of defaulting to the hostname.
+
+[discrete]
+==== Server-initiated backup notes
+
+If running backups from a backup server, the parameters will by default apply to all clients.  To target parameters for specific clients, you can wrap them in a shell scripting conditional clause (if-then-else, or case statement).
+
+==== Examples:
+
+To include specified directories:
+
+ INCLUDE=( / /var /var/log /home )
+
+To exclude /tmp and /var/tmp
+
+ EXCLUDE=( /tmp /var/tmp )
+
+To exclude all ".tmp" and ".dbf" files
+
+ EXCLUDEMATCH=( "*.tmp" "*.dbf" )
+
+On a server backing up multiple clients -- to exclude all database ".dbf" files only on the database server "erp-database", include the following:
+
+ if [ "${clientname}" = "erp-database" ]
+ then
+     EXCLUDEMATCH=( "*.dbf" )
+ fi
