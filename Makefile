@@ -7,7 +7,7 @@ SOWNER=snebu
 SGROUP=snebu
 MAN1=snebu.1 snebu-client.1 snebu-client-backup.1 snebu-client-listbackups.1 snebu-client-restore.1 snebu-client-validate.1 snebu-expire.1 snebu-listbackups.1 snebu-newbackup.1 snebu-permissions.1 snebu-purge.1 snebu-restore.1 snebu-submitfiles.1 tarcrypt.1
 MAN5=snebu-client.conf.5 snebu-client-plugin.5
-DOC=readme.md snebu.adoc COPYING.txt
+DOC=readme.md snebu*.adoc COPYING.txt
 PREFIX=/usr/local
 DATADIR=${PREFIX}/share
 BINDIR=$(PREFIX)/bin
@@ -34,9 +34,9 @@ install: $(PROGS) $(SCRIPTS) $(CONFIGS)
 	mkdir -p $(DESTDIR)$(DOCDIR)/$(PKGNAME)
 	install -p -m 755 $(PROGS) $(SCRIPTS) $(DESTDIR)$(BINDIR)/
 	install -p -m 644  $(CONFIGS) $(DESTDIR)$(ETCDIR)/
-	install -p -m 644 $(MAN1) $(DESTDIR)$(MANDIR)/man1
-	install -p -m 644 $(MAN5) $(DESTDIR)$(MANDIR)/man5
-	install -p -m 644 $(DOC) $(DESTDIR)$(DOCDIR)/$(PKGNAME)
+	install -p -m 644 docs/$(MAN1) $(DESTDIR)$(MANDIR)/man1
+	install -p -m 644 docs/$(MAN5) $(DESTDIR)$(MANDIR)/man5
+	install -p -m 644 docs/$(DOC) $(DESTDIR)$(DOCDIR)/$(PKGNAME)
 
 clean:
 	rm -f $(PROGS) snebu-main.o snebu-newbackup.o tarlib.o snebu-submitfiles.o snebu-restore.o snebu-listbackups.o snebu-expire-purge.o snebu-permissions.o tarcrypt.o

@@ -1,0 +1,20 @@
+= SNEBU
+:sectnums:
+:sectnumlevels: 2
+:toc: left
+:toclevels: 2
+:keywords: Snebu, Linux Backup, Snapshot, Encrypting
+:nofooter:
+
+:asterisk: *
+++++
+<p style="color:rgb(150,150,150);"> Simple Network Encrypting Backup Utility</p>
+++++
+
+include::snebu-intro.adoc[]
+
+include::snebu-quickstart.adoc[]
+
+include::snebu-concepts.adoc[]
+
+include::snebu-reference.adoc[]

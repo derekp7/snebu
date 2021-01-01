@@ -1,0 +1,26 @@
+== Introduction
+
+Snebu is a high-performance snapshot-style backup system for Linux supporting compression, deduplication and optional public key encryption.  It can operate in single-host mode, push mode (client pushes data to server), or pull mode (server pulls data from client) via SSH.  In pull mode, no agent is required on the client (the program _tarcrypt_ will need to be on clients when encryption is used).
+
+The backups are snapshot style, so only the minimum necessary files are transferred to the backup server to complete a backup set.  This keeps storage and bandwidth utilization to a minimum.
+
+Server side is accessed via SSH, supports multiple simultaneous clients, and deduplicates backup files across file systems, clients and backup sets.  Server access supports multi-user granular permissions per account (i.e., an account can be granted backup access, but forbidden delete access -- useful for protection against malware attacks).
+
+
+[discrete]
+=== Primary Features
+* Centrally managed
+* Snapshot backups
+* Database-backed metadata catalog
+* File-level deduplication
+** Across backup sets and clients
+* Compression
+* RSA Public Key encryption
+* Single-host, Client-push, or Server-pull backups
+* Multiple user granular access
+* Agentless
+** Client-side uses standard Unix/Linux commands -- _find_, _tar_, _ssh_, _bash_
+* High efficiency C code
+** Minimal library runtime dependencies -- _SQLite_, _OpenSSL_, _LZOP_
+
+_SNEBU -- Sleep Nominally, Everything's Backed Up._
