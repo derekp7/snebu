@@ -94,19 +94,28 @@ pluginpostf() {
 begin_db_backup() {
     [ "${verbose}" -gt 0 ] && echo "Begin DB backup" >&2
     ### Steps to place DB in hot backup mode
+    ### Make sure to execute these on the target host being backed
+    ### up if running from the backup server (in pull mode)
+
 }
 
 end_db_backup() {
     [ "${verbose}" -gt 0 ] && echo "End DB backup" >&2
     ### Steps to DB out of hot backup mode
+    ### Make sure to execute these on the target host being backed
+    ### up if running from the backup server (in pull mode)
 }
 
 print_dbf_filenames() {
     [ "${verbose}" -gt 0 ] &&  echo "Generating DBF filenames" >&2
     ### Output list of dbf file names
+    ### Make sure to execute these on the target host being backed
+    ### up if running from the backup server (in pull mode)
 }
 
 print_dbf_log_filenames() {
     [ "${verbose}" -gt 0 ] &&  echo "Generating DBF log filenames" >&2
     ### Output list of archived transaction log file names
+    ### Make sure to execute these on the target host being backed
+    ### up if running from the backup server (in pull mode)
 }
