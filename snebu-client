@@ -32,7 +32,7 @@ process_cmdline()
     else
 	verbose=0
     fi
-    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,retention:,date:,force-full,changedir:,exclude:,xmatch:,graft:,plugin:,verbose,quiet,help,sudo:,encryption-key:,decrypt,nodecrypt" -o "c:n:r:d:fqvC:x:m:hk:" -- "$@")")
+    if ! args=("$(getopt -l "config:,name:,remote-client:,backup-server:,backup-user:,remote-user:,retention:,date:,force-full,changedir:,exclude:,xmatch:,graft:,plugin:,verbose,quiet,help,sudo:,encryption-key:,decrypt,nodecrypt" -o "c:n:r:d:fqvC:x:m:hk:" -- "$@")")
     then
         usage target
         exit 1
