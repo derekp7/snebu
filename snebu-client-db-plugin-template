@@ -1,15 +1,20 @@
 ### Snebu backup plugin template for databases
+[ -z "${verbose}" ] && verbose=0
+[ "${verbose}" -gt 0 ] && echo "Executing client plugin template" >&2
 
+pluginpre=pluginpref
+pluginpost=pluginpostf
 # Initialize an internal housekeeping variable
-# \fI(Step 0)\fR
+# (Step 0)
 dbstage=0
 
 # Define the pre-backup script
-pluginpre() {
+pluginpref() {
+    [ "${verbose}" -gt 0 ] && echo "Executing client plugin pre script" >&2
     # Stage 0 => haven't backed up the DB yet
     if [ "${dbstage}" = 0 ]
     then
-	# \fI(Step 1)\fR
+	# (Step 1)
 	# Save the current include/exclude list
 	OLD_INCLUDE=( "${INCLUDE[@]}" )
 	OLD_EXCLUDE=( "${EXCLUDE[@]}" )
@@ -34,7 +39,7 @@ pluginpre() {
 	# pluginpost() with dbstage still set to 0
     elif [ "${dbstage}" = 1 ]
     then
-	# \fI(Step 3)\fR
+	# (Step 3)
 	DBF_LOG_FILES=( "$(
 	    # Function to list archived transaction logs
 	    print_dbf_log_filenames
@@ -46,10 +51,11 @@ pluginpre() {
     fi
 }
 
-pluginpost() {
+pluginpostf() {
+    [ "${verbose}" -gt 0 ] && echo "client plugin post" >&2
     if [ "${dbstage}" = 0 ]
     then
-	# \fI(Step 2)\fR
+	# (Step 2)
 	# Take DB out of hot backup mode
 	end_db_backup
 	
@@ -60,12 +66,11 @@ pluginpost() {
 	# Now control jumps back to pluginpre() with dbstage=1
     elif [ "${dbstage}" = 1 ]
     then
-	# \fI(Step 4)\fR
+	# (Step 4)
 	# Restore the original include/exclude list, with the
 	# database files added to the exclude list.
 	INCLUDE=( "${OLD_INCLUDE[@]}" )
-	EXCLUDE=( "${OLD_EXCLUDE[@]}" "${DBF_FILES[@]}" \\
-	"${DBF_LOG_FILES[@]}"
+	EXCLUDE=( "${OLD_EXCLUDE[@]}" "${DBF_FILES[@]}" "${DBF_LOG_FILES[@]}" )
 	EXCLUDEMATCH=( "${OLD_EXCLUDEMATCH[@]}" )
 
 	# Define the next stage, and repeat the backup
@@ -78,7 +83,7 @@ pluginpost() {
 	# above database files added to the exclude).
     elif [ "${dbstage}" = 2 ]
     then
-	# \fI(Step 5)\fR
+	# (Step 5)
 	# Break the cycle, backup is completed for this host.
 	bkrepeat=0
     fi
@@ -87,17 +92,21 @@ pluginpost() {
 # Also, don't forget to fill in the functions referenced above:
 
 begin_db_backup() {
+    [ "${verbose}" -gt 0 ] && echo "Begin DB backup" >&2
     ### Steps to place DB in hot backup mode
 }
 
 end_db_backup() {
+    [ "${verbose}" -gt 0 ] && echo "End DB backup" >&2
     ### Steps to DB out of hot backup mode
 }
 
 print_dbf_filenames() {
+    [ "${verbose}" -gt 0 ] &&  echo "Generating DBF filenames" >&2
     ### Output list of dbf file names
 }
 
 print_dbf_log_filenames() {
+    [ "${verbose}" -gt 0 ] &&  echo "Generating DBF log filenames" >&2
     ### Output list of archived transaction log file names
 }
