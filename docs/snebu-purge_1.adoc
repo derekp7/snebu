@@ -2,13 +2,22 @@
 
 
 ----
-snebu purge
+snebu purge [ -v ] [ -q ]
 ----
 
 ==== Description
 
 Permanently removes files from disk storage that are no longer
 referenced by any backups. Run this command after running "snebu expire".
+
+==== Options
+
+
+*-v*, *--verbose*::
+Turns on verbose mode (default if stderr is a tty)
+
+*-q*, *--quiet*::
+Turns off verbose mode (default if stderr is not a tty)
 
 ==== See Also
 

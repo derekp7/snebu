@@ -51,7 +51,7 @@ Available subcomands that work with permissions are:
 
 *permissions*
 
-Note that in the case of functions that aren't host specific (such as _permissions_) or    affect all hosts (_snebu purge_, or _snebu expire -a ..._), users will need to be granted permission to all hosts by specifying *-h '{asterisk}'* in order to be granted access to those specific functions).
+Note that in the case of functions that aren't host specific (such as _permissions_) or affect all hosts (_snebu purge_, or _snebu expire -a ..._), users will need to be granted permission to all hosts by specifying *-h ${asterisk}* in order to be granted access to those specific functions).
 
 To grant permissions, this command must be run as the user that snebu is
 installed under, or the user must be granted access to the _permissions_

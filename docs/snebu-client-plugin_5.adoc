@@ -3,21 +3,29 @@
 
 ==== Description
 
-Specifying the *--plugin* argument when executing a snebu-client backup operation will cause the specified plugin script to be incorporated into the backup process.  The plugin script defines at least two shell script functions -- -fBpluginpre(), which executes prior to the backup, and pluginpost()\R which executes after the backup has completed.
+Specifying the *--plugin* argument when executing a snebu-client backup operation will cause the specified plugin script to be incorporated into the backup process.  The plugin script defines at least two shell script functions -- *pluginpref()*, which executes prior to the backup, and *pluginpostf()* which executes after the backup has completed.  Two associated variables, *pluginpre* and *pluginpost*, contain the names of these two functions (so the functions themselves can be named anything, as long as the variables point to them).
 
 This allows performing operations such as mounting a file system snapshot prior to a backup and removing the snapshot afterwards, or placing a database in hot backup mode at the beginning of the backup.  In the case of backing up a database, often times the backup will need to be completed in multiple stages -- place the DB in hot backup mode, gather a list of database files, back them up, take the DB out of hot backup mode, gather a list of files containing transaction logs that were created during the backup, and finally backing up those files.
 
 To facilitate these type of backup steps, the *pluginpre* function can save the contents of the file include/exclude variables *INCLUDE*, *EXCLUDE*, and *EXCLUDEMATCH*.  Then set the variable *bkrepeat=1*, along with setting any other housekeeping variables used inside the plugin script.  Once it has completed the last stage, it can then restore the include/exclude variables, let the rest of the backup process continue, and then set *bkrepeat=0* to finish off the backup.
 
+Note that the plugin runs on the same host that is running the snebu-client script.  So if you are doing _push_ backups from a client to a server, it will function as expected.  But if you are doing _pull_ based backups (running snebu-client from the backup server), then be sure to have the pre and post functions perform their actions on the target server (referencing the *clientname* and _rmtuser_ variables as appropriate).  Feel free to use the *rpcsh()* function defined in snebu-client (see function definition for brief description and usage).
+
 [discrete]
 ==== Functions and Variables
 
 
-*pluginpre()*::
+*pluginpref()*::
 Shell script code containing pre-backup procedures.
 
-*pluginpost()*::
+*pluginpostf()*::
 Shell script code containing post-backup procedures.
+
+*pluginpre*::
+Variable containing name of pluginpre function
+
+*pluginpost*::
+Variable containing name of pluginpost function
 
 *bkrepeat*::
 Set bkrepeat=1 to repeat the backup with modifications to the include/exclude list.  Every time the backup repeats, the backup set is amended with the new file set.
@@ -39,13 +47,19 @@ The Since these functions get called at various times from the snebu-client scri
 
 ....
 ### Snebu backup plugin template for databases
+[ -z "${verbose}" ] && verbose=0
+[ "${verbose}" -gt 0 ] && echo "Executing client plugin template" >&2
 
+pluginpre=pluginpref
+pluginpost=pluginpostf
 # Initialize an internal housekeeping variable
 # (Step 0)
 dbstage=0
 
 # Define the pre-backup script
-pluginpre() {
+pluginpref() {
+    [ "${verbose}" -gt 0 ] &&
+	echo "Executing client plugin pre script" >&2
     # Stage 0 => haven't backed up the DB yet
     if [ "${dbstage}" = 0 ]
     then
@@ -86,7 +100,8 @@ pluginpre() {
     fi
 }
 
-pluginpost() {
+pluginpostf() {
+    [ "${verbose}" -gt 0 ] && echo "client plugin post" >&2
     if [ "${dbstage}" = 0 ]
     then
 	# (Step 2)
@@ -104,7 +119,8 @@ pluginpost() {
 	# Restore the original include/exclude list, with the
 	# database files added to the exclude list.
 	INCLUDE=( "${OLD_INCLUDE[@]}" )
-	EXCLUDE=( "${OLD_EXCLUDE[@]}" "${DBF_FILES[@]}" 	"${DBF_LOG_FILES[@]}"
+	EXCLUDE=( "${OLD_EXCLUDE[@]}" "${DBF_FILES[@]}" \
+	    "${DBF_LOG_FILES[@]}" )
 	EXCLUDEMATCH=( "${OLD_EXCLUDEMATCH[@]}" )
 
 	# Define the next stage, and repeat the backup
@@ -126,18 +142,30 @@ pluginpost() {
 # Also, don't forget to fill in the functions referenced above:
 
 begin_db_backup() {
+    [ "${verbose}" -gt 0 ] && echo "Begin DB backup" >&2
     ### Steps to place DB in hot backup mode
+    ### Make sure to execute these on the target host being backed
+    ### up if running from the backup server (in pull mode)
 }
 
 end_db_backup() {
+    [ "${verbose}" -gt 0 ] && echo "End DB backup" >&2
     ### Steps to DB out of hot backup mode
+    ### Make sure to execute these on the target host being backed
+    ### up if running from the backup server (in pull mode)
 }
 
 print_dbf_filenames() {
+    [ "${verbose}" -gt 0 ] &&  echo "Generating DBF filenames" >&2
     ### Output list of dbf file names
+    ### Make sure to execute these on the target host being backed
+    ### up if running from the backup server (in pull mode)
 }
 
 print_dbf_log_filenames() {
+    [ "${verbose}" -gt 0 ] &&  echo "Generating DBF log filenames" >&2
     ### Output list of archived transaction log file names
+    ### Make sure to execute these on the target host being backed
+    ### up if running from the backup server (in pull mode)
 }
 ....
