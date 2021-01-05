@@ -221,7 +221,7 @@ sqlite3 *opendb()
 	strcata(&metapathpp, metapathp[i]);
 	if (stat(metapathpp, &sb) == -1) {
 	    fprintf(stderr, "Creating directory %s\n", metapathpp);
-	    mkdir(metapathpp, 0750);
+	    mkdir(metapathpp, 0700);
 	}
 	else {
 	    if (! S_ISDIR (sb.st_mode)) {
@@ -245,7 +245,7 @@ sqlite3 *opendb()
 	strcata(&vaultpathpp, vaultpathp[i]);
 	if (stat(vaultpathpp, &sb) == -1) {
 	    fprintf(stderr, "Creating directory %s\n", vaultpathpp);
-	    mkdir(vaultpathpp, 0750);
+	    mkdir(vaultpathpp, 0700);
 	}
 	else {
 	    if (! S_ISDIR (sb.st_mode)) {

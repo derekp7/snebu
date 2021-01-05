@@ -38,7 +38,6 @@ install: $(PROGS) $(SCRIPTS) $(CONFIGS)
 	install -p -m 644 $(addprefix docs/,$(MAN1)) $(DESTDIR)$(MANDIR)/man1
 	install -p -m 644 $(addprefix docs/,$(MAN5)) $(DESTDIR)$(MANDIR)/man5
 	install -p -m 644 $(addprefix docs/,$(DOC)) $(DESTDIR)$(DOCDIR)/$(PKGNAME)
-	cd ..
 
 clean:
 	rm -f $(PROGS) snebu-main.o snebu-newbackup.o tarlib.o snebu-submitfiles.o snebu-restore.o snebu-listbackups.o snebu-expire-purge.o snebu-permissions.o tarcrypt.o
