@@ -758,9 +758,9 @@ listbackups()
     [ -n "${datestamp}" ] && sargs=( "${sargs[@]}" -d ${datestamp} )
     if [ -z "${backupname}" -a "${verbose}" -ge 1 ]
     then
-	for i in $( $SNEBU listbackups )
+	for i in $( $SNEBU listbackups </dev/null)
 	do
-	    snebu listbackups -n $i
+	    $SNEBU listbackups -n $i </dev/null
 	done
     else
 	$SNEBU listbackups "${sargs[@]}" "${@}" </dev/null
