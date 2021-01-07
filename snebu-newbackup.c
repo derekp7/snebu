@@ -465,6 +465,17 @@ int flush_inbound_files(sqlite3 *bkcatalog, int bkid, int force_full_backup, int
 	    first_flush = 1;
 	}
         sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
+	    "delete from inbound_file_entities "
+	    "where exists (select * from needed_file_entities "
+	    "where needed_file_entities.filename = inbound_file_entities.filename "
+	    "and needed_file_entities.backupset_id = %d)" , bkid)),0, 0, &sqlerr);
+        if (sqlerr != 0) {
+            fprintf(stderr, "%s\n%s\n\n",sqlerr, sqlstmt);
+            sqlite3_free(sqlerr);
+        }   
+        sqlite3_free(sqlstmt);
+
+        sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
             "insert or ignore into needed_file_entities  "
             "(backupset_id, device_id, inode, filename, infilename, size, cdatestamp)  "
             "select distinct %d, i.device_id, i.inode, i.filename, i.infilename, "
