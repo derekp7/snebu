@@ -36,6 +36,8 @@ extern char *SHN;
 int listbackups(int argc, char **argv);
 void usage();
 int checkperm(sqlite3 *bkcatalog, char *action, char *backupname);
+char *stresc(char *src, char **target);
+void dfree(void *b);
 
 int listbackups(int argc, char **argv)
 {
@@ -68,6 +70,9 @@ int listbackups(int argc, char **argv)
     int longoptidx;
     int longoutput = 0;
     int long0output = 0;
+    char *escfname = 0;
+    char *esclname = 0;
+    char *escxheader = 0;
 
 
     *bkname = *datestamp = '\0';
@@ -84,7 +89,7 @@ int listbackups(int argc, char **argv)
 		foundopts |= 2;
 		break;
 	    case 'l':
-		longoutput = 1;
+		longoutput++;
 		foundopts |= 4;
 		break;
 	    case '0':
@@ -235,7 +240,7 @@ int listbackups(int argc, char **argv)
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
-    else if (longoutput == 1 && long0output == 0) {
+    else if (longoutput >= 1 && long0output == 0) {
 	range = strchr(datestamp, '-');
 	if (range != NULL) {
 	    *range = '\0';
@@ -256,14 +261,14 @@ int listbackups(int argc, char **argv)
 	    (sqlstmt = sqlite3_mprintf("select distinct serial, ftype, \n"
 		"permission, device_id, inode, user_name, user_id, \n"
 		"group_name, group_id, size, %s, cdatestamp, datestamp, \n"
-		"filename, extdata \n"
+		"filename, extdata, xheader \n"
 		"from file_entities_bd where name = '%q' and serial >= %d "
 		"and serial <= %d%s", SHN, bkname, bdatestamp, edatestamp, filespec != 0 ? filespec : "")),
 		-1, &sqlres, 0);
 
 	if (bdatestamp == edatestamp)
 	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
-		printf("%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s\t%s\n",
+		printf("%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%Ld\t%s\t%d\t%d\t%s%s%s\t%s\n",
 
 		strcmp((char *)sqlite3_column_text(sqlres, 1), "0") == 0 ? "f" : 
 		    strcmp((char *)sqlite3_column_text(sqlres, 1), "2") == 0 ? "l" : 
@@ -280,8 +285,10 @@ int listbackups(int argc, char **argv)
 		sqlite3_column_text(sqlres, 10),
 		sqlite3_column_int(sqlres, 11),
 		sqlite3_column_int(sqlres, 12),
-		sqlite3_column_text(sqlres, 13),
-		sqlite3_column_text(sqlres, 14));
+		longoutput > 1 ? stresc((char *) sqlite3_column_text(sqlres, 15), &escxheader) : "",
+		longoutput > 1 ? "\t" : "",
+		stresc((char *) sqlite3_column_text(sqlres, 13), &escfname),
+		stresc((char *) sqlite3_column_text(sqlres, 14), &esclname));
 	    }
 	else
 	    while (sqlite3_step(sqlres) == SQLITE_ROW) {
@@ -387,6 +394,12 @@ int listbackups(int argc, char **argv)
 	sqlite3_finalize(sqlres);
 	sqlite3_free(sqlstmt);
     }
+    if (escfname != 0)
+	dfree(escfname);
+    if (esclname != 0)
+	dfree(esclname);
+    if (escxheader != 0)
+	dfree(escxheader);
     
     return(0);
 }
