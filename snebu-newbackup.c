@@ -134,7 +134,7 @@ int newbackup(int argc, char **argv)
 		    }
 		    if ((grafteqptr = strchr(optarg, '=')) == 0) {
 			help("newbackup");
-			exit(1);
+			return(1);
 		    }
 		    graft[numgrafts][0] = optarg;
 		    graft[numgrafts][1] = grafteqptr + 1;
@@ -162,18 +162,18 @@ int newbackup(int argc, char **argv)
 		break;
 	    default:
 		usage();
-		exit(1);
+		return(1);
 	    }
 	}
     if ((foundopts & 7) != 7) {
 	fprintf(stderr, "Didn't find all arguments\n");
         usage();
-        exit(1);
+        return (1);
     }
 
     if (checkperm(bkcatalog, "backup", bkname)) {
         sqlite3_close(bkcatalog);
-        return(1);
+        exit(1);
     }
 /*
     sqlite3_exec(bkcatalog,
@@ -204,12 +204,13 @@ int newbackup(int argc, char **argv)
         bkid = sqlite3_column_int(sqlres, 0);
 	if (strcmp((char *) sqlite3_column_text(sqlres, 1), retention) != 0) {
 	    fprintf(stderr, "A backup already exists for %s/%s, but with retention schedule %s\n", bkname, datestamp, (char *) sqlite3_column_text(sqlres, 1));
-	    exit(1);
+	    return(1);
 	}
     }
     else {
 	fprintf(stderr, "newbackup: failed to create backup id\n");
-	exit(1);
+        logaction(bkcatalog, bkid, 2, "failed to create backup id");
+	return(1);
     }
     sqlite3_finalize(sqlres);
     sqlite3_free(sqlstmt);
@@ -300,11 +301,27 @@ int newbackup(int argc, char **argv)
 	fprintf(stderr, "Gathering full snapshot file manifest\n");
 
     time_t curtime = time(NULL);
-    time_t lastflush_time = curtime;
 
+    sqlite3_prepare_v2(bkcatalog,
+	(sqlstmt = sqlite3_mprintf(
+            "insert or ignore into inbound_file_entities "
+            "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
+            "group_id, size, hash, cdatestamp, datestamp, filename, extdata, infilename)  "
+	    "values (@bkid, @ftype, @mode, @devid, @inode, @auid, @nuid, @agid, @ngid, @filesize, @hash, @cmodtime, @modtime, @pathsub, @linktarget, @filename)")),
+	    -1, &sqlres, 0);
+
+        
+    char *tmppathsub = NULL;
+    int fib1 = 0;
+    int fib2 = 1;
+    int fib3 = 1;
+
+    time_t starttime = time(NULL);
+    time_t laststattime = time(NULL);
     while (getdelim(&filespecs, &filespeclen, input_terminator, stdin) > 0) {
 	int pathskip = 0;
 	char pathsub[4097];
+	char tmpmodestr[32];
 	parse(filespecs, &filespecsl, '\t');
 	if (filecount < 1) {
 	    sqlite3_exec(bkcatalog, "END", 0, 0, 0);
@@ -321,7 +338,8 @@ int newbackup(int argc, char **argv)
 	strncpy(fs.agid, filespecsl[6], 32);
 	fs.ngid = atoi(filespecsl[7]);
 	fs.filesize = strtoull(filespecsl[8], NULL, 10);
-	strncpy(fs.sha1, filespecsl[9], 32);
+	strncpy(fs.sha1, filespecsl[9], EVP_MAX_MD_SIZE * 2);
+	fs.sha1[EVP_MAX_MD_SIZE * 2] = '\0';
 	// Handle input datestamp of xxxxx.xxxxx
 	if (strchr(filespecsl[10], '.') != NULL)
 	    *(strchr(filespecsl[10], '.')) = '\0';
@@ -385,6 +403,29 @@ int newbackup(int argc, char **argv)
 		break;
 	    }
 	}
+	sqlite3_bind_int(sqlres, 1, bkid);
+	sqlite3_bind_text(sqlres, 2, &fs.ftype, 1, SQLITE_STATIC);
+	sprintf(tmpmodestr, "%4.4o", fs.mode);
+	sqlite3_bind_text(sqlres, 3, tmpmodestr, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 4, fs.devid, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 5, fs.inode, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 6, fs.auid, -1, SQLITE_STATIC);
+	sqlite3_bind_int(sqlres, 7, fs.nuid);
+	sqlite3_bind_text(sqlres, 8, fs.agid, -1, SQLITE_STATIC);
+	sqlite3_bind_int(sqlres, 9, fs.ngid);
+	sqlite3_bind_int64(sqlres, 10, fs.filesize);
+	sqlite3_bind_text(sqlres, 11, fs.sha1, -1, SQLITE_STATIC);
+	sqlite3_bind_int(sqlres, 12, fs.cmodtime);
+	sqlite3_bind_int(sqlres, 13, fs.modtime);
+	strncpya0(&tmppathsub, pathsub, 0);
+	strcata(&tmppathsub, fs.filename + pathskip);
+	sqlite3_bind_text(sqlres, 14, tmppathsub, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 15, fs.linktarget, -1, SQLITE_STATIC);
+	sqlite3_bind_text(sqlres, 16, fs.filename, -1, SQLITE_STATIC);
+
+	sqlite3_step(sqlres);
+	sqlite3_reset(sqlres);
+#if 0
         sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
             "insert or ignore into inbound_file_entities "
             "(backupset_id, ftype, permission, device_id, inode, user_name, user_id, group_name,  "
@@ -397,17 +438,25 @@ int newbackup(int argc, char **argv)
             sqlite3_free(sqlerr);
         }
         sqlite3_free(sqlstmt);
-	if ((curtime = time(NULL)) > lastflush_time + 10) {
+#endif
+        if (verbose > 0) {
+	    if ((curtime = time(NULL)) > laststattime + 2) {
+		fprintf(stderr, " Processed %d files              \r", filecount);
+		laststattime = curtime;
+	    }
+	}
+	if ((curtime = time(NULL)) > starttime + fib3) {
+	    fib1 = fib2;
+	    fib2 = fib3;
+	    fib3 = fib1 + fib2;
+
 	    if (verbose > 0) {
 		fprintf(stderr, "*\r");
 	    }
 	    flush_inbound_files(bkcatalog, bkid, force_full_backup, output_terminator);
-	    if (verbose > 0) {
-		fprintf(stderr, " Processed %d files              \r", filecount);
-	    }
-	    lastflush_time = time(NULL);
 	}
     }
+    sqlite3_finalize(sqlres);
     dfree(filespecsl);
     if (filecount == 0) {
 	fprintf(stderr, "Empty manifest submitted, aborting backup\n");
