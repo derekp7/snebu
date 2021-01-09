@@ -151,7 +151,7 @@ int expire(int argc, char **argv)
 	    "delete from log where backupset_id = %d ",
 	    bkid)), 0, 0, &sqlerr);
 	sqlite3_exec(bkcatalog, "END", 0, 0, 0);
-	exit(0);
+	return(0);
     }
 
     sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
