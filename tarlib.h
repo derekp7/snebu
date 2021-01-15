@@ -275,6 +275,7 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group);
 int c_getline(char **buf, size_t (*c_fread)(), void *c_handle);
 unsigned long long int * fibseq();
 unsigned long long int nextfib(unsigned long long int n);
+void passadd(char **pwds, char *pass);
 
 #define EVP_MAX_MD_SIZE_b64 (((int)((EVP_MAX_MD_SIZE + 2) / 3)) * 4 + 1)
 

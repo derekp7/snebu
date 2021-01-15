@@ -297,7 +297,7 @@ int submitfiles(int argc, char **argv)
 	    }
 	    // temporary map of inbound key number and recorded key
 	    sqlite3_exec(bkcatalog, (sqlstmt = sqlite3_mprintf(
-		"insert or ignore into temp_key_map (keyposition, id)"
+		"insert or replace into temp_key_map (keyposition, id)"
 		"values (%d, %d)", atoi(mdfields[1]), cipherid)), 0, 0, 0);
 	    sqlite3_free(sqlstmt);
 	    if (numkeys > cryptinfo_n) {
@@ -405,6 +405,10 @@ int submitfiles(int argc, char **argv)
 		    if (verbose >= 1)
 			update_status(total_bytes_received + atoll(mdfields[2]), est_size, mdfields[1], curtime, start_time, '+');
 	    }
+	}
+	else if (strcmp(mdfields[0], "2") == 0) {
+	    flush_received_files(bkcatalog, verbose, bkid, est_size, &linkedfiles_bytes);
+	    lastflush_time = curtime;
 	}
 	inbuf[0] = '\0';
     } 
@@ -543,6 +547,7 @@ int submitfiles2(int out_h)
 			}
 
 		    }
+		    fprintf(out, "3\n");
 		    for (int i = 0; i < numkeys; i++) {
 			fprintf(out, "0\t%d\t%s\t%s\t%s\t%s\t%s\t\n", i,
 			    keys[i].fingerprint, stresc(keys[i].eprvkey, &esceprvkey), stresc(keys[i].pubkey, &escpubkey),

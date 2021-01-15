@@ -46,6 +46,8 @@ int HMAC_CTX_reset(HMAC_CTX *ctx);
 static void *OPENSSL_zalloc(size_t num);
 #endif
 
+char *saved_passwords = NULL;
+
 int tar_get_next_hdr(struct filespec *fs)
 {
     struct tarhead tarhead;
@@ -322,6 +324,7 @@ int tar_write_next_hdr(struct filespec *fs) {
     int paxsparsehdrsz = 0;
     unsigned long long int filesize = fs->filesize;
 
+    memset(&tarhead, 0, 512);
     if (fs->filename == NULL || fs->filename[0] == 0)
 	return(-1);
     if (fs->xheaderlen > 0) {
@@ -439,6 +442,7 @@ int tar_write_next_hdr(struct filespec *fs) {
 	    tmpchksum += 0xFF & *p;
 	sprintf(tarhead.chksum, "%6.6o", tmpchksum);
 	fwrite(&tarhead, 1, 512, stdout);  // write out pax header
+	fflush(stdout);
 
 	for (i = 0; i < fs->xheaderlen; i += 512) {
 	    memset(curblock, 0, 512);
@@ -605,10 +609,14 @@ int setpaxvar(char **paxdata, int *paxlen, char *inname, char *invalue, int inva
     int innvplen;
     char *nvpline = NULL;
     int foundit=0;
+    int x;
 
     innvplen = innamelen + invaluelen + 3 + (ilog10(innamelen + invaluelen + 3 + (ilog10( innamelen + invaluelen + 3)) + 1)) + 1;
     nvpline = malloc(innvplen + 1);
-    sprintf(nvpline, "%d %s=%s\n", innvplen, inname, invalue);
+    sprintf(nvpline, "%d %s=", innvplen, inname);
+    x = strlen(nvpline);
+    memcpy(nvpline + x, invalue, invaluelen);
+    memcpy(nvpline + x + invaluelen, "\n\0", 2);
 
     while (*paxdata + cnvp < *paxdata + *paxlen) {
 	cnvplen = strtol(*paxdata + cnvp, &cname, 10);
@@ -827,9 +835,9 @@ void *memcpya(void **dest, void *src, size_t n)
 void *memcpyao(void **dest, void *src, size_t n, size_t offset)
 {
     if (*dest == NULL)
-	*dest = dmalloc(n);
-    if (dmalloc_size(*dest) < n)
-	*dest = drealloc(*dest, n);
+	*dest = dmalloc(n + offset);
+    if (dmalloc_size(*dest) < n + offset)
+	*dest = drealloc(*dest, n + offset);
     memcpy((*dest) + offset, src, n);
     return(*dest);
 }
@@ -837,6 +845,7 @@ void *memcpyao(void **dest, void *src, size_t n, size_t offset)
 // Initialize filespec structure
 int fsinit(struct filespec *fs)
 {
+    memset(fs, 0, sizeof(struct filespec));
     fs->ftype = 0;
     fs->mode = 0;
     fs->devid[0] = 0;
@@ -913,10 +922,15 @@ int fsdup(struct filespec *tsf, struct filespec *sfs)
 // Free a filespec data structure
 int fsfree(struct filespec *fs)
 {
+    fsclear(fs);
     dfree(fs->filename);
     dfree(fs->linktarget);
     dfree(fs->xheader);
     dfree(fs->sparsedata);
+    fs->filename = NULL;
+    fs->linktarget = NULL;
+    fs->xheader = NULL;
+    fs->sparsedata = NULL;
     return(0);
 }
 
@@ -1922,6 +1936,33 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
     unsigned char tmp_hmac_hash[EVP_MAX_MD_SIZE];
     unsigned char tmp_hmac_hash_b64[((int)((EVP_MAX_MD_SIZE + 2) / 3)) * 4 + 1];
 
+    // Try saved passwords against all keys
+    for (int i = 0; i < rsa_keys->numkeys; i++) {
+	for (char *p = saved_passwords; p != NULL && *p != '\0'; p += strlen(p) + 1) {
+	    if (rsa_keys->keys[i].evp_keypair == NULL) {
+		rsa_keydata = BIO_new_mem_buf(rsa_keys->keys[i].eprvkey, -1);
+		rsa_keys->keys[i].evp_keypair = EVP_PKEY_new();
+		if (PEM_read_bio_PrivateKey(rsa_keydata, &(rsa_keys->keys[i].evp_keypair), NULL, p) == NULL) {
+		    // didn't match, try the next key
+		    BIO_free(rsa_keydata);
+		    rsa_keydata = NULL;
+		    EVP_PKEY_free(rsa_keys->keys[i].evp_keypair);
+		    rsa_keys->keys[i].evp_keypair = NULL;
+		    continue;
+		}
+		else {
+		    SHA256((unsigned char *) p, strlen(p), passphrase_hash);
+		    HMAC(EVP_sha256(), passphrase_hash, SHA256_DIGEST_LENGTH,
+			(unsigned char *) rsa_keys->keys[i].pubkey,
+			strlen(rsa_keys->keys[i].pubkey), rsa_keys->keys[i].hmac_key, &hmac_key_len);
+		    SHA256((unsigned char *) rsa_keys->keys[i].hmac_key, 32, tmp_hmac_hash);
+		    EVP_EncodeBlock(tmp_hmac_hash_b64, tmp_hmac_hash, 32);
+		    BIO_free(rsa_keydata);
+		    rsa_keydata = NULL;
+		}
+	    }
+	}
+    }
     for (int i = 0; required_keys_group[i] != NULL; i++) {
 	int n = atoi(required_keys_group[i]);
 	if (n < rsa_keys->numkeys && rsa_keys->keys[n].evp_keypair == NULL) {
@@ -1947,6 +1988,7 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
 	prompt = UI_new();
 	UI_add_input_string(prompt, msg1, 0, passphrase, 1, 4095);
 	UI_result = UI_process(prompt);
+	passadd(&saved_passwords, passphrase);
 	while (1) {
 	    if (UI_result == 0) {
 		// try the passphrase against all keys
@@ -1972,6 +2014,7 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
 			    BIO_free(rsa_keydata);
 			    rsa_keydata = NULL;
 			}
+
 		    }
 		}
 		// check the required keys, see if password worked for any of them
@@ -1995,6 +2038,7 @@ int decode_privkey(struct rsa_keys *rsa_keys, char **required_keys_group)
 		prompt = UI_new();
 		UI_add_input_string(prompt, msg3, 0, passphrase, 1, 4095);
 		UI_result = UI_process(prompt);
+		passadd(&saved_passwords, passphrase);
 	    }
 	    else {
 		UI_free(prompt);
@@ -2407,6 +2451,27 @@ unsigned long long int nextfib(unsigned long long int n)
             return(*(fibseq() + i));
     }
     return(0);
+}
+
+void passadd(char **pwds, char *pass)
+{
+    char *p;
+    int n;
+    if (*pwds == NULL || **pwds == '\0') {
+        strncpya0(pwds, pass, 0);
+        memcpyao((void **) pwds, "\0", 1, strlen(pass) + 1);
+    }
+
+    else {
+        p = *pwds;
+        while (*((p = strchr(p, '\0')) + 1) != '\0') {
+            p += 1;
+        }
+        p++;
+        n = p - *pwds;
+        memcpyao((void **) pwds, pass, strlen(pass) + 1, n);
+        memcpyao((void **) pwds, "\0", 1, n + strlen(pass) + 1);
+    }
 }
 
 #if (OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER))
