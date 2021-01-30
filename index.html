@@ -219,7 +219,10 @@ sudo make install</pre>
 <div class="literalblock">
 <div class="content">
 <pre>sudo useradd -r -U -d /var/lib/snebu snebu
-sudo chown snebu:snebu</pre>
+sudo chown -R snebu:snebu /var/lib/snebu
+chmod -R 600 /var/lib/snebu
+chown snebu:snebu /usr/local/bin/snebu
+chmod 1744 /usr/local/bin/snebu</pre>
 </div>
 </div>
 <div class="paragraph">
